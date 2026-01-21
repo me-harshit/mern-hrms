@@ -1,21 +1,21 @@
-# Dependency directories
+# Dependency
 node_modules/
 client/node_modules/
 server/node_modules/
 
-# Environment variables (Crucial for security!)
+# Environment
 .env
 server/.env
 client/.env
 
-# Build directories
+# Build
 client/build/
 
-# Debug logs
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
