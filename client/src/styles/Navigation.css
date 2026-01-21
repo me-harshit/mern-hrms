@@ -132,3 +132,16 @@ body {
   background: #f3f4f6;
   color: var(--secondary);
 }
+
+.role-badge {
+    margin: 15px 25px;
+    padding: 6px 12px;
+    background: #f1f5f9;
+    color: var(--primary); /* #215D7B */
+    font-size: 10px;
+    font-weight: 800;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    border-left: 3px solid var(--primary);
+}

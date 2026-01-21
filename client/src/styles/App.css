@@ -8,7 +8,6 @@
   --bg-page: #f9fafb;
 }
 
-/* Apply Poppins to everything */
 * {
   margin: 0;
   padding: 0;
@@ -24,7 +23,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-
 body,
 html {
   margin: 0;
@@ -39,17 +37,15 @@ html {
 }
 
 .content-wrapper {
-  margin-left: 260px;
+  margin-left: 260px; /* Space for the sidebar */
   margin-top: 65px;
-  min-height: 100vh;
+  width: calc(100% - 260px); /* Take up the remaining width */
+  display: flex;
+  flex-direction: column;
 }
 
 .main-content {
-  /* margin-left: 260px;
-  margin-top: 65px; */
   padding: 40px;
-  /* background-color: #f8fafc;
-  min-height: calc(100vh - 60px); */
 }
 
 /* Reusable Page Components */
@@ -65,4 +61,92 @@ html {
   font-weight: 700;
   color: #1e293b;
   margin-bottom: 20px;
+}
+
+.stats-grid {
+  display: flex;            /* Switch from grid to flex */
+  flex-direction: row;      /* Force horizontal alignment */
+  justify-content: space-between; 
+  gap: 25px;
+  margin-top: 20px;
+  width: 100%;              /* Ensure it takes full width */
+}
+
+.stat-card {
+  flex: 1;                  /* This makes all cards the same width */
+  background: white;
+  padding: 25px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s;
+  min-width: 200px;         /* Prevents them from getting too squashed */
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+}
+
+.stat-icon {
+  width: 55px;
+  height: 55px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+}
+
+.teal-bg {
+  background-color: #215D7B;
+}
+
+.plum-bg {
+  background-color: #A6477F;
+}
+
+.border-teal {
+  border-bottom: 4px solid #215D7B;
+}
+
+.border-plum {
+  border-bottom: 4px solid #A6477F;
+}
+
+.stat-info p {
+  color: #7A7A7A;
+  font-size: 14px;
+  margin: 0;
+}
+
+.stat-info h3 {
+  color: #000;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 5px 0 0 0;
+}
+
+.action-btn-primary {
+    background-color: var(--primary);
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Poppins';
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.action-btn-secondary {
+    background-color: white;
+    color: var(--secondary);
+    border: 2px solid var(--secondary);
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-family: 'Poppins';
+    font-weight: 500;
+    cursor: pointer;
 }
