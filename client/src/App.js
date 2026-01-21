@@ -1,24 +1,33 @@
+import './styles/App.css';
+import './styles/Navigation.css';
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
 import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
+import Attendance from './pages/Attendance';
 
-// A simple wrapper to add Sidebar to certain pages
 const DashboardLayout = ({ children }) => (
-  <div style={{ display: 'flex' }}>
-    <Sidebar />
-    <div style={{ marginLeft: '250px', padding: '20px', width: '100%' }}>
-      {children}
+    <div className="app-container">
+        <Sidebar />
+        <div className="content-wrapper">
+            <Topbar />
+            <div className="main-content">
+                {children}
+            </div>
+        </div>
     </div>
-  </div>
 );
 
 function App() {
   return (
     <Router>
       <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
@@ -31,6 +40,11 @@ function App() {
         <Route path="/profile" element={
           <DashboardLayout>
             <Profile />
+          </DashboardLayout>
+        } />
+        <Route path="/attendance" element={
+          <DashboardLayout>
+            <Attendance />
           </DashboardLayout>
         } />
 

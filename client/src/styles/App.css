@@ -1,0 +1,68 @@
+:root {
+  --primary: #215D7B;
+  --secondary: #A6477F;
+  --text-main: #000000;
+  --text-muted: #7A7A7A;
+  --bg-sidebar: #ffffff;
+  --bg-topbar: #ffffff;
+  --bg-page: #f9fafb;
+}
+
+/* Apply Poppins to everything */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Poppins', sans-serif !important;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+body,
+html {
+  margin: 0;
+  padding: 0;
+  background-color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+}
+
+/* The Main Layout Grid */
+.app-container {
+  display: flex;
+}
+
+.content-wrapper {
+  margin-left: 260px;
+  margin-top: 65px;
+  min-height: 100vh;
+}
+
+.main-content {
+  /* margin-left: 260px;
+  margin-top: 65px; */
+  padding: 40px;
+  /* background-color: #f8fafc;
+  min-height: calc(100vh - 60px); */
+}
+
+/* Reusable Page Components */
+.page-card {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 20px;
+}

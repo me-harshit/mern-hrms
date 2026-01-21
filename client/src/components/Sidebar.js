@@ -1,37 +1,41 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
+import { Link, useLocation } from 'react-router-dom';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+    faThLarge, 
+    faCalendarCheck, 
+    faUser, 
+    faFileAlt 
+} from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = () => {
-    const navigate = useNavigate();
-
-    const handleLogout = () => {
-        Swal.fire({
-            title: 'Logout?',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Yes'
-        }).then((result) => {
-            if (result.isConfirmed) navigate('/login');
-        });
-    };
+    const location = useLocation();
 
     return (
-        <div style={sidebarStyle}>
-            <h2 style={{color: '#fff', marginBottom: '30px'}}>HRMS</h2>
-            <Link to="/dashboard" style={linkStyle}>🏠 Dashboard</Link>
-            <Link to="/attendance" style={linkStyle}>📅 Attendance</Link>
-            <Link to="/leaves" style={linkStyle}>📝 Leaves</Link>
-            <div onClick={handleLogout} style={{...linkStyle, marginTop: 'auto', color: '#ff7675'}}>🚪 Logout</div>
+        <div className="sidebar">
+            <nav className="sidebar-menu">
+                <Link to="/dashboard" className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faThLarge} className="nav-icon" /> 
+                    <span>Dashboard</span>
+                </Link>
+                
+                <Link to="/attendance" className={`nav-link ${location.pathname === '/attendance' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faCalendarCheck} className="nav-icon" /> 
+                    <span>Attendance</span>
+                </Link>
+                
+                <Link to="/profile" className={`nav-link ${location.pathname === '/profile' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faUser} className="nav-icon" /> 
+                    <span>Profile</span>
+                </Link>
+                
+                <Link to="/leaves" className={`nav-link ${location.pathname === '/leaves' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> 
+                    <span>Leaves</span>
+                </Link>
+            </nav>
         </div>
     );
 };
-
-const sidebarStyle = {
-    width: '250px', height: '100vh', background: '#2d3436', 
-    display: 'flex', flexDirection: 'column', padding: '20px', position: 'fixed'
-};
-
-const linkStyle = { color: '#dfe6e9', textDecoration: 'none', padding: '10px 0', cursor: 'pointer' };
 
 export default Sidebar;

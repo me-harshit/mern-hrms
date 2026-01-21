@@ -1,0 +1,134 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+.sidebar {
+  width: 260px;
+  background-color: var(--bg-sidebar);
+  height: calc(100vh - 65px); /* Subtract Topbar height */
+  position: fixed;
+  left: 0;
+  top: 65px; /* Start below Topbar */
+  border-right: 1px solid #e5e7eb;
+  z-index: 998; /* Lower than Topbar */
+  overflow-y: auto; /* Allow scrolling if items increase */
+}
+
+.nav-link.active {
+  color: var(--primary);
+  background-color: #f0f7f9;
+  border-right: 4px solid var(--primary);
+}
+
+.topbar-logo {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-logo img {
+  height: 32px;
+  width: auto;
+}
+
+.sidebar-menu {
+  margin-top: 20px;
+  flex-grow: 1;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  padding: 14px 25px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: 0.3s;
+  font-size: 14px;
+}
+
+.nav-icon {
+    width: 20px;
+    margin-right: 15px;
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: 0.3s;
+}
+
+.nav-link:hover .nav-icon,
+.nav-link.active .nav-icon {
+    color: var(--primary); 
+    background-color: #f0f7f9;
+}
+
+.nav-link:hover {
+  color: var(--primary);
+  background-color: #f0f7f9;
+}
+
+.topbar {
+  height: 65px;
+  background: var(--bg-topbar);
+  display: flex;
+  justify-content: space-between; /* Logo on left, Profile on right */
+  align-items: center;
+  padding: 0 30px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%; /* Full width */
+  border-bottom: 2px solid #e5e7eb; /* The 100% width border */
+  z-index: 1000; /* Always on top */
+}
+
+.profile-trigger {
+  position: relative;
+  padding: 10px 0;
+}
+
+.profile-badge {
+  width: 40px;
+  height: 40px;
+  background: var(--primary);
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Hover Dropdown */
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 55px;
+  right: 0;
+  background: white;
+  min-width: 200px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 0;
+  overflow: hidden;
+}
+
+.profile-trigger:hover .dropdown-menu {
+  display: block;
+}
+
+.dropdown-link {
+  padding: 12px 20px;
+  display: block;
+  color: var(--text-main);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.dropdown-link:hover {
+  background: #f3f4f6;
+  color: var(--secondary);
+}
