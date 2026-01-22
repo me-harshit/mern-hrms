@@ -1,167 +1,126 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-    faCheckCircle, faClock, faCalendarTimes,
-    faUsers, faUserPlus, faHandHoldingUsd, faBriefcase
-} from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+    faUsers, faUserCheck, faClipboardList, faPlaneDeparture, 
+    faSpinner, faBriefcase, faCalendarCheck, faClock 
+} from '@fortawesome/free-solid-svg-icons';
+import '../styles/App.css';
 
 const Dashboard = () => {
-    const navigate = useNavigate();
-    const [user, setUser] = useState(null);
-    const [stats, setStats] = useState({
-        totalEmployees: 0,
-        presentToday: 0,
-        pendingLeaves: 0,
-        myAttendance: '0/0',
-        myLeaveBalance: 0
-    });
+    const user = JSON.parse(localStorage.getItem('user'));
+    const isEmployee = user.role === 'EMPLOYEE';
+
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 1. Get User Info
-        const storedUser = JSON.parse(localStorage.getItem('user'));
-        setUser(storedUser);
-
-        // 2. Fetch Stats (Simulated for now, replace with API later)
-        if (storedUser) {
-            fetchStats(storedUser.role);
-        }
-    }, []);
-
-    const fetchStats = async (role) => {
-        // In the future, this will be: axios.get('/api/dashboard/stats')
-        // For now, we simulate data based on role
-        if (role === 'ADMIN' || role === 'HR') {
-            // Fetch total employees count for Admin/HR
+        const fetchStats = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const res = await axios.get('http://localhost:5000/api/employees', {
+                // Determine URL based on Role
+                const url = isEmployee 
+                    ? 'http://localhost:5000/api/dashboard/employee-stats'
+                    : 'http://localhost:5000/api/dashboard/admin-stats';
+
+                const res = await axios.get(url, {
                     headers: { 'x-auth-token': token }
                 });
-                setStats(prev => ({
-                    ...prev,
-                    totalEmployees: res.data.length,
-                    presentToday: Math.floor(res.data.length * 0.9), // Mock data
-                    pendingLeaves: 3 // Mock data
-                }));
+                setStats(res.data);
+                setLoading(false);
             } catch (err) {
-                console.error("Error fetching dashboard stats");
+                console.error("Error loading dashboard data");
+                setLoading(false);
             }
-        } else {
-            // Employee Specific Stats
-            setStats(prev => ({
-                ...prev,
-                myAttendance: '20/22 Days',
-                myLeaveBalance: 12
-            }));
-        }
-    };
+        };
 
-    if (!user) return <div className="main-content">Loading Dashboard...</div>;
+        fetchStats();
+    }, [isEmployee]);
 
-    const isAdminOrHR = user.role === 'ADMIN' || user.role === 'HR';
+    if (loading) return <div className="main-content"><FontAwesomeIcon icon={faSpinner} spin /> Loading...</div>;
 
     return (
-        <div>
-            {/* --- HEADER SECTION --- */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                <div>
-                    <h1 className="page-title">Dashboard</h1>
-                    <p style={{ color: '#7A7A7A', marginTop: '5px' }}>
-                        Welcome back, <span style={{ color: '#215D7B', fontWeight: 'bold' }}>{user.name}</span>
-                    </p>
+        <div className="dashboard-container">
+            <div className="welcome-banner">
+                <h1>Welcome, {user.name}</h1>
+                <p>{isEmployee ? "Here is your personal summary." : "Here is the company overview."}</p>
+            </div>
+
+            {/* --- ADMIN / HR VIEW --- */}
+            {!isEmployee && (
+                <div className="stats-grid">
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}><FontAwesomeIcon icon={faUsers} /></div>
+                        <div className="stat-info">
+                            <p>Total Employees</p>
+                            <h3>{stats.totalEmployees}</h3>
+                        </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: '#dcfce7', color: '#16a34a' }}><FontAwesomeIcon icon={faUserCheck} /></div>
+                        <div className="stat-info">
+                            <p>Present Today</p>
+                            <h3>{stats.presentToday}</h3>
+                        </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: '#fee2e2', color: '#dc2626' }}><FontAwesomeIcon icon={faClipboardList} /></div>
+                        <div className="stat-info">
+                            <p>Pending Actions</p>
+                            <h3>{stats.pendingLeaves}</h3>
+                        </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: '#fef9c3', color: '#ca8a04' }}><FontAwesomeIcon icon={faPlaneDeparture} /></div>
+                        <div className="stat-info">
+                            <p>On Leave</p>
+                            <h3>{stats.onLeaveToday}</h3>
+                        </div>
+                    </div>
                 </div>
-                <span className={`role-tag ${user.role.toLowerCase()}`} style={{ fontSize: '14px', padding: '8px 15px' }}>
-                    {user.role} VIEW
-                </span>
-            </div>
+            )}
 
-            {/* --- STATS GRID --- */}
-            <div className="stats-grid">
-                
-                {/* --- VIEW: EMPLOYEE --- */}
-                {!isAdminOrHR && (
-                    <>
-                        <div className="stat-card border-teal">
-                            <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faCheckCircle} /></div>
-                            <div className="stat-info">
-                                <p>My Attendance</p>
-                                <h3>{stats.myAttendance}</h3>
-                            </div>
+            {/* --- EMPLOYEE VIEW --- */}
+            {isEmployee && (
+                <div className="stats-grid">
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: '#dcfce7', color: '#16a34a' }}><FontAwesomeIcon icon={faCalendarCheck} /></div>
+                        <div className="stat-info">
+                            <p>Attendance (Month)</p>
+                            <h3>{stats.presentDays} Days</h3>
                         </div>
-                        <div className="stat-card border-plum">
-                            <div className="stat-icon plum-bg"><FontAwesomeIcon icon={faCalendarTimes} /></div>
-                            <div className="stat-info">
-                                <p>Leave Balance</p>
-                                <h3>{stats.myLeaveBalance} Days</h3>
-                            </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}><FontAwesomeIcon icon={faBriefcase} /></div>
+                        <div className="stat-info">
+                            <p>Leave Balance</p>
+                            <h3>{stats.leaveBalance} / {stats.totalLeaves}</h3>
                         </div>
-                        <div className="stat-card border-teal">
-                            <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faClock} /></div>
-                            <div className="stat-info">
-                                <p>Avg. Work Hours</p>
-                                <h3>8h 30m</h3>
-                            </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: '#fef9c3', color: '#ca8a04' }}><FontAwesomeIcon icon={faClock} /></div>
+                        <div className="stat-info">
+                            <p>Pending Requests</p>
+                            <h3>{stats.myPending}</h3>
                         </div>
-                    </>
-                )}
+                    </div>
+                </div>
+            )}
 
-                {/* --- VIEW: HR & ADMIN --- */}
-                {isAdminOrHR && (
-                    <>
-                        <div className="stat-card border-teal">
-                            <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faUsers} /></div>
-                            <div className="stat-info">
-                                <p>Total Employees</p>
-                                <h3>{stats.totalEmployees}</h3>
-                            </div>
-                        </div>
-                        <div className="stat-card border-plum">
-                            <div className="stat-icon plum-bg"><FontAwesomeIcon icon={faBriefcase} /></div>
-                            <div className="stat-info">
-                                <p>On Leave Today</p>
-                                <h3>{stats.totalEmployees - stats.presentToday}</h3>
-                            </div>
-                        </div>
-                        <div className="stat-card border-teal">
-                            <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faCheckCircle} /></div>
-                            <div className="stat-info">
-                                <p>Present Today</p>
-                                <h3>{stats.presentToday}</h3>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </div>
-
-            {/* --- QUICK ACTIONS SECTION --- */}
-            <div style={{ marginTop: '40px' }}>
-                <h2 className="page-title" style={{ fontSize: '20px', marginBottom: '20px' }}>Quick Actions</h2>
-                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-
-                    {/* Common Action */}
-                    <button className="action-btn-primary" onClick={() => navigate('/attendance')}>
-                        <FontAwesomeIcon icon={faClock} style={{ marginRight: '8px' }} /> 
-                        {isAdminOrHR ? 'View Attendance Logs' : 'Check In / Out'}
+            {/* --- COMMON QUICK ACTIONS --- */}
+            <div className="recent-activity-section" style={{ marginTop: '30px' }}>
+                <h3>Quick Actions</h3>
+                <div className="quick-actions-grid" style={{ display: 'flex', gap: '15px', marginTop: '15px' }}>
+                    <button className="gts-btn primary" onClick={() => window.location.href='/attendance'}>
+                        Mark Attendance
                     </button>
-
-                    <button className="action-btn-secondary">
-                        <FontAwesomeIcon icon={faCalendarTimes} style={{ marginRight: '8px' }} /> Apply for Leave
+                    <button className="gts-btn warning" onClick={() => window.location.href='/leaves'}>
+                        Apply for Leave
                     </button>
-
-                    {/* Admin / HR Specific Actions */}
-                    {isAdminOrHR && (
-                        <>
-                            <button className="action-btn-secondary" onClick={() => navigate('/employees')}>
-                                <FontAwesomeIcon icon={faUserPlus} style={{ marginRight: '8px' }} /> Manage Employees
-                            </button>
-                            {user.role === 'ADMIN' && (
-                                <button className="action-btn-secondary">
-                                    <FontAwesomeIcon icon={faHandHoldingUsd} style={{ marginRight: '8px' }} /> Run Payroll
-                                </button>
-                            )}
-                        </>
+                    {!isEmployee && (
+                        <button className="gts-btn danger" onClick={() => window.location.href='/leave-requests'}>
+                            Review Requests
+                        </button>
                     )}
                 </div>
             </div>
