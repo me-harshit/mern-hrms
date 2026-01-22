@@ -2,7 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const authRoutes = require('./routes/auth'); // Import the route
+const authRoutes = require('./routes/auth');
+const employeeRoutes = require('./routes/employee');
 
 dotenv.config();
 const app = express();
@@ -12,6 +13,7 @@ app.use(cors());
 
 // --- ROUTES ---
 app.use('/api/auth', authRoutes); // Use the route
+app.use('/api/employees', employeeRoutes);
 
 app.get('/', (req, res) => res.send("GTS HRMS API is running..."));
 

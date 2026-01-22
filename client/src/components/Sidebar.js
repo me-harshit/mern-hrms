@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-    faThLarge, 
-    faCalendarCheck, 
-    faUser, 
+import {
+    faThLarge,
+    faCalendarCheck,
+    faUser,
     faFileAlt,
     faUsers,        // Added this
     faShieldAlt    // Added this
@@ -12,9 +12,9 @@ import {
 
 const Sidebar = () => {
     const location = useLocation();
-    
-    // Mock user role - change this to 'EMPLOYEE', 'HR' or 'ADMIN' to test
-    const userRole = 'ADMIN'; 
+
+    const user = JSON.parse(localStorage.getItem('user'));
+    const userRole = user?.role || 'EMPLOYEE';
 
     return (
         <div className="sidebar">

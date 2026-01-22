@@ -1,28 +1,84 @@
-import '../styles/Auth.css';
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import axios from 'axios';
+import { useNavigate, Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import '../styles/Auth.css';
 
 const Login = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const navigate = useNavigate();
 
-    const handleLoginStub = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
-        Swal.fire('Success', 'Logged in (UI Mode)', 'success');
-        navigate('/dashboard');
+        try {
+            const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+            
+            localStorage.setItem('token', res.data.token);
+            localStorage.setItem('user', JSON.stringify(res.data.user));
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Welcome Back!',
+                text: `Logged in as ${res.data.user.name}`,
+                timer: 1500,
+                showConfirmButton: false,
+                iconColor: '#215D7B'
+            });
+
+            setTimeout(() => {
+                navigate('/dashboard');
+                window.location.reload();
+            }, 1500);
+
+        } catch (err) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Login Failed',
+                text: err.response?.data?.message || 'Invalid Credentials',
+                confirmButtonColor: '#215D7B'
+            });
+        }
     };
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '90vh' }}>
-            <div style={{ background: '#fff', padding: '40px', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', width: '350px' }}>
-                <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Login</h2>
-                <form onSubmit={handleLoginStub} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    <input type="email" placeholder="Email" style={{ padding: '12px', borderRadius: '5px', border: '1px solid #ddd' }} required />
-                    <input type="password" placeholder="Password" style={{ padding: '12px', borderRadius: '5px', border: '1px solid #ddd' }} required />
-                    <button style={{ background: '#007bff', color: 'white', border: 'none', padding: '10px', borderRadius: '5px', cursor: 'pointer' }} type="submit">
-                        Enter Dashboard
-                    </button>
+        <div className="auth-container">
+            <div className="auth-card">
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                    <img src="/GTS.png" alt="GTS Logo" style={{ height: '50px' }} />
+                </div>
+                <h2>Portal Login</h2>
+                <p className="auth-subtitle">Welcome back! Please enter your details.</p>
+                
+                <form onSubmit={handleLogin}>
+                    <div className="form-group">
+                        <label>Email Address</label>
+                        <input 
+                            type="email" 
+                            className="auth-input"
+                            placeholder="e.g. employee@gts.com"
+                            value={email} 
+                            onChange={(e) => setEmail(e.target.value)} 
+                            required 
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Password</label>
+                        <input 
+                            type="password" 
+                            className="auth-input"
+                            placeholder="••••••••"
+                            value={password} 
+                            onChange={(e) => setPassword(e.target.value)} 
+                            required 
+                        />
+                    </div>
+                    <button type="submit" className="auth-btn">Sign In</button>
                 </form>
+                
+                <div className="auth-footer">
+                    Don't have an account? <Link to="/register" className="auth-link">Register here</Link>
+                </div>
             </div>
         </div>
     );
