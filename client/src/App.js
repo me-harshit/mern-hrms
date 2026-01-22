@@ -7,7 +7,6 @@ import Employees from './pages/Employees';
 // Pages
 import Home from './pages/Home';
 import Login from './pages/Login';
-// import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Attendance from './pages/Attendance';
@@ -43,7 +42,6 @@ function App() {
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
-        {/* <Route path="/register" element={<Register />} /> */}
 
         {/* Protected Dashboard Section (Requires Login) */}
         <Route element={<ProtectedRoute isAllowed={isAuthenticated} />}>

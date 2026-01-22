@@ -145,3 +145,46 @@ body {
     letter-spacing: 1.5px;
     border-left: 3px solid var(--primary);
 }
+
+/* Topbar Dropdown Enhancements */
+.dropdown-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    background-color: #f8fafc;
+}
+
+.user-full-name {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.user-role-tag {
+    margin: 2px 0 0 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dropdown-icon {
+    margin-right: 12px;
+    width: 16px;
+    color: #94a3b8;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: #f1f5f9;
+    margin: 5px 0;
+}
+
+.logout-text {
+    color: var(--secondary) !important;
+    font-weight: 600;
+}
+
+.dropdown-link:hover .dropdown-icon {
+    color: var(--primary);
+}
