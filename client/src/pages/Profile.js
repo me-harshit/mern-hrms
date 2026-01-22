@@ -4,12 +4,15 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faUser, faEnvelope, faPhone, faMapMarkerAlt, 
-    faEdit, faSave, faTimes, faCamera 
+    faEdit, faSave, faTimes, faCamera,
+    faIdCard, faFirstAid // Added new icons
 } from '@fortawesome/free-solid-svg-icons';
 
 const Profile = () => {
     const [user, setUser] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
+    
+    // Form data only includes editable fields
     const [formData, setFormData] = useState({
         name: '', email: '', phoneNumber: '', address: ''
     });
@@ -25,6 +28,8 @@ const Profile = () => {
                 headers: { 'x-auth-token': token }
             });
             setUser(res.data);
+            
+            // Only set editable fields in formData
             setFormData({
                 name: res.data.name,
                 email: res.data.email,
@@ -56,6 +61,10 @@ const Profile = () => {
             // Update local state to show the new image immediately
             setUser({ ...user, profilePic: res.data.filePath });
             
+            // Sync with localStorage
+            const storedUser = JSON.parse(localStorage.getItem('user'));
+            localStorage.setItem('user', JSON.stringify({ ...storedUser, profilePic: res.data.filePath }));
+
             Swal.fire({ icon: 'success', title: 'Picture Updated', timer: 1000, showConfirmButton: false });
         } catch (err) {
             Swal.fire('Error', 'Image upload failed', 'error');
@@ -164,6 +173,26 @@ const Profile = () => {
                             <FontAwesomeIcon icon={faPhone} className="detail-icon" />
                             <div><label>Phone Number</label><p>{user.phoneNumber || 'Not provided'}</p></div>
                         </div>
+                        
+                        {/* --- NEW READ-ONLY FIELDS --- */}
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faIdCard} className="detail-icon" />
+                            <div>
+                                <label>Aadhaar Number</label>
+                                <p style={{ letterSpacing: '1px', fontWeight: '600' }}>
+                                    {user.aadhaar || 'Pending HR Update'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faFirstAid} className="detail-icon" style={{ letterSpacing: '1px', fontWeight: '600' }} />
+                            <div>
+                                <label>Emergency Contact</label>
+                                <p>{user.emergencyContact || 'Not provided'}</p>
+                            </div>
+                        </div>
+                        {/* ----------------------------- */}
+
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faMapMarkerAlt} className="detail-icon" />
                             <div><label>Address</label><p>{user.address || 'Not provided'}</p></div>

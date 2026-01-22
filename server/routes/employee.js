@@ -43,10 +43,18 @@ router.put('/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Denied' });
 
-        const { name, email, role, status, joiningDate, password } = req.body;
-        
-        // Create an update object
-        let updateData = { name, email, role, status, joiningDate };
+        const { name, email, role, status, joiningDate, password, aadhaar, emergencyContact } = req.body;
+
+        // 2. Add them to the update object
+        let updateData = {
+            name,
+            email,
+            role,
+            status,
+            joiningDate,
+            aadhaar,           // Added
+            emergencyContact   // Added
+        };
 
         // If a password is provided, hash it
         if (password && password.trim() !== "") {

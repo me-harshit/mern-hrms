@@ -1,21 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faFileAlt, faCheckCircle, faTimesCircle, faClock } from '@fortawesome/free-solid-svg-icons';
 
 const Leaves = () => {
-    // Mock Data (Static for now)
-    const [stats] = useState({
+    const [stats, setStats] = useState({
         annualQuota: 12,
-        used: 2,
-        pending: 1
+        used: 0,
+        pending: 0
     });
+    const [leaveHistory, setLeaveHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const [leaveHistory] = useState([
-        { _id: 1, type: 'Casual Leave', from: '2026-01-15', to: '2026-01-15', days: 1, reason: 'Personal work', status: 'Approved' },
-        { _id: 2, type: 'Sick Leave', from: '2026-02-10', to: '2026-02-12', days: 3, reason: 'Viral Fever', status: 'Rejected' },
-        { _id: 3, type: 'Casual Leave', from: '2026-03-20', to: '2026-03-20', days: 1, reason: 'Family Function', status: 'Pending' }
-    ]);
+    useEffect(() => {
+        fetchLeaves();
+    }, []);
+
+    const fetchLeaves = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get('http://localhost:5000/api/leaves/my-leaves', {
+                headers: { 'x-auth-token': token }
+            });
+            setLeaveHistory(res.data);
+
+            // Calculate Stats (Basic logic)
+            const usedLeaves = res.data
+                .filter(l => l.status === 'Approved')
+                .reduce((acc, curr) => acc + curr.days, 0);
+            
+            const pendingCount = res.data.filter(l => l.status === 'Pending').length;
+
+            setStats(prev => ({ ...prev, used: usedLeaves, pending: pendingCount }));
+            setLoading(false);
+        } catch (err) {
+            console.error("Error fetching leaves");
+            setLoading(false);
+        }
+    };
 
     const handleApplyLeave = async () => {
         const { value: formValues } = await Swal.fire({
@@ -24,19 +47,20 @@ const Leaves = () => {
                 <div style="text-align: left;">
                     <label class="swal-custom-label">Leave Type</label>
                     <select id="leave-type" class="swal2-select" style="width: 100%;">
-                        <option value="CL">Casual Leave (1 Day)</option>
-                        <option value="SL">Sick Leave</option>
-                        <option value="PL">Privilege Leave</option>
+                        <option value="CL">Casual Leave (CL)</option>
+                        <option value="SL">Sick Leave (SL)</option>
+                        <option value="PL">Privilege Leave (PL)</option>
+                        <option value="UL">Unpaid Leave (UL)</option>
                     </select>
 
                     <div style="display: flex; gap: 10px;">
                         <div style="flex: 1;">
                             <label class="swal-custom-label">From Date</label>
-                            <input id="date-from" type="date" class="swal2-input">
+                            <input id="date-from" type="date" class="swal2-input" style="width: 100%;">
                         </div>
                         <div style="flex: 1;">
                             <label class="swal-custom-label">To Date</label>
-                            <input id="date-to" type="date" class="swal2-input">
+                            <input id="date-to" type="date" class="swal2-input" style="width: 100%;">
                         </div>
                     </div>
 
@@ -57,14 +81,22 @@ const Leaves = () => {
                 if (!from || !to || !reason) {
                     Swal.showValidationMessage('Please fill all fields');
                 }
-                return { type, from, to, reason };
+                return { leaveType: type, fromDate: from, toDate: to, reason };
             }
         });
 
         if (formValues) {
-            // Placeholder: This is where we will add the axios.post() call next
-            console.log("Applying for:", formValues);
-            Swal.fire('Submitted!', 'Your leave request has been sent to HR.', 'success');
+            try {
+                const token = localStorage.getItem('token');
+                await axios.post('http://localhost:5000/api/leaves/apply', formValues, {
+                    headers: { 'x-auth-token': token }
+                });
+                
+                Swal.fire('Submitted!', 'Your leave request has been sent to HR.', 'success');
+                fetchLeaves(); // Refresh list
+            } catch (err) {
+                Swal.fire('Error', 'Failed to submit request.', 'error');
+            }
         }
     };
 
@@ -75,6 +107,8 @@ const Leaves = () => {
             default: return <span className="status-badge warning"><FontAwesomeIcon icon={faClock} /> Pending</span>;
         }
     };
+
+    if (loading) return <div className="main-content">Loading Leaves...</div>;
 
     return (
         <div className="leaves-container">
@@ -90,7 +124,7 @@ const Leaves = () => {
                 <div className="stat-card border-teal">
                     <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faFileAlt} /></div>
                     <div className="stat-info">
-                        <p>Annual CL Quota</p>
+                        <p>Annual Quota</p>
                         <h3>{stats.annualQuota} Days</h3>
                     </div>
                 </div>
@@ -104,7 +138,7 @@ const Leaves = () => {
                 <div className="stat-card border-teal">
                     <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faClock} /></div>
                     <div className="stat-info">
-                        <p>Remaining Balance</p>
+                        <p>Available Balance</p>
                         <h3>{stats.annualQuota - stats.used} Days</h3>
                     </div>
                 </div>
@@ -124,17 +158,23 @@ const Leaves = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {leaveHistory.map(leave => (
-                            <tr key={leave._id}>
-                                <td style={{ fontWeight: '600' }}>{leave.type}</td>
-                                <td style={{ fontSize: '14px', color: '#555' }}>
-                                    {leave.from} <span style={{ color: '#aaa' }}>to</span> {leave.to}
-                                </td>
-                                <td>{leave.days}</td>
-                                <td style={{ maxWidth: '200px', fontSize: '13px', color: '#777' }}>{leave.reason}</td>
-                                <td>{getStatusBadge(leave.status)}</td>
-                            </tr>
-                        ))}
+                        {leaveHistory.length === 0 ? (
+                            <tr><td colSpan="5" style={{textAlign:'center', padding:'20px', color:'#999'}}>No leave history found.</td></tr>
+                        ) : (
+                            leaveHistory.map(leave => (
+                                <tr key={leave._id}>
+                                    <td style={{ fontWeight: '600' }}>{leave.leaveType}</td>
+                                    <td style={{ fontSize: '14px', color: '#555' }}>
+                                        {new Date(leave.fromDate).toLocaleDateString()} 
+                                        <span style={{ color: '#aaa', margin: '0 5px' }}>to</span> 
+                                        {new Date(leave.toDate).toLocaleDateString()}
+                                    </td>
+                                    <td>{leave.days}</td>
+                                    <td style={{ maxWidth: '200px', fontSize: '13px', color: '#777' }}>{leave.reason}</td>
+                                    <td>{getStatusBadge(leave.status)}</td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>

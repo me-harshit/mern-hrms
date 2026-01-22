@@ -21,15 +21,6 @@ const userSchema = new mongoose.Schema({
         enum: ['EMPLOYEE', 'HR', 'ADMIN'],
         default: 'EMPLOYEE'
     },
-    status: {
-        type: String,
-        enum: ['ACTIVE', 'INACTIVE'],
-        default: 'ACTIVE'
-    },
-    joiningDate: {
-        type: Date,
-        default: Date.now
-    },
     phoneNumber: {
         type: String,
         default: ""
@@ -41,7 +32,24 @@ const userSchema = new mongoose.Schema({
     profilePic: {
         type: String,
         default: ""
-    }
+    },
+    aadhaar: {
+        type: String,
+        default: "Not Updated"
+    },
+    emergencyContact: {
+        type: String,
+        default: ""
+    },
+    joiningDate: {
+        type: Date,
+        default: Date.now
+    },
+    status: {
+        type: String,
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE'
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

@@ -188,3 +188,29 @@ body {
 .dropdown-link:hover .dropdown-icon {
     color: var(--primary);
 }
+
+.sidebar-section-label {
+    /* Layout & Spacing */
+    margin-top: 15px;
+    margin-bottom: 5px;
+    padding: 15px 0 5px 20px; /* Left padding aligns with link text */
+    
+    /* Typography */
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    
+    /* GTS Theme Colors */
+    color: #64748b; /* Muted Slate Gray for text */
+    
+    /* Visual Separator */
+    border-top: 1px solid #e2e8f0; /* Very subtle line to separate from User links */
+    display: block;
+}
+
+/* Optional: If you want it to pop slightly more on hover/active context */
+.sidebar:hover .sidebar-section-label {
+    color: #215D7B; /* Turns GTS Teal on sidebar hover */
+    transition: 0.3s ease;
+}

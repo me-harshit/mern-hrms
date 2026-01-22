@@ -522,3 +522,139 @@ html {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* --- ATTENDANCE PAGE STYLES (Compact Redesign) --- */
+
+.attendance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.digital-clock {
+    background: #215D7B;
+    color: white;
+    padding: 8px 16px;       /* Smaller padding */
+    border-radius: 6px;
+    font-size: 18px;         /* Smaller font */
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 4px 10px rgba(33, 93, 123, 0.3);
+}
+
+.control-card {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;           /* Reduced padding */
+    box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    
+    /* FLEXBOX MAGIC: This creates the side-by-side layout */
+    display: flex;
+    flex-direction: row;     /* Horizontal alignment */
+    align-items: center;     /* Vertically center items */
+    justify-content: center; /* Center the group horizontally */
+    gap: 50px;               /* Space between Ring and Buttons */
+    
+    margin-bottom: 25px;
+}
+
+/* Status Ring - Made Smaller */
+.status-ring {
+    width: 130px;            /* Reduced from 200px */
+    height: 130px;           /* Reduced from 200px */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Removed margin-bottom since it's now side-by-side */
+    transition: 0.5s;
+    border: 6px solid #f1f5f9;
+    flex-shrink: 0;          /* Prevents ring from squishing */
+}
+
+.status-ring.working { border-color: #16a34a; box-shadow: 0 0 15px rgba(22, 163, 74, 0.2); }
+.status-ring.break { border-color: #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.2); }
+.status-ring.out { border-color: #cbd5e1; }
+
+.inner-status {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    font-size: 16px;         /* Smaller text */
+    font-weight: 700;
+    color: #475569;
+}
+
+/* Timer Text Sizes */
+.timer-normal { font-size: 24px; color: #f59e0b; }
+.timer-danger { font-size: 24px; color: #dc2626; animation: blink 1s infinite; }
+
+@keyframes blink { 50% { opacity: 0.5; } }
+
+/* Actions Area - Aligned Left */
+.actions-area {
+    width: auto;             /* Let it take natural width */
+    text-align: left;        /* Align text left */
+}
+
+.half-day-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; /* Align toggle start */
+    gap: 10px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: #64748b;
+}
+
+.toggle-active { color: #215D7B; font-size: 22px; }
+.toggle-inactive { color: #cbd5e1; font-size: 22px; }
+
+.button-group {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-start; /* Align buttons start */
+}
+
+.gts-btn {
+    padding: 10px 24px;      /* Compact buttons */
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    transition: 0.3s;
+}
+
+.gts-btn.primary { background: #215D7B; color: white; }
+.gts-btn.primary:hover { background: #1a4a63; }
+
+.gts-btn.danger { background: #fee2e2; color: #dc2626; }
+.gts-btn.danger:hover { background: #fecaca; }
+
+.gts-btn.warning { background: #fef3c7; color: #d97706; }
+.gts-btn.warning:hover { background: #fde68a; }
+
+/* Responsive: Stack vertically on mobile */
+@media (max-width: 600px) {
+    .control-card {
+        flex-direction: column;
+        gap: 30px;
+    }
+    .actions-area {
+        width: 100%;
+        text-align: center;
+    }
+    .button-group, .half-day-toggle {
+        justify-content: center;
+    }
+}

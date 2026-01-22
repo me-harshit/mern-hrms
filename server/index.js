@@ -2,8 +2,14 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
+// --- 1. IMPORT ROUTES ---
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employee');
+// FIX: Point to the correct files
+const settingsRoutes = require('./routes/settings');     
+const attendanceRoutes = require('./routes/attendance'); 
+const leaveRoutes = require('./routes/leaves');
 
 dotenv.config();
 const app = express();
@@ -12,9 +18,12 @@ app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static('uploads'));
 
-// --- ROUTES ---
-app.use('/api/auth', authRoutes); // Use the route
+// --- 2. USE ROUTES ---
+app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/leaves', leaveRoutes);
 
 app.get('/', (req, res) => res.send("GTS HRMS API is running..."));
 

@@ -1,10 +1,7 @@
 import './styles/App.css';
 import './styles/Navigation.css';
-import CalendarPage from './pages/CalendarPage';
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import Employees from './pages/Employees';
-import Leaves from './pages/Leaves';
 
 // Pages
 import Home from './pages/Home';
@@ -12,7 +9,12 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Attendance from './pages/Attendance';
-
+import Employees from './pages/Employees';
+import Leaves from './pages/Leaves';
+import LeaveRequests from './pages/LeaveRequests';
+import CalendarPage from './pages/CalendarPage';
+import AdminSettings from './pages/AdminSettings';
+import AttendanceLogs from './pages/AttendanceLogs';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -20,7 +22,6 @@ import Topbar from './components/Topbar';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Layout Component 
-// The <Outlet /> is a placeholder that renders whatever child route is currently active
 const DashboardLayout = () => (
   <div className="app-container">
     <Sidebar />
@@ -48,17 +49,48 @@ function App() {
         {/* Protected Dashboard Section (Requires Login) */}
         <Route element={<ProtectedRoute isAllowed={isAuthenticated} />}>
           <Route element={<DashboardLayout />}>
+
+            {/* Common Routes */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/employees" element={<Employees />} />
             <Route path="/leaves" element={<Leaves />} />
 
-            {/* Role-Based Routes can be added here */}
-            {userRole === 'ADMIN' && (
-              <Route path="/employees" element={<h1>Employee Management</h1>} />
-            )}
+            {/* HR & Admin Only Route */}
+            <Route
+              path="/employees"
+              element={
+                (userRole === 'HR' || userRole === 'ADMIN')
+                  ? <Employees />
+                  : <Navigate to="/dashboard" />
+              }
+            />
+            <Route
+              path="/attendance-logs"
+              element={
+                (userRole === 'HR' || userRole === 'ADMIN')
+                  ? <AttendanceLogs />
+                  : <Navigate to="/dashboard" />
+              }
+            />
+            <Route
+              path="/admin-settings"
+              element={
+                userRole === 'ADMIN'
+                  ? <AdminSettings />
+                  : <Navigate to="/dashboard" />
+              }
+            />
+            <Route
+              path="/leave-requests"
+              element={
+                (userRole === 'HR' || userRole === 'ADMIN')
+                  ? <LeaveRequests />
+                  : <Navigate to="/dashboard" />
+              }
+            />
+
           </Route>
         </Route>
 

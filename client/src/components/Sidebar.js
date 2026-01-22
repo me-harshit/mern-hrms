@@ -8,7 +8,7 @@ import {
     faUser,
     faFileAlt,
     faUsers,        // Added this
-    faShieldAlt    // Added this
+    faShieldAlt,    // Added this
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = () => {
@@ -47,9 +47,22 @@ const Sidebar = () => {
 
                 {/* HR & ADMIN ONLY: Employee Directory */}
                 {(userRole === 'HR' || userRole === 'ADMIN') && (
-                    <Link to="/employees" className={`nav-link ${location.pathname === '/employees' ? 'active' : ''}`}>
-                        <FontAwesomeIcon icon={faUsers} className="nav-icon" /> <span>Manage Employees</span>
-                    </Link>
+                    <>
+                        <div className="sidebar-section-label">HR Management</div>
+
+                        <Link to="/employees" className={`nav-link ${location.pathname === '/employees' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faUsers} className="nav-icon" /> <span>Employees</span>
+                        </Link>
+
+                        <Link to="/attendance-logs" className={`nav-link ${location.pathname === '/attendance-logs' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faCalendarCheck} className="nav-icon" /> <span>Attendance Logs</span>
+                        </Link>
+
+                        <Link to="/leave-requests" className={`nav-link ${location.pathname === '/leave-requests' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Requests</span>
+                        </Link>
+                    </>
+
                 )}
 
                 {/* ADMIN ONLY: System Settings */}

@@ -63,6 +63,8 @@ const Employees = () => {
                     password: document.getElementById('add-password').value,
                     joiningDate: document.getElementById('add-date').value,
                     role: document.getElementById('add-role').value,
+                    aadhaar: document.getElementById('edit-aadhaar').value,
+                    emergencyContact: document.getElementById('edit-emergency').value,
                 }
             }
         });
@@ -85,36 +87,53 @@ const Employees = () => {
     const handleEditEmployee = async (emp) => {
         const { value: formValues } = await Swal.fire({
             title: 'Edit Employee Details',
+            // Increased width to fit more fields
+            width: '600px',
             html: `
-            <div style="text-align: left; padding: 0 10px;">
-                <label class="swal-custom-label">Full Name</label>
-                <input id="edit-name" class="swal2-input" value="${emp.name}">
+            <div style="text-align: left; padding: 0 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 
-                <label class="swal-custom-label">Work Email</label>
-                <input id="edit-email" class="swal2-input" value="${emp.email}">
-                
-                <label class="swal-custom-label">New Password (Leave blank to keep current)</label>
-                <input id="edit-password" type="password" class="swal2-input" placeholder="••••••••">
+                <div style="grid-column: span 2;">
+                    <label class="swal-custom-label">Full Name</label>
+                    <input id="edit-name" class="swal2-input" value="${emp.name}" style="width: 95%;">
+                </div>
 
-                <label class="swal-custom-label">Joining Date</label>
-                <input id="edit-date" type="date" class="swal2-input" value="${emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : ''}">
-                
-                <div style="display: flex; gap: 10px;">
-                    <div style="flex: 1;">
-                        <label class="swal-custom-label">Role</label>
-                        <select id="edit-role" class="swal2-select" style="width: 100%;">
-                            <option value="EMPLOYEE" ${emp.role === 'EMPLOYEE' ? 'selected' : ''}>Employee</option>
-                            <option value="HR" ${emp.role === 'HR' ? 'selected' : ''}>HR Manager</option>
-                            <option value="ADMIN" ${emp.role === 'ADMIN' ? 'selected' : ''}>Admin</option>
-                        </select>
-                    </div>
-                    <div style="flex: 1;">
-                        <label class="swal-custom-label">Status</label>
-                        <select id="edit-status" class="swal2-select" style="width: 100%;">
-                            <option value="ACTIVE" ${emp.status === 'ACTIVE' ? 'selected' : ''}>Active</option>
-                            <option value="INACTIVE" ${emp.status === 'INACTIVE' ? 'selected' : ''}>Inactive</option>
-                        </select>
-                    </div>
+                <div>
+                    <label class="swal-custom-label">Work Email</label>
+                    <input id="edit-email" class="swal2-input" value="${emp.email}" style="width: 90%;">
+                </div>
+                <div>
+                    <label class="swal-custom-label">Joining Date</label>
+                    <input id="edit-date" type="date" class="swal2-input" value="${emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : ''}" style="width: 90%;">
+                </div>
+
+                <div>
+                    <label class="swal-custom-label">Aadhaar Number</label>
+                    <input id="edit-aadhaar" class="swal2-input" value="${emp.aadhaar || ''}" placeholder="1234-5678-9012" style="width: 90%;">
+                </div>
+                <div>
+                    <label class="swal-custom-label">Emergency Contact</label>
+                    <input id="edit-emergency" class="swal2-input" value="${emp.emergencyContact || ''}" placeholder="+91..." style="width: 90%;">
+                </div>
+
+                <div>
+                    <label class="swal-custom-label">Role</label>
+                    <select id="edit-role" class="swal2-select" style="width: 100%;">
+                        <option value="EMPLOYEE" ${emp.role === 'EMPLOYEE' ? 'selected' : ''}>Employee</option>
+                        <option value="HR" ${emp.role === 'HR' ? 'selected' : ''}>HR Manager</option>
+                        <option value="ADMIN" ${emp.role === 'ADMIN' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="swal-custom-label">Status</label>
+                    <select id="edit-status" class="swal2-select" style="width: 100%;">
+                        <option value="ACTIVE" ${emp.status === 'ACTIVE' ? 'selected' : ''}>Active</option>
+                        <option value="INACTIVE" ${emp.status === 'INACTIVE' ? 'selected' : ''}>Inactive</option>
+                    </select>
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label class="swal-custom-label">New Password (Optional)</label>
+                    <input id="edit-password" type="password" class="swal2-input" placeholder="Leave blank to keep current" style="width: 95%;">
                 </div>
             </div>
         `,
@@ -124,10 +143,13 @@ const Employees = () => {
             preConfirm: () => ({
                 name: document.getElementById('edit-name').value,
                 email: document.getElementById('edit-email').value,
-                password: document.getElementById('edit-password').value,
                 joiningDate: document.getElementById('edit-date').value,
+                // Capture new fields
+                aadhaar: document.getElementById('edit-aadhaar').value,
+                emergencyContact: document.getElementById('edit-emergency').value,
                 role: document.getElementById('edit-role').value,
                 status: document.getElementById('edit-status').value,
+                password: document.getElementById('edit-password').value,
             })
         });
 
@@ -137,10 +159,10 @@ const Employees = () => {
                 await axios.put(`http://localhost:5000/api/employees/${emp._id}`, formValues, {
                     headers: { 'x-auth-token': token }
                 });
-                Swal.fire('Updated!', 'Employee credentials updated.', 'success');
+                Swal.fire('Updated!', 'Employee record updated.', 'success');
                 fetchEmployees();
             } catch (err) {
-                Swal.fire('Error', err.response?.data?.message || 'Update failed', 'error');
+                Swal.fire('Error', 'Update failed.', 'error');
             }
         }
     };
