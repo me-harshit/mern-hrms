@@ -1,8 +1,10 @@
 import './styles/App.css';
 import './styles/Navigation.css';
+import CalendarPage from './pages/CalendarPage';
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Employees from './pages/Employees';
+import Leaves from './pages/Leaves';
 
 // Pages
 import Home from './pages/Home';
@@ -49,7 +51,9 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/attendance" element={<Attendance />} />
+            <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/employees" element={<Employees />} />
+            <Route path="/leaves" element={<Leaves />} />
 
             {/* Role-Based Routes can be added here */}
             {userRole === 'ADMIN' && (

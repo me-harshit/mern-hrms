@@ -481,3 +481,44 @@ html {
     background: var(--secondary);
     transform: scale(1.1);
 }
+
+/* --- LEAVES PAGE STYLES --- */
+
+.leaves-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.status-badge.success {
+    background-color: #dcfce7;
+    color: #16a34a;
+}
+
+.status-badge.danger {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.status-badge.warning {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+/* Responsive Grid */
+@media (max-width: 768px) {
+    .leaves-stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

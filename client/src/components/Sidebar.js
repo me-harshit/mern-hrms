@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
 import {
     faThLarge,
     faCalendarCheck,
@@ -36,8 +37,12 @@ const Sidebar = () => {
                     <FontAwesomeIcon icon={faUser} className="nav-icon" /> <span>My Profile</span>
                 </Link>
 
+                <Link to="/calendar" className={`nav-link ${location.pathname === '/calendar' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faCalendarAlt} className="nav-icon" /> <span>Yearly Calendar</span>
+                </Link>
+
                 <Link to="/leaves" className={`nav-link ${location.pathname === '/leaves' ? 'active' : ''}`}>
-                    <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leaves</span>
+                    <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
                 </Link>
 
                 {/* HR & ADMIN ONLY: Employee Directory */}
