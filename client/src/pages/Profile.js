@@ -1,35 +1,182 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import Swal from 'sweetalert2';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+    faUser, faEnvelope, faPhone, faMapMarkerAlt, 
+    faEdit, faSave, faTimes, faCamera 
+} from '@fortawesome/free-solid-svg-icons';
 
 const Profile = () => {
-    // Hardcoded for UI Phase
-    const user = {
-        name: "John Doe",
-        email: "john.doe@office.com",
-        role: "Software Engineer",
-        dept: "IT",
-        joined: "January 15, 2024"
+    const [user, setUser] = useState(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({
+        name: '', email: '', phoneNumber: '', address: ''
+    });
+
+    useEffect(() => {
+        fetchProfile();
+    }, []);
+
+    const fetchProfile = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get('http://localhost:5000/api/auth/me', {
+                headers: { 'x-auth-token': token }
+            });
+            setUser(res.data);
+            setFormData({
+                name: res.data.name,
+                email: res.data.email,
+                phoneNumber: res.data.phoneNumber || '',
+                address: res.data.address || ''
+            });
+        } catch (err) {
+            console.error("Error fetching profile", err);
+        }
     };
 
+    // --- LOGIC: Handle Profile Picture Upload ---
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const uploadData = new FormData();
+        uploadData.append('avatar', file);
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.post('http://localhost:5000/api/auth/upload-avatar', uploadData, {
+                headers: { 
+                    'Content-Type': 'multipart/form-data',
+                    'x-auth-token': token 
+                }
+            });
+            
+            // Update local state to show the new image immediately
+            setUser({ ...user, profilePic: res.data.filePath });
+            
+            Swal.fire({ icon: 'success', title: 'Picture Updated', timer: 1000, showConfirmButton: false });
+        } catch (err) {
+            Swal.fire('Error', 'Image upload failed', 'error');
+        }
+    };
+
+    const handleUpdate = async (e) => {
+        e.preventDefault();
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.put('http://localhost:5000/api/auth/update-profile', formData, {
+                headers: { 'x-auth-token': token }
+            });
+            setUser(res.data);
+            setIsEditing(false);
+            
+            // Sync with localStorage for Topbar/Sidebar
+            const storedUser = JSON.parse(localStorage.getItem('user'));
+            localStorage.setItem('user', JSON.stringify({ ...storedUser, name: res.data.name }));
+
+            Swal.fire({ icon: 'success', title: 'Profile Updated', timer: 1500, showConfirmButton: false });
+        } catch (err) {
+            Swal.fire('Error', 'Could not update profile', 'error');
+        }
+    };
+
+    if (!user) return <div className="main-content">Loading profile...</div>;
+
+    const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
+
     return (
-        <div>
-            <h1>My Profile</h1>
-            <div style={profileCard}>
-                <div style={avatarStyle}>{user.name.charAt(0)}</div>
-                <div style={{ flexGrow: 1 }}>
-                    <h2 style={{ margin: '0 0 10px 0' }}>{user.name}</h2>
-                    <p><strong>Role:</strong> {user.role}</p>
-                    <p><strong>Department:</strong> {user.dept}</p>
-                    <p><strong>Email:</strong> {user.email}</p>
-                    <p><strong>Joined Date:</strong> {user.joined}</p>
+        <div className="profile-container">
+            <h1 className="page-title">My Profile</h1>
+            
+            <div className="profile-card">
+                <div className="profile-header">
+                    {/* Avatar Container with Upload Overlay */}
+                    <div className="profile-avatar-container">
+                        {user.profilePic ? (
+                            <img 
+                                src={`http://localhost:5000${user.profilePic}`} 
+                                alt="Profile" 
+                                className="profile-img-large" 
+                            />
+                        ) : (
+                            <div className="profile-avatar-large">{initials}</div>
+                        )}
+                        <label htmlFor="avatar-upload" className="avatar-edit-icon">
+                            <FontAwesomeIcon icon={faCamera} />
+                            <input 
+                                type="file" 
+                                id="avatar-upload" 
+                                hidden 
+                                onChange={handleFileChange} 
+                                accept="image/*" 
+                            />
+                        </label>
+                    </div>
+
+                    <div className="profile-info-text">
+                        <h2>{user.name}</h2>
+                        <span className={`role-tag ${user.role.toLowerCase()}`}>{user.role}</span>
+                    </div>
+
+                    {!isEditing && (
+                        <button className="edit-profile-btn" onClick={() => setIsEditing(true)}>
+                            <FontAwesomeIcon icon={faEdit} /> Edit Profile
+                        </button>
+                    )}
                 </div>
-                <button style={editBtn}>Edit Profile</button>
+
+                <hr className="profile-divider" />
+
+                {isEditing ? (
+                    <form onSubmit={handleUpdate} className="profile-form">
+                        <div className="form-grid">
+                            <div className="form-group">
+                                <label>Full Name</label>
+                                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
+                            </div>
+                            <div className="form-group">
+                                <label>Work Email</label>
+                                <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
+                            </div>
+                            <div className="form-group">
+                                <label>Phone Number</label>
+                                <input type="text" value={formData.phoneNumber} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} placeholder="+91 ..." />
+                            </div>
+                            <div className="form-group">
+                                <label>Address</label>
+                                <input type="text" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="City, Country" />
+                            </div>
+                        </div>
+                        <div className="profile-actions">
+                            <button type="submit" className="save-btn"><FontAwesomeIcon icon={faSave} /> Save Changes</button>
+                            <button type="button" className="cancel-btn" onClick={() => setIsEditing(false)}><FontAwesomeIcon icon={faTimes} /> Cancel</button>
+                        </div>
+                    </form>
+                ) : (
+                    <div className="profile-details-grid">
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faEnvelope} className="detail-icon" />
+                            <div><label>Email Address</label><p>{user.email}</p></div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faPhone} className="detail-icon" />
+                            <div><label>Phone Number</label><p>{user.phoneNumber || 'Not provided'}</p></div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faMapMarkerAlt} className="detail-icon" />
+                            <div><label>Address</label><p>{user.address || 'Not provided'}</p></div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faUser} className="detail-icon" />
+                            <div><label>Member Since</label><p>{new Date(user.createdAt).toLocaleDateString('en-GB')}</p></div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
-
-const profileCard = { display: 'flex', gap: '30px', background: '#fff', padding: '30px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', alignItems: 'center', marginTop: '20px' };
-const avatarStyle = { width: '100px', height: '100px', background: '#007bff', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '40px', borderRadius: '50%' };
-const editBtn = { alignSelf: 'flex-start', background: '#f1f2f6', border: 'none', padding: '8px 15px', borderRadius: '5px', cursor: 'pointer' };
 
 export default Profile;

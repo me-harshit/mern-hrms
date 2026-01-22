@@ -21,9 +21,26 @@ const userSchema = new mongoose.Schema({
         enum: ['EMPLOYEE', 'HR', 'ADMIN'],
         default: 'EMPLOYEE'
     },
-    joinedDate: {
+    status: {
+        type: String,
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE'
+    },
+    joiningDate: {
         type: Date,
         default: Date.now
+    },
+    phoneNumber: {
+        type: String,
+        default: ""
+    },
+    address: {
+        type: String,
+        default: ""
+    },
+    profilePic: {
+        type: String,
+        default: ""
     }
 }, { timestamps: true });
 
