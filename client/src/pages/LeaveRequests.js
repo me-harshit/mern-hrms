@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faTimes } from '@fortawesome/free-solid-svg-icons'; // Removed faFileAlt
+import { faCheck, faTimes } from '@fortawesome/free-solid-svg-icons';
 
 const LeaveRequests = () => {
-    // ... (rest of your code stays exactly the same) ...
     const [requests, setRequests] = useState([]);
 
     useEffect(() => {
@@ -14,10 +13,8 @@ const LeaveRequests = () => {
 
     const fetchRequests = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:5000/api/leaves/all-requests', {
-                headers: { 'x-auth-token': token }
-            });
+            // Use api.get with relative path
+            const res = await api.get('/leaves/all-requests');
             setRequests(res.data);
         } catch (err) {
             console.error("Error fetching requests");
@@ -36,10 +33,9 @@ const LeaveRequests = () => {
 
         if (result.isConfirmed) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.put(`http://localhost:5000/api/leaves/action/${id}`, { status }, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.put with relative path
+                await api.put(`/leaves/action/${id}`, { status });
+                
                 Swal.fire('Updated!', `Request has been ${status}.`, 'success');
                 fetchRequests(); // Refresh
             } catch (err) {

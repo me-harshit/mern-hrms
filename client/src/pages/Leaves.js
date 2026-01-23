@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import api from '../utils/api';
 import { faPlus, faFileAlt, faCheckCircle, faTimesCircle, faClock } from '@fortawesome/free-solid-svg-icons';
 
 const Leaves = () => {
@@ -20,9 +21,7 @@ const Leaves = () => {
     const fetchLeaves = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:5000/api/leaves/my-leaves', {
-                headers: { 'x-auth-token': token }
-            });
+            const res = await api.get('/leaves/my-leaves');
             setLeaveHistory(res.data);
 
             // Calculate Stats (Basic logic)
@@ -88,9 +87,7 @@ const Leaves = () => {
         if (formValues) {
             try {
                 const token = localStorage.getItem('token');
-                await axios.post('http://localhost:5000/api/leaves/apply', formValues, {
-                    headers: { 'x-auth-token': token }
-                });
+                await api.post('/leaves/apply', formValues);
                 
                 Swal.fire('Submitted!', 'Your leave request has been sent to HR.', 'success');
                 fetchLeaves(); // Refresh list

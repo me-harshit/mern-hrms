@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -39,10 +39,8 @@ const Attendance = () => {
     // --- API: FETCH LOGS ---
     const fetchLogs = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:5000/api/attendance/my-logs', {
-                headers: { 'x-auth-token': token }
-            });
+            // Use api.get with relative path (no token needed here manually)
+            const res = await api.get('/attendance/my-logs');
             setLogs(res.data);
             const todayLog = res.data.find(log => !log.checkOut); 
             
@@ -70,8 +68,6 @@ const Attendance = () => {
     // --- HANDLERS ---
     const handleCheckIn = async () => {
         try {
-            const token = localStorage.getItem('token');
-            
             const result = await Swal.fire({
                 title: 'Confirm Check-In',
                 text: 'Start your work day?',
@@ -82,10 +78,8 @@ const Attendance = () => {
             });
 
             if (result.isConfirmed) {
-                // Call API
-                const res = await axios.post('http://localhost:5000/api/attendance/checkin', {}, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.post with relative path
+                const res = await api.post('/attendance/checkin', {});
 
                 setStatus('WORKING');
                 fetchLogs(); // Refresh table
@@ -100,8 +94,6 @@ const Attendance = () => {
 
     const handleCheckOut = async () => {
         try {
-            const token = localStorage.getItem('token');
-            
             // Warn if before 14:30
             const now = new Date();
             const isEarlyExit = now.getHours() < 14 || (now.getHours() === 14 && now.getMinutes() < 30);
@@ -119,9 +111,8 @@ const Attendance = () => {
             });
 
             if (result.isConfirmed) {
-                await axios.post('http://localhost:5000/api/attendance/checkout', {}, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.post with relative path
+                await api.post('/attendance/checkout', {});
 
                 setStatus('OUT');
                 fetchLogs(); // Refresh table
@@ -177,8 +168,6 @@ const Attendance = () => {
 
                 {/* RIGHT: Controls */}
                 <div className="actions-area">
-                    {/* Manual Half-Day Toggle REMOVED */}
-
                     <div className="button-group">
                         {status === 'OUT' ? (
                             <button className="gts-btn primary" onClick={handleCheckIn}>
@@ -235,7 +224,6 @@ const Attendance = () => {
                             logs.map((log, index) => (
                                 <tr key={index}>
                                     <td style={{ fontWeight: '600', color: '#555' }}>{log.date}</td>
-                                    {/* Format time nicely from ISO string if needed */}
                                     <td>{new Date(log.checkIn).toLocaleTimeString()}</td>
                                     <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString() : '-'}</td>
                                     

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faTrash, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
@@ -8,7 +8,7 @@ import '../styles/Calendar.css';
 const CalendarPage = () => {
     const year = new Date().getFullYear();
     const [events, setEvents] = useState({});
-    const [holidays, setHolidays] = useState([]); // Re-enabled for the list
+    const [holidays, setHolidays] = useState([]); 
     const [loading, setLoading] = useState(true);
 
     const user = JSON.parse(localStorage.getItem('user'));
@@ -26,16 +26,14 @@ const CalendarPage = () => {
 
     const fetchCalendarData = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const config = { headers: { 'x-auth-token': token } };
-
+            // api util handles base URL and headers automatically
             const [holidaysRes, attendanceRes, leavesRes] = await Promise.all([
-                axios.get('http://localhost:5000/api/holidays', config),
-                axios.get('http://localhost:5000/api/attendance/my-logs', config),
-                axios.get('http://localhost:5000/api/leaves/my-leaves', config)
+                api.get('/holidays'),
+                api.get('/attendance/my-logs'),
+                api.get('/leaves/my-leaves')
             ]);
 
-            setHolidays(holidaysRes.data); // Save raw list for the table
+            setHolidays(holidaysRes.data); 
             processEvents(holidaysRes.data, attendanceRes.data, leavesRes.data);
             setLoading(false);
 
@@ -106,10 +104,8 @@ const CalendarPage = () => {
 
         if (formValues && formValues.name && formValues.date) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.post('http://localhost:5000/api/holidays', formValues, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.post with relative path
+                await api.post('/holidays', formValues);
                 Swal.fire('Success', 'Holiday added successfully', 'success');
                 fetchCalendarData();
             } catch (err) {
@@ -130,10 +126,8 @@ const CalendarPage = () => {
 
         if (result.isConfirmed) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.delete(`http://localhost:5000/api/holidays/${id}`, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.delete with relative path
+                await api.delete(`/holidays/${id}`);
                 Swal.fire('Deleted', 'Holiday has been removed.', 'success');
                 fetchCalendarData();
             } catch (err) {

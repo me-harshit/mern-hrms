@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faUser, faEnvelope, faPhone, faMapMarkerAlt, 
     faEdit, faSave, faTimes, faCamera,
-    faIdCard, faFirstAid // Added new icons
+    faIdCard, faFirstAid 
 } from '@fortawesome/free-solid-svg-icons';
 
 const Profile = () => {
@@ -23,10 +23,8 @@ const Profile = () => {
 
     const fetchProfile = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:5000/api/auth/me', {
-                headers: { 'x-auth-token': token }
-            });
+            // Use api.get with relative path
+            const res = await api.get('/auth/me');
             setUser(res.data);
             
             // Only set editable fields in formData
@@ -50,11 +48,11 @@ const Profile = () => {
         uploadData.append('avatar', file);
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.post('http://localhost:5000/api/auth/upload-avatar', uploadData, {
+            // Use api.post. We must override Content-Type for file uploads.
+            // Token is still added automatically by api.js
+            const res = await api.post('/auth/upload-avatar', uploadData, {
                 headers: { 
-                    'Content-Type': 'multipart/form-data',
-                    'x-auth-token': token 
+                    'Content-Type': 'multipart/form-data'
                 }
             });
             
@@ -74,10 +72,8 @@ const Profile = () => {
     const handleUpdate = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.put('http://localhost:5000/api/auth/update-profile', formData, {
-                headers: { 'x-auth-token': token }
-            });
+            // Use api.put with relative path
+            const res = await api.put('/auth/update-profile', formData);
             setUser(res.data);
             setIsEditing(false);
             
@@ -94,6 +90,7 @@ const Profile = () => {
     if (!user) return <div className="main-content">Loading profile...</div>;
 
     const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
+    const SERVER_URL = 'http://localhost:5000'; // Helper for static images
 
     return (
         <div className="profile-container">
@@ -105,7 +102,7 @@ const Profile = () => {
                     <div className="profile-avatar-container">
                         {user.profilePic ? (
                             <img 
-                                src={`http://localhost:5000${user.profilePic}`} 
+                                src={`${SERVER_URL}${user.profilePic}`} 
                                 alt="Profile" 
                                 className="profile-img-large" 
                             />

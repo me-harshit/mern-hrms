@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCog, faSave, faClock, faUserClock } from '@fortawesome/free-solid-svg-icons';
@@ -19,11 +19,8 @@ const AdminSettings = () => {
 
     const fetchSettings = async () => {
         try {
-            const token = localStorage.getItem('token');
-            // Ensure this endpoint matches your backend route
-            const res = await axios.get('http://localhost:5000/api/settings', {
-                headers: { 'x-auth-token': token }
-            });
+            // Use api.get with relative path
+            const res = await api.get('/settings');
             if (res.data) {
                 setSettings({
                     officeStartTime: res.data.officeStartTime || '09:30',
@@ -41,10 +38,9 @@ const AdminSettings = () => {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('token');
-            await axios.put('http://localhost:5000/api/settings', settings, {
-                headers: { 'x-auth-token': token }
-            });
+            // Use api.put with relative path
+            await api.put('/settings', settings);
+            
             Swal.fire({
                 title: 'Settings Saved!',
                 text: 'Attendance rules have been updated.',

@@ -22,18 +22,33 @@ router.get('/', auth, async (req, res) => {
 // @desc    HR/Admin adds a new employee
 router.post('/add', auth, async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        // 1. Destructure ALL fields sent from frontend
+        const {
+            name, email, password, role,
+            joiningDate, aadhaar, emergencyContact
+        } = req.body;
 
         let user = await User.findOne({ email });
         if (user) return res.status(400).json({ message: 'User already exists' });
 
-        user = new User({ name, email, password, role });
+        // 2. Create User with ALL fields
+        user = new User({
+            name,
+            email,
+            password,
+            role,
+            joiningDate,
+            aadhaar,
+            emergencyContact
+        });
+
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
 
         await user.save();
         res.json({ message: 'Employee added successfully' });
     } catch (err) {
+        console.error(err.message);
         res.status(500).send('Server Error');
     }
 });

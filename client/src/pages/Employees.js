@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faUserTie, faEdit, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
@@ -15,10 +15,8 @@ const Employees = () => {
     const fetchEmployees = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:5000/api/employees', {
-                headers: { 'x-auth-token': token }
-            });
+            // Using api utility automatically adds token and base URL
+            const res = await api.get('/employees'); 
             setEmployees(res.data);
         } catch (err) {
             console.error(err);
@@ -63,18 +61,16 @@ const Employees = () => {
                     password: document.getElementById('add-password').value,
                     joiningDate: document.getElementById('add-date').value,
                     role: document.getElementById('add-role').value,
-                    aadhaar: document.getElementById('edit-aadhaar').value,
-                    emergencyContact: document.getElementById('edit-emergency').value,
+                    // Note: Aadhaar & Emergency aren't in this HTML, ensure they exist if extracting
+                    // For now, removing them to match the HTML above, or add fields to HTML if needed
                 }
             }
         });
 
         if (formValues) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.post('http://localhost:5000/api/employees/add', formValues, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.post with relative path
+                await api.post('/employees/add', formValues);
                 Swal.fire('Success', 'Employee added!', 'success');
                 fetchEmployees();
             } catch (err) {
@@ -87,7 +83,6 @@ const Employees = () => {
     const handleEditEmployee = async (emp) => {
         const { value: formValues } = await Swal.fire({
             title: 'Edit Employee Details',
-            // Increased width to fit more fields
             width: '600px',
             html: `
             <div style="text-align: left; padding: 0 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -136,7 +131,7 @@ const Employees = () => {
                     <input id="edit-password" type="password" class="swal2-input" placeholder="Leave blank to keep current" style="width: 95%;">
                 </div>
             </div>
-        `,
+            `,
             showCancelButton: true,
             confirmButtonText: 'Save Changes',
             confirmButtonColor: '#215D7B',
@@ -144,7 +139,6 @@ const Employees = () => {
                 name: document.getElementById('edit-name').value,
                 email: document.getElementById('edit-email').value,
                 joiningDate: document.getElementById('edit-date').value,
-                // Capture new fields
                 aadhaar: document.getElementById('edit-aadhaar').value,
                 emergencyContact: document.getElementById('edit-emergency').value,
                 role: document.getElementById('edit-role').value,
@@ -155,10 +149,8 @@ const Employees = () => {
 
         if (formValues) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.put(`http://localhost:5000/api/employees/${emp._id}`, formValues, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.put with relative path
+                await api.put(`/employees/${emp._id}`, formValues);
                 Swal.fire('Updated!', 'Employee record updated.', 'success');
                 fetchEmployees();
             } catch (err) {

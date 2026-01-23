@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import centralized api
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import '../styles/Auth.css';
@@ -12,7 +12,8 @@ const Login = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+            // Use api.post with relative path
+            const res = await api.post('/auth/login', { email, password });
             
             localStorage.setItem('token', res.data.token);
             localStorage.setItem('user', JSON.stringify(res.data.user));

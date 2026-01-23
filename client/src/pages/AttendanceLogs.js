@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faEdit } from '@fortawesome/free-solid-svg-icons'; // Removed unused icons
+import { faSearch, faEdit } from '@fortawesome/free-solid-svg-icons';
 
 const AttendanceLogs = () => {
     const [logs, setLogs] = useState([]);
@@ -54,14 +54,12 @@ const AttendanceLogs = () => {
         }
 
         setFilteredLogs(result);
-    }, [logs, filterType, searchTerm]); // Dependencies are now correct
+    }, [logs, filterType, searchTerm]); 
 
     const fetchLogs = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:5000/api/attendance/all-logs', {
-                headers: { 'x-auth-token': token }
-            });
+            // Use api.get with relative path
+            const res = await api.get('/attendance/all-logs');
             setLogs(res.data);
         } catch (err) {
             console.error("Error fetching logs");
@@ -106,10 +104,9 @@ const AttendanceLogs = () => {
 
         if (formValues) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.put(`http://localhost:5000/api/attendance/update/${log._id}`, formValues, {
-                    headers: { 'x-auth-token': token }
-                });
+                // Use api.put with relative path
+                await api.put(`/attendance/update/${log._id}`, formValues);
+                
                 Swal.fire('Updated', 'Attendance record updated.', 'success');
                 fetchLogs(); 
             } catch (err) {

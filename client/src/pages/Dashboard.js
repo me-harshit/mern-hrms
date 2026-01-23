@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api'; // Import api util
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faUsers, faUserCheck, faClipboardList, faPlaneDeparture, 
@@ -17,15 +17,13 @@ const Dashboard = () => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const token = localStorage.getItem('token');
-                // Determine URL based on Role
+                // Determine relative URL based on Role
                 const url = isEmployee 
-                    ? 'http://localhost:5000/api/dashboard/employee-stats'
-                    : 'http://localhost:5000/api/dashboard/admin-stats';
+                    ? '/dashboard/employee-stats'
+                    : '/dashboard/admin-stats';
 
-                const res = await axios.get(url, {
-                    headers: { 'x-auth-token': token }
-                });
+                // api.get handles base URL and headers automatically
+                const res = await api.get(url);
                 setStats(res.data);
                 setLoading(false);
             } catch (err) {
