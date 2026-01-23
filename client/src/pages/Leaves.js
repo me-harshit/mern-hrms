@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import api from '../utils/api';
@@ -20,7 +19,6 @@ const Leaves = () => {
 
     const fetchLeaves = async () => {
         try {
-            const token = localStorage.getItem('token');
             const res = await api.get('/leaves/my-leaves');
             setLeaveHistory(res.data);
 
@@ -86,7 +84,6 @@ const Leaves = () => {
 
         if (formValues) {
             try {
-                const token = localStorage.getItem('token');
                 await api.post('/leaves/apply', formValues);
                 
                 Swal.fire('Submitted!', 'Your leave request has been sent to HR.', 'success');
