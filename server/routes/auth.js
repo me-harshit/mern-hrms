@@ -17,7 +17,7 @@ if (!fs.existsSync(uploadDir)) {
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         // Use the absolute path variable
-        cb(null, uploadDir); 
+        cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
         // Ensure req.user exists before accessing id to prevent crashes
@@ -30,12 +30,33 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) => {
+router.post('/upload-avatar', auth, (req, res, next) => {
+    // Manually call the upload middleware to catch errors
+    const uploadMiddleware = upload.single('avatar');
+
+    uploadMiddleware(req, res, (err) => {
+        if (err) {
+            // THIS WILL PRINT THE REAL ERROR IN PM2 LOGS
+            console.error("❌ MULTER UPLOAD ERROR:", err);
+            return res.status(500).json({
+                message: "Upload failed on server",
+                error: err.message
+            });
+        }
+        // If no error, continue to your DB logic
+        next();
+    });
+}, async (req, res) => {
     try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
         const filePath = `/uploads/${req.file.filename}`;
         await User.findByIdAndUpdate(req.user.id, { profilePic: filePath });
         res.json({ filePath });
     } catch (err) {
+        console.error("❌ DB SAVE ERROR:", err.message);
         res.status(500).send('Server Error');
     }
 });
@@ -72,9 +93,9 @@ router.post('/login', async (req, res) => {
             { expiresIn: '24h' }, // Token valid for 1 day
             (err, token) => {
                 if (err) throw err;
-                res.json({ 
-                    token, 
-                    user: { id: user.id, name: user.name, role: user.role } 
+                res.json({
+                    token,
+                    user: { id: user.id, name: user.name, role: user.role }
                 });
             }
         );
@@ -98,7 +119,7 @@ router.get('/me', auth, async (req, res) => {
 router.put('/update-profile', auth, async (req, res) => {
     try {
         const { name, email, phoneNumber, address } = req.body;
-        
+
         // Find user and update
         const user = await User.findByIdAndUpdate(
             req.user.id,
