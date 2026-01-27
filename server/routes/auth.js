@@ -8,42 +8,52 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const uploadDir = path.join(__dirname, '../uploads');
+// --- DEBUGGING PATH RESOLUTION ---
+// process.cwd() gets the folder you are in when you run 'node index.js'
+const uploadDir = path.join(process.cwd(), 'uploads');
 
+console.log("------------------------------------------------");
+console.log("📂 UPLOAD DIRECTORY SET TO:", uploadDir);
+console.log("✅ Does folder exist?", fs.existsSync(uploadDir));
+console.log("------------------------------------------------");
+
+// Ensure folder exists
 if (!fs.existsSync(uploadDir)) {
+    console.log("⚠️ Folder missing. Creating it now...");
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        // Use the absolute path variable
+        // Use the explicit absolute path
         cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
-        // Ensure req.user exists before accessing id to prevent crashes
         if (!req.user || !req.user.id) {
             return cb(new Error('User not authenticated in Multer'));
         }
-        cb(null, `${req.user.id}-${Date.now()}${path.extname(file.originalname)}`);
+        const uniqueSuffix = Date.now();
+        const ext = path.extname(file.originalname);
+        cb(null, `${req.user.id}-${uniqueSuffix}${ext}`);
     }
 });
 
 const upload = multer({ storage });
 
+// --- UPLOAD ROUTE WITH ERROR HANDLING ---
 router.post('/upload-avatar', auth, (req, res, next) => {
-    // Manually call the upload middleware to catch errors
     const uploadMiddleware = upload.single('avatar');
-
+    
     uploadMiddleware(req, res, (err) => {
         if (err) {
-            // THIS WILL PRINT THE REAL ERROR IN PM2 LOGS
             console.error("❌ MULTER UPLOAD ERROR:", err);
-            return res.status(500).json({
-                message: "Upload failed on server",
-                error: err.message
+            // Return JSON error so frontend doesn't get HTML 500 page
+            return res.status(500).json({ 
+                message: "Upload failed on server", 
+                error: err.message,
+                pathAttempted: uploadDir 
             });
         }
-        // If no error, continue to your DB logic
         next();
     });
 }, async (req, res) => {
@@ -52,7 +62,11 @@ router.post('/upload-avatar', auth, (req, res, next) => {
             return res.status(400).json({ message: 'No file uploaded' });
         }
 
+        // Save relative path for the frontend URL
         const filePath = `/uploads/${req.file.filename}`;
+        
+        console.log("✅ File saved successfully at:", req.file.path);
+        
         await User.findByIdAndUpdate(req.user.id, { profilePic: filePath });
         res.json({ filePath });
     } catch (err) {
@@ -65,47 +79,33 @@ router.post('/upload-avatar', auth, (req, res, next) => {
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-
-        // 1. Check if user exists
         const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(400).json({ message: 'Invalid Credentials' });
-        }
+        if (!user) return res.status(400).json({ message: 'Invalid Credentials' });
 
-        // 2. Compare hashed password
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid Credentials' });
-        }
+        if (!isMatch) return res.status(400).json({ message: 'Invalid Credentials' });
 
-        // 3. Create JWT Payload (Include ID and Role)
-        const payload = {
-            user: {
-                id: user.id,
-                role: user.role
-            }
-        };
+        const payload = { user: { id: user.id, role: user.role } };
 
-        // 4. Sign the token
         jwt.sign(
             payload,
             process.env.JWT_SECRET,
-            { expiresIn: '24h' }, // Token valid for 1 day
+            { expiresIn: '24h' },
             (err, token) => {
                 if (err) throw err;
-                res.json({
-                    token,
-                    user: { id: user.id, name: user.name, role: user.role }
+                res.json({ 
+                    token, 
+                    user: { id: user.id, name: user.name, role: user.role } 
                 });
             }
         );
-
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
     }
 });
 
+// @route   GET /api/auth/me
 router.get('/me', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password');
@@ -115,18 +115,15 @@ router.get('/me', auth, async (req, res) => {
     }
 });
 
-
+// @route   PUT /api/auth/update-profile
 router.put('/update-profile', auth, async (req, res) => {
     try {
         const { name, email, phoneNumber, address } = req.body;
-
-        // Find user and update
         const user = await User.findByIdAndUpdate(
             req.user.id,
             { $set: { name, email, phoneNumber, address } },
             { new: true }
         ).select('-password');
-
         res.json(user);
     } catch (err) {
         res.status(500).send('Server Error');
