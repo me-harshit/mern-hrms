@@ -4,10 +4,20 @@ const auth = require('../middleware/authMiddleware');
 const Attendance = require('../models/Attendance');
 const Settings = require('../models/Settings');
 
+const getISTDate = () => {
+    const now = new Date();
+    // Convert current UTC time to IST string
+    const istString = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    return new Date(istString);
+};
+
 // Helper: Get today's date string (DD/MM/YYYY)
 const getTodayStr = () => {
-    const d = new Date();
-    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    const d = getISTDate();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
 };
 
 // @route   POST /api/attendance/checkin
@@ -15,8 +25,8 @@ const getTodayStr = () => {
 router.post('/checkin', auth, async (req, res) => {
     try {
         const userId = req.user.id;
-        const dateStr = getTodayStr();
-        const now = new Date();
+        const dateStr = getTodayStr(); // Now strictly IST
+        const nowIST = getISTDate();   // Current Time in IST
 
         // 1. Check if already checked in
         let existingRecord = await Attendance.findOne({ userId, date: dateStr });
@@ -30,26 +40,28 @@ router.post('/checkin', auth, async (req, res) => {
             settings = { officeStartTime: "09:30", gracePeriod: 15, halfDayThreshold: 30 };
         }
 
-        // 3. Logic: Calculate Lateness
-        const [startHour, startMin] = settings.officeStartTime.split(':').map(Number);
+        // 3. Logic: Calculate Lateness using "Minutes from Midnight"
+        // This is safer than Date object subtraction across timezones
+        const [officeH, officeM] = settings.officeStartTime.split(':').map(Number);
+        const officeStartMinutes = (officeH * 60) + officeM;
 
-        const officeStartTime = new Date();
-        officeStartTime.setHours(startHour, startMin, 0, 0);
+        const currentH = nowIST.getHours();
+        const currentM = nowIST.getMinutes();
+        const currentMinutes = (currentH * 60) + currentM;
 
         // Difference in minutes
-        const diffMinutes = Math.floor((now - officeStartTime) / 60000);
+        const diffMinutes = currentMinutes - officeStartMinutes;
 
         let status = 'Present';
         let note = '';
 
-        // --- HELPER: Format Minutes to "X hr Y min" ---
+        // --- HELPER: Format Minutes ---
         const formatLateTime = (mins) => {
             const h = Math.floor(mins / 60);
             const m = mins % 60;
             if (h > 0) return `${h} hr ${m} min`;
             return `${m} min`;
         };
-        // ----------------------------------------------
 
         if (diffMinutes > settings.halfDayThreshold) {
             status = 'Half Day';
@@ -59,11 +71,12 @@ router.post('/checkin', auth, async (req, res) => {
             note = `Late by ${formatLateTime(diffMinutes)}`;
         }
 
-        // 4. Save to DB
+        // 4. Save to DB (Save 'checkIn' as standard UTC for database consistency, 
+        // but calculations were done in IST)
         const newAttendance = new Attendance({
             userId,
             date: dateStr,
-            checkIn: now,
+            checkIn: new Date(), // Storing actual UTC timestamp is good practice for DB
             status,
             note
         });
@@ -72,7 +85,7 @@ router.post('/checkin', auth, async (req, res) => {
         res.json(newAttendance);
 
     } catch (err) {
-        console.error(err.message);
+        console.error("CheckIn Error:", err.message);
         res.status(500).send('Server Error');
     }
 });
@@ -85,8 +98,9 @@ router.post('/checkin', auth, async (req, res) => {
 router.post('/checkout', auth, async (req, res) => {
     try {
         const userId = req.user.id;
-        const dateStr = getTodayStr(); // Function defined in previous step (DD/MM/YYYY)
-        const now = new Date();
+        const dateStr = getTodayStr(); // Using corrected IST helper
+        const now = new Date(); // Actual UTC time for saving
+        const nowIST = getISTDate(); // IST time for logic
 
         // 1. Find today's record
         let record = await Attendance.findOne({ userId, date: dateStr });
@@ -94,24 +108,25 @@ router.post('/checkout', auth, async (req, res) => {
             return res.status(400).json({ message: 'No check-in record found for today.' });
         }
 
-        // 2. Early Exit Logic (Before 14:30)
-        // 14:30 = 2:30 PM. We check if current hour is < 14 OR (hour is 14 AND minute < 30)
-        const currentHour = now.getHours();
-        const currentMin = now.getMinutes();
+        // 2. Early Exit Logic (Before 14:30 IST)
+        const currentHour = nowIST.getHours();
+        const currentMin = nowIST.getMinutes();
 
-        // Default to existing status (e.g., 'Present' or 'Late')
         let finalStatus = record.status;
         let note = record.note;
 
         // If leaving before 14:30, force Half Day
         if (currentHour < 14 || (currentHour === 14 && currentMin < 30)) {
-            finalStatus = 'Half Day';
-            note = (note ? note + '; ' : '') + 'Early exit before 14:30';
+            // Only overwrite if they weren't already absent/half-day
+            if (finalStatus !== 'Absent') {
+                finalStatus = 'Half Day';
+                note = (note ? note + '; ' : '') + 'Early exit before 14:30';
+            }
         }
 
         // 3. Calculate Total Hours
         const checkInTime = new Date(record.checkIn);
-        const diffMs = now - checkInTime;
+        const diffMs = now - checkInTime; // UTC - UTC works fine for duration
         const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
 
         // 4. Update Record
