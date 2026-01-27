@@ -6,7 +6,6 @@ const dotenv = require('dotenv');
 // --- 1. IMPORT ROUTES ---
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employee');
-// FIX: Point to the correct files
 const settingsRoutes = require('./routes/settings');     
 const attendanceRoutes = require('./routes/attendance'); 
 const leaveRoutes = require('./routes/leaves');

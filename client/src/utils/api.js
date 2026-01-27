@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const baseURL = process.env.NODE_ENV === 'production' 
-  ? '/api' 
+const baseURL = process.env.NODE_ENV === 'production'
+  ? '/api'
   : 'http://localhost:5000/api';
 
 const api = axios.create({
@@ -20,6 +20,21 @@ api.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response, // FIXED: changed 'res' to 'response'
+  (error) => {
+    // If the server rejects the token (Expired or Invalid)
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Force redirect to login
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
 );
 
 export default api;

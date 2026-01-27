@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const Attendance = require('../models/Attendance');
-const Settings = require('../models/Settings'); // We need this for the time rules
+const Settings = require('../models/Settings');
 
 // Helper: Get today's date string (DD/MM/YYYY)
 const getTodayStr = () => {
@@ -32,7 +32,7 @@ router.post('/checkin', auth, async (req, res) => {
 
         // 3. Logic: Calculate Lateness
         const [startHour, startMin] = settings.officeStartTime.split(':').map(Number);
-        
+
         const officeStartTime = new Date();
         officeStartTime.setHours(startHour, startMin, 0, 0);
 
@@ -155,7 +155,7 @@ router.get('/all-logs', auth, async (req, res) => {
         const logs = await Attendance.find()
             .populate('userId', 'name email')
             .sort({ createdAt: -1 });
-            
+
         res.json(logs);
     } catch (err) {
         console.error(err.message);
@@ -169,37 +169,52 @@ router.put('/update/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        const { status, checkIn, checkOut, note } = req.body;
-        
-        let record = await Attendance.findById(req.params.id);
-        if (!record) return res.status(404).json({ message: 'Record not found' });
+        const { checkIn, checkOut, status, note } = req.body;
 
-        // Update fields
-        record.status = status;
-        record.note = note;
+        let newStatus = status;
 
-        // If Admin changes time, we must update the Date objects
-        // We preserve the original YYYY-MM-DD, just change the HH:MM
-        if (checkIn) {
-            const newIn = new Date(record.checkIn);
-            const [h, m] = checkIn.split(':');
-            newIn.setHours(h, m);
-            record.checkIn = newIn;
+        // --- AUTO-CALCULATION LOGIC ---
+        if (status === 'Auto') {
+            // 1. Fetch Settings
+            const settings = await Settings.findOne();
+            const officeStart = settings?.officeStartTime || '09:30';
+            const gracePeriod = settings?.gracePeriod || 15;
+            const halfDayThreshold = settings?.halfDayThreshold || 30;
+
+            // 2. Parse Times
+            const checkInDate = new Date(checkIn);
+
+            // Create "Office Start" date object for comparison
+            const [officeH, officeM] = officeStart.split(':');
+            const officeTime = new Date(checkInDate); // Clone the day
+            officeTime.setHours(officeH, officeM, 0, 0);
+
+            // 3. Calculate Difference in Minutes
+            const diffMs = checkInDate - officeTime;
+            const lateMinutes = Math.floor(diffMs / 60000);
+
+            // 4. Determine Status
+            if (lateMinutes > halfDayThreshold) {
+                newStatus = 'Half Day';
+            } else if (lateMinutes > gracePeriod) {
+                newStatus = 'Late';
+            } else {
+                newStatus = 'Present';
+            }
         }
 
-        if (checkOut) {
-            const newOut = new Date(record.checkOut || record.checkIn); // Fallback if no checkout existed
-            const [h, m] = checkOut.split(':');
-            newOut.setHours(h, m);
-            record.checkOut = newOut;
+        const updatedLog = await Attendance.findByIdAndUpdate(
+            req.params.id,
+            {
+                checkIn,
+                checkOut,
+                status: newStatus,
+                note
+            },
+            { new: true }
+        );
 
-            // Recalculate Total Hours
-            const diffMs = record.checkOut - record.checkIn;
-            record.totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
-        }
-
-        await record.save();
-        res.json(record);
+        res.json(updatedLog);
 
     } catch (err) {
         console.error(err.message);

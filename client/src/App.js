@@ -36,7 +36,13 @@ const DashboardLayout = () => (
 
 function App() {
   const isAuthenticated = !!localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user'));
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem('user'));
+  } catch (e) {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+  }
   const userRole = user?.role;
 
   return (
