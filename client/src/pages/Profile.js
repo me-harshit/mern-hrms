@@ -17,6 +17,12 @@ const Profile = () => {
         name: '', email: '', phoneNumber: '', address: ''
     });
 
+    // --- FIX 1: DYNAMIC IMAGE URL ---
+    // If in production, use relative path (''). If dev, use localhost:5000
+    const SERVER_URL = process.env.NODE_ENV === 'production' 
+        ? '' 
+        : 'http://localhost:5000';
+
     useEffect(() => {
         fetchProfile();
     }, []);
@@ -48,8 +54,9 @@ const Profile = () => {
         uploadData.append('avatar', file);
 
         try {
-            // Use api.post. We must override Content-Type for file uploads.
-            // Token is still added automatically by api.js
+            // --- FIX 2: UPLOAD HEADERS ---
+            // We use the centralized 'api', but we MUST override the Content-Type header
+            // to allow multipart/form-data for files.
             const res = await api.post('/auth/upload-avatar', uploadData, {
                 headers: { 
                     'Content-Type': 'multipart/form-data'
@@ -65,6 +72,7 @@ const Profile = () => {
 
             Swal.fire({ icon: 'success', title: 'Picture Updated', timer: 1000, showConfirmButton: false });
         } catch (err) {
+            console.error(err);
             Swal.fire('Error', 'Image upload failed', 'error');
         }
     };
@@ -90,7 +98,6 @@ const Profile = () => {
     if (!user) return <div className="main-content">Loading profile...</div>;
 
     const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
-    const SERVER_URL = 'http://localhost:5000'; // Helper for static images
 
     return (
         <div className="profile-container">
@@ -102,9 +109,11 @@ const Profile = () => {
                     <div className="profile-avatar-container">
                         {user.profilePic ? (
                             <img 
+                                // Uses dynamic SERVER_URL
                                 src={`${SERVER_URL}${user.profilePic}`} 
                                 alt="Profile" 
                                 className="profile-img-large" 
+                                onError={(e) => { e.target.onerror = null; e.target.src = '' }} // Fallback if image fails
                             />
                         ) : (
                             <div className="profile-avatar-large">{initials}</div>
