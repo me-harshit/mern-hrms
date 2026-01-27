@@ -6,10 +6,24 @@ const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+
+const uploadDir = path.join(__dirname, '../uploads');
+
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
-    destination: './uploads/',
+    destination: (req, file, cb) => {
+        // Use the absolute path variable
+        cb(null, uploadDir); 
+    },
     filename: (req, file, cb) => {
+        // Ensure req.user exists before accessing id to prevent crashes
+        if (!req.user || !req.user.id) {
+            return cb(new Error('User not authenticated in Multer'));
+        }
         cb(null, `${req.user.id}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
