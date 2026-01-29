@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api'; // Import api util
+import { useNavigate } from 'react-router-dom'; // 1. Import this
+import api from '../utils/api'; 
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faUserTie, faEdit, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
@@ -7,6 +8,7 @@ import { faPlus, faUserTie, faEdit, faCalendarAlt } from '@fortawesome/free-soli
 const Employees = () => {
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate(); // 2. Initialize the hook
 
     useEffect(() => {
         fetchEmployees();
@@ -15,7 +17,6 @@ const Employees = () => {
     const fetchEmployees = async () => {
         setLoading(true);
         try {
-            // Using api utility automatically adds token and base URL
             const res = await api.get('/employees'); 
             setEmployees(res.data);
         } catch (err) {
@@ -25,8 +26,8 @@ const Employees = () => {
         }
     };
 
-    // --- LOGIC: ADD NEW EMPLOYEE ---
     const handleAddEmployee = async () => {
+        // ... (Keep your existing Add Employee Swal logic here) ...
         const { value: formValues } = await Swal.fire({
             title: 'Register New Employee',
             html: `
@@ -61,15 +62,12 @@ const Employees = () => {
                     password: document.getElementById('add-password').value,
                     joiningDate: document.getElementById('add-date').value,
                     role: document.getElementById('add-role').value,
-                    // Note: Aadhaar & Emergency aren't in this HTML, ensure they exist if extracting
-                    // For now, removing them to match the HTML above, or add fields to HTML if needed
                 }
             }
         });
 
         if (formValues) {
             try {
-                // Use api.post with relative path
                 await api.post('/employees/add', formValues);
                 Swal.fire('Success', 'Employee added!', 'success');
                 fetchEmployees();
@@ -79,84 +77,10 @@ const Employees = () => {
         }
     };
 
-    // --- LOGIC: EDIT EXISTING EMPLOYEE ---
-    const handleEditEmployee = async (emp) => {
-        const { value: formValues } = await Swal.fire({
-            title: 'Edit Employee Details',
-            width: '600px',
-            html: `
-            <div style="text-align: left; padding: 0 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                
-                <div style="grid-column: span 2;">
-                    <label class="swal-custom-label">Full Name</label>
-                    <input id="edit-name" class="swal2-input" value="${emp.name}" style="width: 95%;">
-                </div>
-
-                <div>
-                    <label class="swal-custom-label">Work Email</label>
-                    <input id="edit-email" class="swal2-input" value="${emp.email}" style="width: 90%;">
-                </div>
-                <div>
-                    <label class="swal-custom-label">Joining Date</label>
-                    <input id="edit-date" type="date" class="swal2-input" value="${emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : ''}" style="width: 90%;">
-                </div>
-
-                <div>
-                    <label class="swal-custom-label">Aadhaar Number</label>
-                    <input id="edit-aadhaar" class="swal2-input" value="${emp.aadhaar || ''}" placeholder="1234-5678-9012" style="width: 90%;">
-                </div>
-                <div>
-                    <label class="swal-custom-label">Emergency Contact</label>
-                    <input id="edit-emergency" class="swal2-input" value="${emp.emergencyContact || ''}" placeholder="+91..." style="width: 90%;">
-                </div>
-
-                <div>
-                    <label class="swal-custom-label">Role</label>
-                    <select id="edit-role" class="swal2-select" style="width: 100%;">
-                        <option value="EMPLOYEE" ${emp.role === 'EMPLOYEE' ? 'selected' : ''}>Employee</option>
-                        <option value="HR" ${emp.role === 'HR' ? 'selected' : ''}>HR Manager</option>
-                        <option value="ADMIN" ${emp.role === 'ADMIN' ? 'selected' : ''}>Admin</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="swal-custom-label">Status</label>
-                    <select id="edit-status" class="swal2-select" style="width: 100%;">
-                        <option value="ACTIVE" ${emp.status === 'ACTIVE' ? 'selected' : ''}>Active</option>
-                        <option value="INACTIVE" ${emp.status === 'INACTIVE' ? 'selected' : ''}>Inactive</option>
-                    </select>
-                </div>
-
-                <div style="grid-column: span 2;">
-                    <label class="swal-custom-label">New Password (Optional)</label>
-                    <input id="edit-password" type="password" class="swal2-input" placeholder="Leave blank to keep current" style="width: 95%;">
-                </div>
-            </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Save Changes',
-            confirmButtonColor: '#215D7B',
-            preConfirm: () => ({
-                name: document.getElementById('edit-name').value,
-                email: document.getElementById('edit-email').value,
-                joiningDate: document.getElementById('edit-date').value,
-                aadhaar: document.getElementById('edit-aadhaar').value,
-                emergencyContact: document.getElementById('edit-emergency').value,
-                role: document.getElementById('edit-role').value,
-                status: document.getElementById('edit-status').value,
-                password: document.getElementById('edit-password').value,
-            })
-        });
-
-        if (formValues) {
-            try {
-                // Use api.put with relative path
-                await api.put(`/employees/${emp._id}`, formValues);
-                Swal.fire('Updated!', 'Employee record updated.', 'success');
-                fetchEmployees();
-            } catch (err) {
-                Swal.fire('Error', 'Update failed.', 'error');
-            }
-        }
+    // 3. THIS IS THE EDITED FUNCTION
+    // Instead of opening a modal, we just go to the new profile page
+    const handleEditEmployee = (emp) => {
+        navigate(`/employee/${emp._id}`);
     };
 
     return (

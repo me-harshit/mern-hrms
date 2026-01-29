@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import api from '../utils/api';
-import { faPlus, faFileAlt, faCheckCircle, faTimesCircle, faClock } from '@fortawesome/free-solid-svg-icons';
+import { faPlus, faCalendarDay, faCheckCircle, faTimesCircle, faClock, faWallet } from '@fortawesome/free-solid-svg-icons';
 
 const Leaves = () => {
-    const [stats, setStats] = useState({
-        annualQuota: 12,
-        used: 0,
-        pending: 0
+    const [balances, setBalances] = useState({
+        CL: 0,
+        EL: 0
     });
     const [leaveHistory, setLeaveHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -20,16 +19,8 @@ const Leaves = () => {
     const fetchLeaves = async () => {
         try {
             const res = await api.get('/leaves/my-leaves');
-            setLeaveHistory(res.data);
-
-            // Calculate Stats (Basic logic)
-            const usedLeaves = res.data
-                .filter(l => l.status === 'Approved')
-                .reduce((acc, curr) => acc + curr.days, 0);
-            
-            const pendingCount = res.data.filter(l => l.status === 'Pending').length;
-
-            setStats(prev => ({ ...prev, used: usedLeaves, pending: pendingCount }));
+            setLeaveHistory(res.data.history);
+            setBalances(res.data.balances); // { CL: 2, EL: 5 }
             setLoading(false);
         } catch (err) {
             console.error("Error fetching leaves");
@@ -38,16 +29,25 @@ const Leaves = () => {
     };
 
     const handleApplyLeave = async () => {
+        // Build Dropdown Options Dynamically
+        let options = '';
+        
+        if (balances.CL > 0) {
+            options += `<option value="CL">Casual Leave (Balance: ${balances.CL})</option>`;
+        }
+        if (balances.EL > 0) {
+            options += `<option value="EL">Earned Leave (Balance: ${balances.EL})</option>`;
+        }
+        // Unpaid Leave is always available
+        options += `<option value="UL">Unpaid Leave (UL)</option>`;
+
         const { value: formValues } = await Swal.fire({
             title: 'Apply for Leave',
             html: `
                 <div style="text-align: left;">
                     <label class="swal-custom-label">Leave Type</label>
                     <select id="leave-type" class="swal2-select" style="width: 100%;">
-                        <option value="CL">Casual Leave (CL)</option>
-                        <option value="SL">Sick Leave (SL)</option>
-                        <option value="PL">Privilege Leave (PL)</option>
-                        <option value="UL">Unpaid Leave (UL)</option>
+                        ${options}
                     </select>
 
                     <div style="display: flex; gap: 10px;">
@@ -85,11 +85,10 @@ const Leaves = () => {
         if (formValues) {
             try {
                 await api.post('/leaves/apply', formValues);
-                
                 Swal.fire('Submitted!', 'Your leave request has been sent to HR.', 'success');
-                fetchLeaves(); // Refresh list
+                fetchLeaves(); 
             } catch (err) {
-                Swal.fire('Error', 'Failed to submit request.', 'error');
+                Swal.fire('Error', err.response?.data?.message || 'Failed to submit request.', 'error');
             }
         }
     };
@@ -114,26 +113,25 @@ const Leaves = () => {
             </div>
 
             {/* --- BALANCE CARDS --- */}
-            <div className="leaves-stats-grid">
+            <div className="leaves-stats-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                
+                {/* Casual Leave Card */}
                 <div className="stat-card border-teal">
-                    <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faFileAlt} /></div>
+                    <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faCalendarDay} /></div>
                     <div className="stat-info">
-                        <p>Annual Quota</p>
-                        <h3>{stats.annualQuota} Days</h3>
+                        <p>Casual Leave (CL)</p>
+                        <h3>{balances.CL} Available</h3>
+                        <small style={{color: '#777'}}>Resets Jan 1st</small>
                     </div>
                 </div>
+
+                {/* Earned Leave Card */}
                 <div className="stat-card border-plum">
-                    <div className="stat-icon plum-bg"><FontAwesomeIcon icon={faCheckCircle} /></div>
+                    <div className="stat-icon plum-bg"><FontAwesomeIcon icon={faWallet} /></div>
                     <div className="stat-info">
-                        <p>Leaves Taken</p>
-                        <h3>{stats.used} Days</h3>
-                    </div>
-                </div>
-                <div className="stat-card border-teal">
-                    <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faClock} /></div>
-                    <div className="stat-info">
-                        <p>Available Balance</p>
-                        <h3>{stats.annualQuota - stats.used} Days</h3>
+                        <p>Earned Leave (EL)</p>
+                        <h3>{balances.EL} Available</h3>
+                        <small style={{color: '#777'}}>Added by HR</small>
                     </div>
                 </div>
             </div>

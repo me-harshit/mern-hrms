@@ -658,3 +658,45 @@ html {
         justify-content: center;
     }
 }
+
+
+/* Card Style */
+.control-card {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    border: 1px solid #eef2f6;
+    margin-bottom: 25px;
+}
+
+/* Custom Input Styling to override Swal default if needed */
+.custom-input {
+    width: 100% !important;
+    margin: 5px 0 0 0 !important;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+}
+
+.input-label {
+    font-weight: 600;
+    font-size: 14px;
+    color: #4b5563;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.hint-text {
+    color: #94a3b8;
+    font-size: 12px;
+    margin-top: 4px;
+    display: block;
+}
+
+/* Table Enhancements */
+.holiday-table tr:hover {
+    background-color: #f8fafc;
+}

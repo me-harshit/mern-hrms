@@ -15,6 +15,7 @@ import LeaveRequests from './pages/LeaveRequests';
 import CalendarPage from './pages/CalendarPage';
 import AdminSettings from './pages/AdminSettings';
 import AttendanceLogs from './pages/AttendanceLogs';
+import EmployeeProfile from './pages/EmployeeProfile'; // This was already imported
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -63,7 +64,7 @@ function App() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
 
-            {/* HR & Admin Only Route */}
+            {/* HR & Admin Only Routes */}
             <Route
               path="/employees"
               element={
@@ -72,6 +73,17 @@ function App() {
                   : <Navigate to="/dashboard" />
               }
             />
+            
+            {/* NEW: Employee Profile (View/Edit) */}
+            <Route
+              path="/employee/:id"
+              element={
+                (userRole === 'HR' || userRole === 'ADMIN')
+                  ? <EmployeeProfile />
+                  : <Navigate to="/dashboard" />
+              }
+            />
+
             <Route
               path="/attendance-logs"
               element={
@@ -80,19 +92,22 @@ function App() {
                   : <Navigate to="/dashboard" />
               }
             />
-            <Route
-              path="/admin-settings"
-              element={
-                userRole === 'ADMIN'
-                  ? <AdminSettings />
-                  : <Navigate to="/dashboard" />
-              }
-            />
+            
             <Route
               path="/leave-requests"
               element={
                 (userRole === 'HR' || userRole === 'ADMIN')
                   ? <LeaveRequests />
+                  : <Navigate to="/dashboard" />
+              }
+            />
+
+            {/* Admin Only Route */}
+            <Route
+              path="/admin-settings"
+              element={
+                userRole === 'ADMIN'
+                  ? <AdminSettings />
                   : <Navigate to="/dashboard" />
               }
             />

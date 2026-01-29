@@ -131,14 +131,53 @@ router.post('/checkout', auth, async (req, res) => {
 });
 
 // @route   GET /api/attendance/my-logs
-// @desc    Get current user's logs
+// @desc    Get current user's logs (and auto-close stale sessions)
 router.get('/my-logs', auth, async (req, res) => {
     try {
-        // Fetch last 30 days of logs, sorted newest first
-        const logs = await Attendance.find({ userId: req.user.id })
+        const userId = req.user.id;
+        const dateStr = getTodayStr(); 
+
+        // --- 1. AUTO-CLEANUP STALE SESSIONS ---
+        const staleSession = await Attendance.findOne({ 
+            userId, 
+            checkOut: null,
+            date: { $ne: dateStr } 
+        });
+
+        if (staleSession) {
+            // A. Fetch Dynamic Settings
+            let settings = await Settings.findOne();
+            // Default to 18:30 if setting missing
+            const closeTimeStr = settings?.officeCloseTime || "18:30"; 
+            
+            // Parse "18:30" -> [18, 30]
+            const [closeH, closeM] = closeTimeStr.split(':').map(Number);
+
+            // B. Set Auto-Out Time
+            const autoOutTime = new Date(staleSession.checkIn);
+            autoOutTime.setHours(closeH, closeM, 0, 0); 
+
+            // Calculate hours
+            const diffMs = autoOutTime - new Date(staleSession.checkIn);
+            const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
+
+            // Update record
+            staleSession.checkOut = autoOutTime;
+            staleSession.totalHours = Number(totalHours) > 0 ? Number(totalHours) : 0;
+            staleSession.status = 'Absent'; 
+            staleSession.note = (staleSession.note || '') + ' [Auto-closed: Forgot Checkout]';
+            
+            await staleSession.save();
+        }
+        // ----------------------------------------
+
+        // --- 2. FETCH LOGS ---
+        const logs = await Attendance.find({ userId })
             .sort({ createdAt: -1 })
             .limit(30);
+
         res.json(logs);
+
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
@@ -221,6 +260,14 @@ router.put('/update/:id', auth, async (req, res) => {
         console.error(err.message);
         res.status(500).send('Server Error');
     }
+});
+
+router.get('/admin/user-logs/:id', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+        const logs = await Attendance.find({ userId: req.params.id }).sort({ createdAt: -1 });
+        res.json(logs);
+    } catch (err) { res.status(500).send('Server Error'); }
 });
 
 module.exports = router;

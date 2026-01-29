@@ -11,12 +11,11 @@ router.get('/admin-stats', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        // Logic matches the previous step (D/M/YYYY)
         const now = new Date();
         const todayStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
 
         const [totalEmployees, presentToday, pendingLeaves, onLeaveToday] = await Promise.all([
-            User.countDocuments({ role: 'EMPLOYEE', status: 'ACTIVE' }),
+            User.countDocuments({}),
             Attendance.countDocuments({ date: todayStr }),
             Leave.countDocuments({ status: 'Pending' }),
             Leave.countDocuments({ status: 'Approved', fromDate: { $lte: now }, toDate: { $gte: now } })
@@ -46,8 +45,8 @@ router.get('/employee-stats', auth, async (req, res) => {
 
         // 3. Attendance this month (Simple count)
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const presentDays = await Attendance.countDocuments({ 
-            userId, 
+        const presentDays = await Attendance.countDocuments({
+            userId,
             createdAt: { $gte: startOfMonth } // Approximate check
         });
 
