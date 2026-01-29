@@ -32,6 +32,11 @@ app.use('/api/holidays', holidays);
 
 app.get('/', (req, res) => res.send("GTS HRMS API is running..."));
 
+app.all('*', (req, res, next) => {
+    console.log(`Incoming Request: ${req.method} ${req.url}`);
+    next();
+});
+
 const PORT = process.env.PORT || 5000;
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
