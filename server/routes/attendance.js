@@ -270,4 +270,19 @@ router.get('/admin/user-logs/:id', auth, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
+
+// TEMP: BioMax Testing Route
+// This route should be UNPROTECTED (no verifyToken middleware) 
+// because the machine doesn't know how to send your JWT.
+router.post('/BiomaxPunch', (req, res) => {
+    console.log("--- BIOMAX DATA RECEIVED ---");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+    console.log("Query Params:", req.query);
+    console.log("----------------------------");
+
+    // Machines usually expect a success response to stop retrying
+    res.status(200).send("OK"); 
+});
+
 module.exports = router;
