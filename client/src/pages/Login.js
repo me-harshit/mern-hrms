@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import api from '../utils/api'; // Import centralized api
+import api from '../utils/api'; 
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'; // Import Component
+import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons'; // Import Icons
 import '../styles/Auth.css';
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    
+    const [showPassword, setShowPassword] = useState(false);
+    
     const navigate = useNavigate();
 
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            // Use api.post with relative path
             const res = await api.post('/auth/login', { email, password });
             
             localStorage.setItem('token', res.data.token);
@@ -63,17 +67,37 @@ const Login = () => {
                             required 
                         />
                     </div>
+
                     <div className="form-group">
                         <label>Password</label>
-                        <input 
-                            type="password" 
-                            className="auth-input"
-                            placeholder="••••••••"
-                            value={password} 
-                            onChange={(e) => setPassword(e.target.value)} 
-                            required 
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <input 
+                                type={showPassword ? "text" : "password"} 
+                                className="auth-input"
+                                placeholder="••••••••"
+                                value={password} 
+                                onChange={(e) => setPassword(e.target.value)} 
+                                required 
+                                style={{ paddingRight: '40px' }} 
+                            />
+                            
+                            {/* Eye Icon */}
+                            <span 
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={{
+                                    position: 'absolute',
+                                    right: '15px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    cursor: 'pointer',
+                                    color: '#666'
+                                }}
+                            >
+                                <FontAwesomeIcon icon={showPassword ? faEye : faEyeSlash} />
+                            </span>
+                        </div>
                     </div>
+
                     <button type="submit" className="auth-btn">Sign In</button>
                 </form>
             </div>

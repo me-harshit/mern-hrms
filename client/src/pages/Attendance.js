@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api'; // Import api util
+import api from '../utils/api'; 
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -21,7 +21,7 @@ const Attendance = () => {
     // --- 1. INITIAL LOAD & CLOCK ---
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-        fetchLogs(); // Load data from DB on mount
+        fetchLogs(); 
         return () => clearInterval(timer);
     }, []);
 
@@ -39,7 +39,6 @@ const Attendance = () => {
     // --- API: FETCH LOGS ---
     const fetchLogs = async () => {
         try {
-            // Use api.get with relative path (no token needed here manually)
             const res = await api.get('/attendance/my-logs');
             setLogs(res.data);
             const todayLog = res.data.find(log => !log.checkOut); 
@@ -56,13 +55,30 @@ const Attendance = () => {
         }
     };
 
-    // --- HELPERS ---
+    // --- HELPER: FORMAT TIMER (MM:SS) ---
     const formatTime = (seconds) => {
         const isNegative = seconds < 0;
         const absSeconds = Math.abs(seconds);
         const mins = Math.floor(absSeconds / 60);
         const secs = absSeconds % 60;
         return `${isNegative ? '-' : ''}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    };
+
+    // --- NEW HELPER: CALCULATE WORKING HOURS ---
+    const calculateDuration = (start, end) => {
+        if (!start || !end) return <span style={{color: '#999', fontStyle: 'italic'}}>Ongoing</span>;
+        
+        const startTime = new Date(start);
+        const endTime = new Date(end);
+        const diffMs = endTime - startTime;
+        
+        if (diffMs < 0) return "-";
+
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        return `${hours}h ${minutes}m`;
     };
 
     // --- HANDLERS ---
@@ -78,11 +94,9 @@ const Attendance = () => {
             });
 
             if (result.isConfirmed) {
-                // Use api.post with relative path
                 const res = await api.post('/attendance/checkin', {});
-
                 setStatus('WORKING');
-                fetchLogs(); // Refresh table
+                fetchLogs(); 
                 Swal.fire('Checked In', res.data.status === 'Late' || res.data.status === 'Half Day' 
                     ? `Marked as ${res.data.status} (Late Entry)` 
                     : 'Success', 'success');
@@ -94,7 +108,6 @@ const Attendance = () => {
 
     const handleCheckOut = async () => {
         try {
-            // Warn if before 14:30
             const now = new Date();
             const isEarlyExit = now.getHours() < 14 || (now.getHours() === 14 && now.getMinutes() < 30);
             const warningText = isEarlyExit 
@@ -111,11 +124,9 @@ const Attendance = () => {
             });
 
             if (result.isConfirmed) {
-                // Use api.post with relative path
                 await api.post('/attendance/checkout', {});
-
                 setStatus('OUT');
-                fetchLogs(); // Refresh table
+                fetchLogs(); 
                 Swal.fire('Checked Out', 'Have a good evening!', 'success');
             }
         } catch (err) {
@@ -198,7 +209,7 @@ const Attendance = () => {
                 </div>
             </div>
 
-            {/* LOGS TABLE (Connected to Real DB Data) */}
+            {/* LOGS TABLE */}
             <div className="employee-table-container">
                 <h3 style={{ padding: '15px', fontSize: '16px', margin: 0, borderBottom: '1px solid #eee', color: '#215D7B' }}>
                     <FontAwesomeIcon icon={faHistory} /> Activity Log
@@ -209,6 +220,7 @@ const Attendance = () => {
                             <th>Date</th>
                             <th>Time In</th>
                             <th>Time Out</th>
+                            <th>Working Hours</th>
                             <th>Status</th>
                             <th>Note</th>
                         </tr>
@@ -216,7 +228,7 @@ const Attendance = () => {
                     <tbody>
                         {logs.length === 0 ? (
                             <tr>
-                                <td colSpan="5" style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
+                                <td colSpan="6" style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
                                     No activity recorded yet.
                                 </td>
                             </tr>
@@ -224,9 +236,14 @@ const Attendance = () => {
                             logs.map((log, index) => (
                                 <tr key={index}>
                                     <td style={{ fontWeight: '600', color: '#555' }}>{log.date}</td>
-                                    <td>{new Date(log.checkIn).toLocaleTimeString()}</td>
-                                    <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString() : '-'}</td>
+                                    <td>{new Date(log.checkIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                                    <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}</td>
                                     
+                                    {/* --- NEW COLUMN: WORKING HOURS --- */}
+                                    <td style={{ fontWeight: 'bold', color: '#215D7B' }}>
+                                        {calculateDuration(log.checkIn, log.checkOut)}
+                                    </td>
+
                                     <td>
                                         <span className={`status-badge ${log.status === 'Half Day' || log.status === 'Late' ? 'warning' : 'success'}`}>
                                             {log.status}

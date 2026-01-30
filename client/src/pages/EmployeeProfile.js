@@ -4,7 +4,7 @@ import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture
+    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture, faEdit
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 
@@ -46,7 +46,7 @@ const EmployeeProfile = () => {
         e.preventDefault();
         try {
             await api.put(`/employees/${id}`, user);
-            Swal.fire('Success', 'Profile updated successfully', 'success');
+            Swal.fire('Success', 'Employee Profile Updated', 'success');
         } catch (err) {
             Swal.fire('Error', 'Failed to update profile', 'error');
         }
@@ -60,10 +60,107 @@ const EmployeeProfile = () => {
                 el: user.earnedLeaveBalance,
                 salary: user.salary
             });
-            Swal.fire('Success', 'Balances & Salary updated', 'success');
+            Swal.fire('Success', 'Employee Profile updated', 'success');
             fetchEmployeeData();
         } catch (err) {
             Swal.fire('Error', 'Update failed', 'error');
+        }
+    };
+
+    // --- HELPER: CALCULATE DURATION ---
+    const calculateDuration = (start, end) => {
+        if (!start || !end) return <span style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>In Progress</span>;
+
+        const startTime = new Date(start);
+        const endTime = new Date(end);
+        const diffMs = endTime - startTime;
+
+        if (diffMs < 0) return "-";
+
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        return `${hours}h ${minutes}m`;
+    };
+
+    // --- HANDLER: EDIT LOG ---
+    const handleEdit = async (log) => {
+        const toTimeStr = (dateStr) => {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        };
+
+        const inTime = toTimeStr(log.checkIn);
+        const outTime = toTimeStr(log.checkOut);
+
+        const { value: formValues } = await Swal.fire({
+            title: `Edit Log: ${log.date}`,
+            html: `
+                <div style="text-align:left">
+                    <p style="font-size:12px; color:#666; margin-bottom:10px;">
+                        <span style="color:#dc2626">*</span> Changing time will auto-recalculate Status.
+                    </p>
+
+                    <label class="swal-custom-label">Check In Time</label>
+                    <input id="swal-in" type="time" class="swal2-input" value="${inTime}">
+
+                    <label class="swal-custom-label">Check Out Time</label>
+                    <input id="swal-out" type="time" class="swal2-input" value="${outTime}">
+
+                    <label class="swal-custom-label">Manual Status Override</label>
+                    <select id="swal-status" class="swal2-select" style="width: 100%">
+                        <option value="Auto">Auto Calculate</option>
+                        <option value="Present" ${log.status === 'Present' ? 'selected' : ''}>Present</option>
+                        <option value="Half Day" ${log.status === 'Half Day' ? 'selected' : ''}>Half Day</option>
+                        <option value="Late" ${log.status === 'Late' ? 'selected' : ''}>Late</option>
+                        <option value="Absent" ${log.status === 'Absent' ? 'selected' : ''}>Absent</option>
+                    </select>
+
+                    <label class="swal-custom-label">Exception Note</label>
+                    <input id="swal-note" class="swal2-input" placeholder="Reason..." value="${log.note || ''}">
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonColor: '#215D7B',
+            preConfirm: () => {
+                const timeInStr = document.getElementById('swal-in').value;
+                const timeOutStr = document.getElementById('swal-out').value;
+                const statusInput = document.getElementById('swal-status').value;
+                const note = document.getElementById('swal-note').value;
+
+                if (!timeInStr) return Swal.showValidationMessage('Check In time is required');
+
+                const checkInDate = new Date(log.checkIn);
+                const [inH, inM] = timeInStr.split(':');
+                checkInDate.setHours(inH, inM, 0, 0);
+
+                let checkOutDate = null;
+                if (timeOutStr) {
+                    checkOutDate = new Date(checkInDate);
+                    const [outH, outM] = timeOutStr.split(':');
+                    checkOutDate.setHours(outH, outM, 0, 0);
+                }
+
+                return {
+                    checkIn: checkInDate.toISOString(),
+                    checkOut: checkOutDate ? checkOutDate.toISOString() : null,
+                    status: statusInput,
+                    note: note
+                };
+            }
+        });
+
+        if (formValues) {
+            try {
+                await api.put(`/attendance/update/${log._id}`, formValues);
+                Swal.fire('Updated', 'Attendance record updated.', 'success');
+                // Refresh data to show changes
+                fetchEmployeeData();
+            } catch (err) {
+                Swal.fire('Error', 'Update failed', 'error');
+            }
         }
     };
 
@@ -248,7 +345,7 @@ const EmployeeProfile = () => {
                     <div className="control-card" style={{ marginBottom: '20px', display: 'block' }}>
                         <h3 className="card-title" style={{ marginBottom: '15px' }}>Manage Leave Balances</h3>
 
-                        {/* Removed 'alignItems: flex-end' to let the Form Groups align naturally */}
+                        {/* Flex Container for Balances & Button */}
                         <div style={{ display: 'flex', gap: '30px' }}>
 
                             <div className="form-group">
@@ -331,8 +428,10 @@ const EmployeeProfile = () => {
                                 <th>Date</th>
                                 <th>Check In</th>
                                 <th>Check Out</th>
+                                <th>Working Hours</th>
                                 <th>Status</th>
                                 <th>Note</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -342,16 +441,27 @@ const EmployeeProfile = () => {
                                         <td style={{ fontWeight: '500' }}>{log.date}</td>
                                         <td>{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                         <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                                        
+                                        {/* Working Hours Column */}
+                                        <td style={{ fontWeight: 'bold', color: '#555' }}>
+                                            {calculateDuration(log.checkIn, log.checkOut)}
+                                        </td>
+
                                         <td>
                                             <span className={`status-badge ${log.status === 'Present' ? 'success' : log.status === 'Half Day' ? 'warning' : 'danger'}`}>
                                                 {log.status}
                                             </span>
                                         </td>
                                         <td style={{ fontSize: '12px', color: '#666' }}>{log.note || '-'}</td>
+                                        <td>
+                                            <button className="gts-btn primary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleEdit(log)}>
+                                                <FontAwesomeIcon icon={faEdit} /> Edit
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#999' }}>No logs found.</td></tr>
+                                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#999' }}>No logs found.</td></tr>
                             )}
                         </tbody>
                     </table>

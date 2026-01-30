@@ -28,8 +28,6 @@ const AttendanceLogs = () => {
         const now = new Date();
 
         if (filterType === 'Today') {
-            // Match Backend Format: "D/M/YYYY" (e.g. 22/1/2026)
-            // Note: Make sure this matches your backend's string format exactly
             const todayBackendFormat = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
             result = result.filter(log => log.date === todayBackendFormat);
         }
@@ -53,11 +51,9 @@ const AttendanceLogs = () => {
         }
         else if (filterType === 'Custom') {
             if (customDates.from && customDates.to) {
-                // Set start to beginning of "From" day
                 const start = new Date(customDates.from);
                 start.setHours(0, 0, 0, 0);
 
-                // Set end to end of "To" day
                 const end = new Date(customDates.to);
                 end.setHours(23, 59, 59, 999);
 
@@ -85,6 +81,23 @@ const AttendanceLogs = () => {
         } catch (err) {
             console.error("Error fetching logs");
         }
+    };
+
+    // --- NEW HELPER: CALCULATE DURATION ---
+    const calculateDuration = (start, end) => {
+        if (!start || !end) return <span style={{color: '#999', fontStyle: 'italic', fontSize:'12px'}}>In Progress</span>;
+        
+        const startTime = new Date(start);
+        const endTime = new Date(end);
+        const diffMs = endTime - startTime;
+        
+        if (diffMs < 0) return "-";
+
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        return `${hours}h ${minutes}m`;
     };
 
     const handleEdit = async (log) => {
@@ -246,6 +259,7 @@ const AttendanceLogs = () => {
                             <th>Date</th>
                             <th>In Time</th>
                             <th>Out Time</th>
+                            <th>Working Hours</th>
                             <th>Status</th>
                             <th>Note</th>
                             <th>Action</th>
@@ -253,7 +267,7 @@ const AttendanceLogs = () => {
                     </thead>
                     <tbody>
                         {filteredLogs.length === 0 ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#888' }}>No attendance records found for this selection.</td></tr>
+                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#888' }}>No attendance records found for this selection.</td></tr>
                         ) : (
                             filteredLogs.map(log => (
                                 <tr key={log._id}>
@@ -261,6 +275,12 @@ const AttendanceLogs = () => {
                                     <td>{log.date}</td>
                                     <td>{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                     <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                                    
+                                    {/* --- NEW COLUMN --- */}
+                                    <td style={{ fontWeight: 'bold', color: '#555' }}>
+                                        {calculateDuration(log.checkIn, log.checkOut)}
+                                    </td>
+
                                     <td>
                                         <span className={`status-badge ${log.status === 'Present' ? 'success' :
                                                 log.status === 'Half Day' ? 'warning' : 'danger'
