@@ -309,3 +309,59 @@
     font-size: 24px;
     opacity: 0.4;
 }
+
+/* --- Slider View Specific Styles --- */
+
+/* Make the card bigger in slider mode */
+.month-card.slider-mode {
+    max-width: 900px !important; /* Increased width */
+    width: 100%;
+    margin: 0 auto;
+    padding: 30px; /* More breathing room */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* Make the specific days bigger in slider view */
+.month-card.slider-mode .days-grid {
+    grid-template-rows: repeat(auto-fill, minmax(100px, 1fr)); /* Taller cells */
+}
+
+.month-card.slider-mode .calendar-day {
+    min-height: 60px; /* Force taller cells */
+    font-size: 1.1rem;
+    display: flex;
+    align-items: flex-start;
+    padding: 10px;
+}
+
+/* --- Animations --- */
+
+.slide-in-right {
+    animation: slideInRight 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.slide-in-left {
+    animation: slideInLeft 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
