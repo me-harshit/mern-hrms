@@ -8,9 +8,13 @@ import '../styles/App.css';
 const AdminSettings = () => {
     const [loading, setLoading] = useState(true);
     const [holidays, setHolidays] = useState([]);
+    
+    // Updated state to include Day and Night shift times
     const [settings, setSettings] = useState({
-        officeStartTime: '09:30',
-        officeCloseTime: '18:30',
+        dayShiftStartTime: '09:30',
+        dayShiftEndTime: '18:30',
+        nightShiftStartTime: '19:00',
+        nightShiftEndTime: '04:00',
         gracePeriod: 15,
         halfDayThreshold: 30
     });
@@ -28,8 +32,10 @@ const AdminSettings = () => {
 
             if (settingsRes.data) {
                 setSettings({
-                    officeStartTime: settingsRes.data.officeStartTime || '09:30',
-                    officeCloseTime: settingsRes.data.officeCloseTime || '18:30',
+                    dayShiftStartTime: settingsRes.data.dayShiftStartTime || '09:30',
+                    dayShiftEndTime: settingsRes.data.dayShiftEndTime || '18:30',
+                    nightShiftStartTime: settingsRes.data.nightShiftStartTime || '19:00',
+                    nightShiftEndTime: settingsRes.data.nightShiftEndTime || '04:00',
                     gracePeriod: settingsRes.data.gracePeriod || 15,
                     halfDayThreshold: settingsRes.data.halfDayThreshold || 30
                 });
@@ -42,7 +48,6 @@ const AdminSettings = () => {
         }
     };
 
-    // --- SETTINGS HANDLERS ---
     const handleSaveSettings = async (e) => {
         e.preventDefault();
         try {
@@ -58,7 +63,6 @@ const AdminSettings = () => {
         }
     };
 
-    // --- HOLIDAY HANDLERS ---
     const handleAddHoliday = async () => {
         const { value: formValues } = await Swal.fire({
             title: 'Add New Holiday',
@@ -118,7 +122,7 @@ const AdminSettings = () => {
             <h1 className="page-title"><FontAwesomeIcon icon={faCog} /> System Configuration</h1>
 
             {/* CARD 1: ATTENDANCE RULES */}
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'center' }}>
+            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'flex-start' }}>
 
                 {/* LEFT: INFO SECTION */}
                 <div style={{ flex: '0 0 280px' }}>
@@ -126,39 +130,60 @@ const AdminSettings = () => {
                         <FontAwesomeIcon icon={faClock} /> Attendance Rules
                     </h3>
                     <p style={{ color: '#777', fontSize: '14px', margin: '10px 0 0', lineHeight: '1.6' }}>
-                        Configure office timings and auto-marking logic.
+                        Configure office timings for Day and Night shifts, along with auto-marking logic.
                     </p>
                 </div>
 
                 {/* RIGHT: FORM SECTION */}
                 <div style={{ flex: '1', minWidth: '300px' }}>
                     <form onSubmit={handleSaveSettings}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
-                            {/* Start Time */}
+                        
+                        {/* --- DAY SHIFT ROW --- */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '15px' }}>
                             <div className="form-group">
-                                <label className="input-label">Office Start Time</label>
+                                <label className="input-label" style={{color: '#e67e22'}}><FontAwesomeIcon icon={faClock} /> Day Shift Start</label>
                                 <input
                                     type="time"
                                     className="swal2-input custom-input"
-                                    value={settings.officeStartTime}
-                                    onChange={(e) => setSettings({ ...settings, officeStartTime: e.target.value })}
+                                    value={settings.dayShiftStartTime}
+                                    onChange={(e) => setSettings({ ...settings, dayShiftStartTime: e.target.value })}
                                 />
                             </div>
-
-                            {/* End Time */}
                             <div className="form-group">
-                                <label className="input-label">Office End Time</label>
+                                <label className="input-label" style={{color: '#e67e22'}}>Day Shift End</label>
                                 <input
                                     type="time"
                                     className="swal2-input custom-input"
-                                    value={settings.officeCloseTime}
-                                    onChange={(e) => setSettings({ ...settings, officeCloseTime: e.target.value })}
+                                    value={settings.dayShiftEndTime}
+                                    onChange={(e) => setSettings({ ...settings, dayShiftEndTime: e.target.value })}
                                 />
                             </div>
                         </div>
 
+                        {/* --- NIGHT SHIFT ROW --- */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
+                            <div className="form-group">
+                                <label className="input-label" style={{color: '#2980b9'}}><FontAwesomeIcon icon={faClock} /> Night Shift Start</label>
+                                <input
+                                    type="time"
+                                    className="swal2-input custom-input"
+                                    value={settings.nightShiftStartTime}
+                                    onChange={(e) => setSettings({ ...settings, nightShiftStartTime: e.target.value })}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="input-label" style={{color: '#2980b9'}}>Night Shift End</label>
+                                <input
+                                    type="time"
+                                    className="swal2-input custom-input"
+                                    value={settings.nightShiftEndTime}
+                                    onChange={(e) => setSettings({ ...settings, nightShiftEndTime: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* --- RULES ROW --- */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-                            {/* Grace Period */}
                             <div className="form-group">
                                 <label className="input-label">Grace Period (Mins)</label>
                                 <input
@@ -170,7 +195,6 @@ const AdminSettings = () => {
                                 <small className="hint-text">Delay allowed before marking "Late"</small>
                             </div>
 
-                            {/* Half Day Threshold */}
                             <div className="form-group">
                                 <label className="input-label">Half-Day Threshold (Mins)</label>
                                 <input
@@ -245,7 +269,7 @@ const AdminSettings = () => {
                                             <td style={{ padding: '14px 12px', textAlign: 'right' }}>
                                                 <button
                                                     className="gts-btn danger"
-                                                    style={{ padding: '6px 12px', fontSize: '12px' }} // Removed opacity: 0.2
+                                                    style={{ padding: '6px 12px', fontSize: '12px' }}
                                                     onClick={() => handleDeleteHoliday(holiday._id)}
                                                     title="Delete Holiday"
                                                 >

@@ -31,7 +31,7 @@ const Leaves = () => {
     const handleApplyLeave = async () => {
         // Build Dropdown Options Dynamically
         let options = '';
-        
+
         if (balances.CL > 0) {
             options += `<option value="CL">Casual Leave (Balance: ${balances.CL})</option>`;
         }
@@ -86,7 +86,7 @@ const Leaves = () => {
             try {
                 await api.post('/leaves/apply', formValues);
                 Swal.fire('Submitted!', 'Your leave request has been sent to HR.', 'success');
-                fetchLeaves(); 
+                fetchLeaves();
             } catch (err) {
                 Swal.fire('Error', err.response?.data?.message || 'Failed to submit request.', 'error');
             }
@@ -114,14 +114,14 @@ const Leaves = () => {
 
             {/* --- BALANCE CARDS --- */}
             <div className="leaves-stats-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                
+
                 {/* Casual Leave Card */}
                 <div className="stat-card border-teal">
                     <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faCalendarDay} /></div>
                     <div className="stat-info">
                         <p>Casual Leave (CL)</p>
                         <h3>{balances.CL} Available</h3>
-                        <small style={{color: '#777'}}>Resets Jan 1st</small>
+                        <small style={{ color: '#777' }}>+1 per month (Resets Jan 1st)</small>
                     </div>
                 </div>
 
@@ -131,7 +131,7 @@ const Leaves = () => {
                     <div className="stat-info">
                         <p>Earned Leave (EL)</p>
                         <h3>{balances.EL} Available</h3>
-                        <small style={{color: '#777'}}>Added by HR</small>
+                        <small style={{ color: '#777' }}>Added by HR</small>
                     </div>
                 </div>
             </div>
@@ -151,14 +151,14 @@ const Leaves = () => {
                     </thead>
                     <tbody>
                         {leaveHistory.length === 0 ? (
-                            <tr><td colSpan="5" style={{textAlign:'center', padding:'20px', color:'#999'}}>No leave history found.</td></tr>
+                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No leave history found.</td></tr>
                         ) : (
                             leaveHistory.map(leave => (
                                 <tr key={leave._id}>
                                     <td style={{ fontWeight: '600' }}>{leave.leaveType}</td>
                                     <td style={{ fontSize: '14px', color: '#555' }}>
-                                        {new Date(leave.fromDate).toLocaleDateString()} 
-                                        <span style={{ color: '#aaa', margin: '0 5px' }}>to</span> 
+                                        {new Date(leave.fromDate).toLocaleDateString()}
+                                        <span style={{ color: '#aaa', margin: '0 5px' }}>to</span>
                                         {new Date(leave.toDate).toLocaleDateString()}
                                     </td>
                                     <td>{leave.days}</td>

@@ -5,12 +5,9 @@ const auth = require('../middleware/authMiddleware');
 const bcrypt = require('bcryptjs');
 
 // @route   GET /api/employees
-// @desc    Get all employees (HR/Admin only)
 router.get('/', auth, async (req, res) => {
     try {
-        if (req.user.role === 'EMPLOYEE') {
-            return res.status(403).json({ message: 'Access denied' });
-        }
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access denied' });
         const employees = await User.find().select('-password');
         res.json(employees);
     } catch (err) {
@@ -20,36 +17,27 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   GET /api/employees/:id
-// @desc    Get single employee by ID (Fixes the 404 on Profile Page)
 router.get('/:id', auth, async (req, res) => {
     try {
-        if (req.user.role === 'EMPLOYEE') {
-            return res.status(403).json({ message: 'Access denied' });
-        }
-        
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access denied' });
         const user = await User.findById(req.params.id).select('-password');
-        
-        if (!user) {
-            return res.status(404).json({ message: 'Employee not found' });
-        }
-        
+        if (!user) return res.status(404).json({ message: 'Employee not found' });
         res.json(user);
     } catch (err) {
         console.error(err.message);
-        if (err.kind === 'ObjectId') {
-            return res.status(404).json({ message: 'Employee not found' });
-        }
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Employee not found' });
         res.status(500).send('Server Error');
     }
 });
 
 // @route   POST /api/employees/add
-// @desc    HR/Admin adds a new employee
 router.post('/add', auth, async (req, res) => {
     try {
         const {
             name, email, password, role,
-            joiningDate, aadhaar, emergencyContact
+            joiningDate, aadhaar, emergencyContact,
+            reportingManagerName, reportingManagerEmail,
+            employeeId // <--- Added Biometric ID
         } = req.body;
 
         let user = await User.findOne({ email });
@@ -62,7 +50,10 @@ router.post('/add', auth, async (req, res) => {
             role,
             joiningDate,
             aadhaar,
-            emergencyContact
+            emergencyContact,
+            reportingManagerName, 
+            reportingManagerEmail,
+            employeeId // <--- Added
         });
 
         const salt = await bcrypt.genSalt(10);
@@ -77,18 +68,18 @@ router.post('/add', auth, async (req, res) => {
 });
 
 // @route   PUT /api/employees/:id
-// @desc    Update employee details
 router.put('/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Denied' });
 
         const { 
             name, email, role, status, joiningDate, password, 
-            aadhaar, emergencyContact, phoneNumber, address, // <--- Added these
-            salary, casualLeaveBalance, earnedLeaveBalance 
+            aadhaar, emergencyContact, phoneNumber, address,
+            salary, casualLeaveBalance, earnedLeaveBalance,
+            reportingManagerName, reportingManagerEmail,
+            employeeId // <--- Added Biometric ID
         } = req.body;
 
-        // Build update object
         let updateData = {};
         if (name) updateData.name = name;
         if (email) updateData.email = email;
@@ -96,18 +87,20 @@ router.put('/:id', auth, async (req, res) => {
         if (status) updateData.status = status;
         if (joiningDate) updateData.joiningDate = joiningDate;
         
-        // Contact Info
         if (aadhaar !== undefined) updateData.aadhaar = aadhaar;
         if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
         if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
         if (address !== undefined) updateData.address = address;
 
-        // HR Fields
         if (salary !== undefined) updateData.salary = salary;
         if (casualLeaveBalance !== undefined) updateData.casualLeaveBalance = casualLeaveBalance;
         if (earnedLeaveBalance !== undefined) updateData.earnedLeaveBalance = earnedLeaveBalance;
 
-        // Password Reset
+        if (reportingManagerName !== undefined) updateData.reportingManagerName = reportingManagerName;
+        if (reportingManagerEmail !== undefined) updateData.reportingManagerEmail = reportingManagerEmail;
+        
+        if (employeeId !== undefined) updateData.employeeId = employeeId; // <--- Added
+
         if (password && password.trim() !== "") {
             const salt = await bcrypt.genSalt(10);
             updateData.password = await bcrypt.hash(password, salt);

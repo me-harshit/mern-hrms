@@ -1,53 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api'; 
-import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-    faClock, faCoffee, faSignInAlt, faSignOutAlt, 
-    faHistory 
-} from '@fortawesome/free-solid-svg-icons';
+import { faHistory, faClock, faFilter, faSearch } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css'; 
 
 const Attendance = () => {
     // --- STATE ---
     const [currentTime, setCurrentTime] = useState(new Date());
-    const [status, setStatus] = useState('OUT'); // OUT, WORKING, BREAK
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
-    
-    // Break Timer
-    const [breakTimeLeft, setBreakTimeLeft] = useState(900); // 15 mins
 
-    // --- 1. INITIAL LOAD & CLOCK ---
+    // --- FILTER STATE ---
+    const [filterType, setFilterType] = useState('All');
+    const [customDates, setCustomDates] = useState({ from: '', to: '' });
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // --- INITIAL LOAD & CLOCK ---
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         fetchLogs(); 
         return () => clearInterval(timer);
     }, []);
 
-    // --- 2. BREAK TIMER LOGIC ---
-    useEffect(() => {
-        let breakInterval;
-        if (status === 'BREAK') {
-            breakInterval = setInterval(() => {
-                setBreakTimeLeft((prev) => prev - 1);
-            }, 1000);
-        }
-        return () => clearInterval(breakInterval);
-    }, [status]);
-
     // --- API: FETCH LOGS ---
     const fetchLogs = async () => {
         try {
             const res = await api.get('/attendance/my-logs');
             setLogs(res.data);
-            const todayLog = res.data.find(log => !log.checkOut); 
-            
-            if (todayLog) {
-                setStatus('WORKING');
-            } else {
-                setStatus('OUT');
-            }
             setLoading(false);
         } catch (err) {
             console.error("Error fetching logs", err);
@@ -55,16 +34,14 @@ const Attendance = () => {
         }
     };
 
-    // --- HELPER: FORMAT TIMER (MM:SS) ---
-    const formatTime = (seconds) => {
-        const isNegative = seconds < 0;
-        const absSeconds = Math.abs(seconds);
-        const mins = Math.floor(absSeconds / 60);
-        const secs = absSeconds % 60;
-        return `${isNegative ? '-' : ''}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    // --- HELPER: PARSE DD/MM/YYYY TO JS DATE ---
+    const parseDateStr = (dateStr) => {
+        if (!dateStr) return new Date();
+        const [d, m, y] = dateStr.split('/');
+        return new Date(y, m - 1, d);
     };
 
-    // --- NEW HELPER: CALCULATE WORKING HOURS ---
+    // --- HELPER: CALCULATE WORKING HOURS ---
     const calculateDuration = (start, end) => {
         if (!start || !end) return <span style={{color: '#999', fontStyle: 'italic'}}>Ongoing</span>;
         
@@ -81,138 +58,146 @@ const Attendance = () => {
         return `${hours}h ${minutes}m`;
     };
 
-    // --- HANDLERS ---
-    const handleCheckIn = async () => {
-        try {
-            const result = await Swal.fire({
-                title: 'Confirm Check-In',
-                text: 'Start your work day?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#215D7B',
-                confirmButtonText: 'Yes, Check In'
-            });
-
-            if (result.isConfirmed) {
-                const res = await api.post('/attendance/checkin', {});
-                setStatus('WORKING');
-                fetchLogs(); 
-                Swal.fire('Checked In', res.data.status === 'Late' || res.data.status === 'Half Day' 
-                    ? `Marked as ${res.data.status} (Late Entry)` 
-                    : 'Success', 'success');
-            }
-        } catch (err) {
-            Swal.fire('Error', err.response?.data?.message || 'Check-in failed', 'error');
-        }
+    // --- HELPER: FORMAT BREAK TIME ---
+    const formatBreakTime = (minutes) => {
+        if (!minutes || minutes <= 0) return "-";
+        
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
     };
 
-    const handleCheckOut = async () => {
-        try {
-            const now = new Date();
-            const isEarlyExit = now.getHours() < 14 || (now.getHours() === 14 && now.getMinutes() < 30);
-            const warningText = isEarlyExit 
-                ? 'It is before 14:30. This will be marked as a HALF DAY. Proceed?' 
-                : 'End your work day?';
+    // --- FILTER LOGIC ---
+    const filteredLogs = logs.filter(log => {
+        // 1. Search Filter (Search by Date, Status, or Note)
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch = 
+            log.date.toLowerCase().includes(searchLower) || 
+            log.status.toLowerCase().includes(searchLower) || 
+            (log.note && log.note.toLowerCase().includes(searchLower));
+        
+        if (!matchesSearch) return false;
 
-            const result = await Swal.fire({
-                title: 'Confirm Check-Out',
-                text: warningText,
-                icon: isEarlyExit ? 'warning' : 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#A6477F',
-                confirmButtonText: 'Yes, Check Out'
-            });
+        // 2. Date Filter
+        if (filterType === 'All') return true;
 
-            if (result.isConfirmed) {
-                await api.post('/attendance/checkout', {});
-                setStatus('OUT');
-                fetchLogs(); 
-                Swal.fire('Checked Out', 'Have a good evening!', 'success');
-            }
-        } catch (err) {
-            Swal.fire('Error', err.response?.data?.message || 'Check-out failed', 'error');
+        const logDate = parseDateStr(log.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (filterType === 'Today') {
+            return logDate.getTime() === today.getTime();
         }
-    };
-
-    const toggleBreak = () => {
-        if (status === 'WORKING') {
-            setStatus('BREAK');
-            setBreakTimeLeft(900);
-        } else if (status === 'BREAK') {
-            setStatus('WORKING');
-            if (breakTimeLeft < 0) {
-                Swal.fire('Break Ended', `You exceeded break time by ${formatTime(breakTimeLeft).replace('-', '+')}`, 'warning');
-            }
+        if (filterType === 'Week') {
+            const lastWeek = new Date(today);
+            lastWeek.setDate(today.getDate() - 7);
+            return logDate >= lastWeek && logDate <= today;
         }
-    };
+        if (filterType === 'Month') {
+            return logDate.getMonth() === today.getMonth() && logDate.getFullYear() === today.getFullYear();
+        }
+        if (filterType === 'Custom') {
+            if (customDates.from && customDates.to) {
+                const fromDate = new Date(customDates.from);
+                fromDate.setHours(0, 0, 0, 0);
+                const toDate = new Date(customDates.to);
+                toDate.setHours(23, 59, 59, 999);
+                return logDate >= fromDate && logDate <= toDate;
+            }
+            return true; 
+        }
+
+        return true;
+    });
 
     if (loading) return <div className="main-content">Loading Attendance...</div>;
 
     return (
         <div className="attendance-container">
-            {/* Header */}
-            <div className="attendance-header">
-                <h2 className="page-title" style={{ fontSize: '20px', margin: 0 }}>Attendance</h2>
-                <div className="digital-clock">
+            
+            {/* Header with Clock */}
+            <div className="attendance-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                <h2 className="page-title" style={{ fontSize: '24px', margin: 0 }}>My Attendance</h2>
+                <div className="digital-clock" style={{ fontSize: '18px', fontWeight: 'bold', color: '#215D7B', background: '#fff', padding: '10px 20px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                    <FontAwesomeIcon icon={faClock} style={{ marginRight: '8px', color: '#94a3b8' }} />
                     {currentTime.toLocaleTimeString()}
                 </div>
             </div>
 
-            {/* Control Card */}
-            <div className="control-card">
-                {/* LEFT: Status Ring */}
-                <div className={`status-ring ${status.toLowerCase()}`}>
-                    <div className="inner-status">
-                        {status === 'BREAK' ? (
-                            <div className={breakTimeLeft < 0 ? 'timer-danger' : 'timer-normal'}>
-                                {formatTime(breakTimeLeft)}
-                                <span style={{ fontSize: '12px' }}>Break</span>
-                            </div>
-                        ) : (
-                            <>
-                                <FontAwesomeIcon icon={status === 'WORKING' ? faClock : faSignInAlt} size="2x" />
-                                <span>{status}</span>
-                            </>
-                        )}
-                    </div>
+            {/* FILTER CONTROLS */}
+            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', marginBottom: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
+                
+                {/* 1. Filter Buttons */}
+                <div className="button-group" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                    {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
+                        <button
+                            key={type}
+                            className={`gts-btn ${filterType === type ? 'primary' : 'warning'}`}
+                            style={{ opacity: filterType === type ? 1 : 0.7, padding: '8px 15px', fontSize: '13px' }}
+                            onClick={() => setFilterType(type)}
+                        >
+                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} style={{ marginRight: '5px' }} />}
+                            {type}
+                        </button>
+                    ))}
                 </div>
 
-                {/* RIGHT: Controls */}
-                <div className="actions-area">
-                    <div className="button-group">
-                        {status === 'OUT' ? (
-                            <button className="gts-btn primary" onClick={handleCheckIn}>
-                                <FontAwesomeIcon icon={faSignInAlt} /> Check In
-                            </button>
-                        ) : (
-                            <>
-                                {status === 'WORKING' && (
-                                    <button className="gts-btn warning" onClick={toggleBreak}>
-                                        <FontAwesomeIcon icon={faCoffee} /> Break
-                                    </button>
-                                )}
-
-                                {status === 'BREAK' && (
-                                    <button className="gts-btn primary" onClick={toggleBreak}>
-                                        <FontAwesomeIcon icon={faClock} /> End Break
-                                    </button>
-                                )}
-
-                                {status !== 'BREAK' && (
-                                    <button className="gts-btn danger" onClick={handleCheckOut}>
-                                        <FontAwesomeIcon icon={faSignOutAlt} /> Out
-                                    </button>
-                                )}
-                            </>
-                        )}
+                {/* 2. Custom Date Inputs (Conditional) */}
+                {filterType === 'Custom' && (
+                    <div className="fade-in" style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '5px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>From:</span>
+                            <input
+                                type="date"
+                                className="swal2-input"
+                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                value={customDates.from}
+                                onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>To:</span>
+                            <input
+                                type="date"
+                                className="swal2-input"
+                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                value={customDates.to}
+                                onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })}
+                            />
+                        </div>
                     </div>
+                )}
+
+                {/* 3. Search Bar */}
+                <div style={{ position: 'relative', minWidth: '250px' }}>
+                    <FontAwesomeIcon
+                        icon={faSearch}
+                        style={{
+                            position: 'absolute',
+                            left: '15px',
+                            top: '50%',                  
+                            transform: 'translateY(-50%)', 
+                            color: '#aaa',
+                            pointerEvents: 'none'        
+                        }}
+                    />
+                    <input
+                        type="text"
+                        placeholder="Search records..."
+                        className="swal2-input"
+                        style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </div>
             </div>
 
             {/* LOGS TABLE */}
-            <div className="employee-table-container">
-                <h3 style={{ padding: '15px', fontSize: '16px', margin: 0, borderBottom: '1px solid #eee', color: '#215D7B' }}>
-                    <FontAwesomeIcon icon={faHistory} /> Activity Log
+            <div className="employee-table-container fade-in">
+                <h3 style={{ padding: '20px', fontSize: '16px', margin: 0, borderBottom: '1px solid #eee', color: '#215D7B', display: 'flex', alignItems: 'center' }}>
+                    <FontAwesomeIcon icon={faHistory} style={{ marginRight: '10px' }} /> Activity Log
                 </h3>
                 <table className="employee-table">
                     <thead>
@@ -220,28 +205,38 @@ const Attendance = () => {
                             <th>Date</th>
                             <th>Time In</th>
                             <th>Time Out</th>
-                            <th>Working Hours</th>
+                            <th>Work Hours</th>
+                            <th>Break Time</th>
                             <th>Status</th>
                             <th>Note</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {logs.length === 0 ? (
+                        {filteredLogs.length === 0 ? (
                             <tr>
-                                <td colSpan="6" style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
-                                    No activity recorded yet.
+                                <td colSpan="7" style={{ textAlign: 'center', color: '#999', padding: '40px' }}>
+                                    No records match your filters.
                                 </td>
                             </tr>
                         ) : (
-                            logs.map((log, index) => (
+                            filteredLogs.map((log, index) => (
                                 <tr key={index}>
                                     <td style={{ fontWeight: '600', color: '#555' }}>{log.date}</td>
-                                    <td>{new Date(log.checkIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-                                    <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}</td>
+                                    <td>
+                                        {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
+                                    </td>
+                                    <td>
+                                        {log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
+                                    </td>
                                     
-                                    {/* --- NEW COLUMN: WORKING HOURS --- */}
+                                    {/* WORKING HOURS COLUMN */}
                                     <td style={{ fontWeight: 'bold', color: '#215D7B' }}>
                                         {calculateDuration(log.checkIn, log.checkOut)}
+                                    </td>
+
+                                    {/* BREAK TIME COLUMN */}
+                                    <td style={{ fontWeight: 'bold', color: '#e67e22' }}>
+                                        {formatBreakTime(log.breakTimeTaken)}
                                     </td>
 
                                     <td>
@@ -258,6 +253,7 @@ const Attendance = () => {
                     </tbody>
                 </table>
             </div>
+            
         </div>
     );
 };

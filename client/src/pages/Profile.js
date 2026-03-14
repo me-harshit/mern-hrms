@@ -1,24 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api'; // Import api util
+import api from '../utils/api'; 
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faUser, faEnvelope, faPhone, faMapMarkerAlt, 
     faEdit, faSave, faTimes, faCamera,
-    faIdCard, faFirstAid 
+    faIdCard, faFirstAid, faUserTie // <--- Added faUserTie
 } from '@fortawesome/free-solid-svg-icons';
 
 const Profile = () => {
     const [user, setUser] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     
-    // Form data only includes editable fields
     const [formData, setFormData] = useState({
         name: '', email: '', phoneNumber: '', address: ''
     });
 
-    // --- FIX 1: DYNAMIC IMAGE URL ---
-    // If in production, use relative path (''). If dev, use localhost:5000
     const SERVER_URL = process.env.NODE_ENV === 'production' 
         ? '' 
         : 'http://localhost:5000';
@@ -29,11 +26,9 @@ const Profile = () => {
 
     const fetchProfile = async () => {
         try {
-            // Use api.get with relative path
             const res = await api.get('/auth/me');
             setUser(res.data);
             
-            // Only set editable fields in formData
             setFormData({
                 name: res.data.name,
                 email: res.data.email,
@@ -45,7 +40,6 @@ const Profile = () => {
         }
     };
 
-    // --- LOGIC: Handle Profile Picture Upload ---
     const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -54,19 +48,14 @@ const Profile = () => {
         uploadData.append('avatar', file);
 
         try {
-            // --- FIX 2: UPLOAD HEADERS ---
-            // We use the centralized 'api', but we MUST override the Content-Type header
-            // to allow multipart/form-data for files.
             const res = await api.post('/auth/upload-avatar', uploadData, {
                 headers: { 
                     'Content-Type': 'multipart/form-data'
                 }
             });
             
-            // Update local state to show the new image immediately
             setUser({ ...user, profilePic: res.data.filePath });
             
-            // Sync with localStorage
             const storedUser = JSON.parse(localStorage.getItem('user'));
             localStorage.setItem('user', JSON.stringify({ ...storedUser, profilePic: res.data.filePath }));
 
@@ -80,12 +69,10 @@ const Profile = () => {
     const handleUpdate = async (e) => {
         e.preventDefault();
         try {
-            // Use api.put with relative path
             const res = await api.put('/auth/update-profile', formData);
             setUser(res.data);
             setIsEditing(false);
             
-            // Sync with localStorage for Topbar/Sidebar
             const storedUser = JSON.parse(localStorage.getItem('user'));
             localStorage.setItem('user', JSON.stringify({ ...storedUser, name: res.data.name }));
 
@@ -105,15 +92,13 @@ const Profile = () => {
             
             <div className="profile-card">
                 <div className="profile-header">
-                    {/* Avatar Container with Upload Overlay */}
                     <div className="profile-avatar-container">
                         {user.profilePic ? (
                             <img 
-                                // Uses dynamic SERVER_URL
                                 src={`${SERVER_URL}${user.profilePic}`} 
                                 alt="Profile" 
                                 className="profile-img-large" 
-                                onError={(e) => { e.target.onerror = null; e.target.src = '' }} // Fallback if image fails
+                                onError={(e) => { e.target.onerror = null; e.target.src = '' }}
                             />
                         ) : (
                             <div className="profile-avatar-large">{initials}</div>
@@ -180,7 +165,6 @@ const Profile = () => {
                             <div><label>Phone Number</label><p>{user.phoneNumber || 'Not provided'}</p></div>
                         </div>
                         
-                        {/* --- NEW READ-ONLY FIELDS --- */}
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faIdCard} className="detail-icon" />
                             <div>
@@ -191,13 +175,29 @@ const Profile = () => {
                             </div>
                         </div>
                         <div className="detail-item">
-                            <FontAwesomeIcon icon={faFirstAid} className="detail-icon" style={{ letterSpacing: '1px', fontWeight: '600' }} />
+                            <FontAwesomeIcon icon={faFirstAid} className="detail-icon" />
                             <div>
                                 <label>Emergency Contact</label>
-                                <p>{user.emergencyContact || 'Not provided'}</p>
+                                <p style={{ letterSpacing: '1px', fontWeight: '600' }}>{user.emergencyContact || 'Not provided'}</p>
                             </div>
                         </div>
-                        {/* ----------------------------- */}
+
+                        {/* --- NEW: REPORTING MANAGER FIELD --- */}
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faUserTie} className="detail-icon" style={{ color: '#215D7B' }} />
+                            <div>
+                                <label>Reporting Manager</label>
+                                {user.reportingManagerName ? (
+                                    <p style={{ fontWeight: '500' }}>
+                                        {user.reportingManagerName} <br />
+                                        <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>{user.reportingManagerEmail}</span>
+                                    </p>
+                                ) : (
+                                    <p style={{ color: '#999', fontStyle: 'italic' }}>Not Assigned</p>
+                                )}
+                            </div>
+                        </div>
+                        {/* ------------------------------------- */}
 
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faMapMarkerAlt} className="detail-icon" />

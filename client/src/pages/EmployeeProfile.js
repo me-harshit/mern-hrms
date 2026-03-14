@@ -242,6 +242,16 @@ const EmployeeProfile = () => {
                             />
                         </div>
 
+                        <div className="form-group">
+                            <label className="input-label" style={{ color: '#215D7B', fontWeight: 'bold' }}>Employee / Biometric ID</label>
+                            <input
+                                className="swal2-input custom-input"
+                                value={user.employeeId || ''}
+                                placeholder="e.g. GTS003"
+                                onChange={e => setUser({ ...user, employeeId: e.target.value })}
+                            />
+                        </div>
+
                         {/* Row 2: Contact Info */}
                         <div className="form-group">
                             <label className="input-label">Phone Number</label>
@@ -307,7 +317,29 @@ const EmployeeProfile = () => {
                             </select>
                         </div>
 
-                        {/* Row 5: Salary & Joining */}
+                        {/* Row 5: Reporting Manager Info (NEW) */}
+                        <div className="form-group">
+                            <label className="input-label">Reporting Manager Name</label>
+                            <input
+                                className="swal2-input custom-input"
+                                value={user.reportingManagerName || ''}
+                                placeholder="Manager's Full Name"
+                                onChange={e => setUser({ ...user, reportingManagerName: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="input-label">Reporting Manager Email</label>
+                            <input
+                                type="email"
+                                className="swal2-input custom-input"
+                                value={user.reportingManagerEmail || ''}
+                                placeholder="manager@gts.ai"
+                                onChange={e => setUser({ ...user, reportingManagerEmail: e.target.value })}
+                            />
+                        </div>
+
+                        {/* Row 6: Salary & Joining */}
                         <div className="form-group">
                             <label className="input-label">Joining Date</label>
                             <input
@@ -441,7 +473,7 @@ const EmployeeProfile = () => {
                                         <td style={{ fontWeight: '500' }}>{log.date}</td>
                                         <td>{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                         <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
-                                        
+
                                         {/* Working Hours Column */}
                                         <td style={{ fontWeight: 'bold', color: '#555' }}>
                                             {calculateDuration(log.checkIn, log.checkOut)}

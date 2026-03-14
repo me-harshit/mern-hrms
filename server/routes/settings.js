@@ -25,15 +25,22 @@ router.put('/', auth, async (req, res) => {
     try {
         if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Access Denied' });
 
-        const { officeStartTime, officeCloseTime, gracePeriod, halfDayThreshold } = req.body;
+        const { 
+            dayShiftStartTime, dayShiftEndTime, 
+            nightShiftStartTime, nightShiftEndTime, 
+            gracePeriod, halfDayThreshold 
+        } = req.body;
         
         let settings = await Settings.findOne();
         if (!settings) settings = new Settings();
 
-        settings.officeStartTime = officeStartTime;
-        settings.officeCloseTime = officeCloseTime;
-        settings.gracePeriod = gracePeriod;
-        settings.halfDayThreshold = halfDayThreshold;
+        if (dayShiftStartTime) settings.dayShiftStartTime = dayShiftStartTime;
+        if (dayShiftEndTime) settings.dayShiftEndTime = dayShiftEndTime;
+        if (nightShiftStartTime) settings.nightShiftStartTime = nightShiftStartTime;
+        if (nightShiftEndTime) settings.nightShiftEndTime = nightShiftEndTime;
+        
+        if (gracePeriod !== undefined) settings.gracePeriod = gracePeriod;
+        if (halfDayThreshold !== undefined) settings.halfDayThreshold = halfDayThreshold;
 
         await settings.save();
         res.json(settings);
@@ -41,7 +48,5 @@ router.put('/', auth, async (req, res) => {
         res.status(500).send('Server Error');
     }
 });
-
-module.exports = router;
 
 module.exports = router;

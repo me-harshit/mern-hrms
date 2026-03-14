@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
     // --- BASIC INFO ---
+    employeeId: { type: String, default: "" },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
@@ -10,16 +11,18 @@ const userSchema = new mongoose.Schema({
     joiningDate: { type: Date, default: Date.now },
     profilePic: { type: String, default: "" },
 
-    // --- CONTACT DETAILS (Restored) ---
+    // --- CONTACT DETAILS ---
     phoneNumber: { type: String, default: "" },
     address: { type: String, default: "" },
     aadhaar: { type: String, default: "" },
     emergencyContact: { type: String, default: "" },
 
-    // --- HR & LEAVE SETTINGS (New) ---
+    // --- REPORTING MANAGER (New) ---
+    reportingManagerName: { type: String, default: "" },
+    reportingManagerEmail: { type: String, default: "" },
+
+    // --- HR & LEAVE SETTINGS ---
     salary: { type: Number, default: 0 }, 
-    
-    // Auto-managed leave balances
     casualLeaveBalance: { type: Number, default: 1 }, 
     earnedLeaveBalance: { type: Number, default: 0 },
     leavesLastReset: { type: Date, default: Date.now }

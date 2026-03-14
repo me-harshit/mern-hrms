@@ -83,7 +83,7 @@ const AttendanceLogs = () => {
         }
     };
 
-    // --- NEW HELPER: CALCULATE DURATION ---
+    // --- HELPER: CALCULATE DURATION ---
     const calculateDuration = (start, end) => {
         if (!start || !end) return <span style={{color: '#999', fontStyle: 'italic', fontSize:'12px'}}>In Progress</span>;
         
@@ -100,6 +100,15 @@ const AttendanceLogs = () => {
         return `${hours}h ${minutes}m`;
     };
 
+    // --- NEW HELPER: FORMAT BREAK TIME ---
+    const formatBreakTime = (minutes) => {
+        if (!minutes || minutes <= 0) return "-";
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+    };
+
     const handleEdit = async (log) => {
         const toTimeStr = (dateStr) => {
             if (!dateStr) return '';
@@ -111,7 +120,7 @@ const AttendanceLogs = () => {
         const outTime = toTimeStr(log.checkOut);
 
         const { value: formValues } = await Swal.fire({
-            title: `Edit Log: ${log.userId.name}`,
+            title: `Edit Log: ${log.userId?.name || 'Unknown'}`,
             html: `
                 <div style="text-align:left">
                     <p style="font-size:12px; color:#666; margin-bottom:10px;">
@@ -236,7 +245,7 @@ const AttendanceLogs = () => {
                             top: '50%',                  
                             transform: 'translateY(-50%)', 
                             color: '#aaa',
-                            pointerEvents: 'none'         
+                            pointerEvents: 'none'        
                         }}
                     />
                     <input
@@ -259,7 +268,8 @@ const AttendanceLogs = () => {
                             <th>Date</th>
                             <th>In Time</th>
                             <th>Out Time</th>
-                            <th>Working Hours</th>
+                            <th>Work Hours</th>
+                            <th>Break Time</th>
                             <th>Status</th>
                             <th>Note</th>
                             <th>Action</th>
@@ -267,7 +277,7 @@ const AttendanceLogs = () => {
                     </thead>
                     <tbody>
                         {filteredLogs.length === 0 ? (
-                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#888' }}>No attendance records found for this selection.</td></tr>
+                            <tr><td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: '#888' }}>No attendance records found for this selection.</td></tr>
                         ) : (
                             filteredLogs.map(log => (
                                 <tr key={log._id}>
@@ -276,9 +286,13 @@ const AttendanceLogs = () => {
                                     <td>{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                     <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
                                     
-                                    {/* --- NEW COLUMN --- */}
                                     <td style={{ fontWeight: 'bold', color: '#555' }}>
                                         {calculateDuration(log.checkIn, log.checkOut)}
+                                    </td>
+
+                                    {/* --- NEW COLUMN --- */}
+                                    <td style={{ fontWeight: 'bold', color: '#e67e22' }}>
+                                        {formatBreakTime(log.breakTimeTaken)}
                                     </td>
 
                                     <td>

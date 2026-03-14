@@ -1,273 +1,301 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer();
 const auth = require('../middleware/authMiddleware');
 const Attendance = require('../models/Attendance');
+const AttendanceLog = require('../models/AttendanceLog');
 const Settings = require('../models/Settings');
+const User = require('../models/User');
 
+// --- HELPER: Format Lateness ---
+const formatLateTime = (mins) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h > 0) return `${h} hr ${m} min`;
+    return `${m} min`;
+};
 
-// Helper: Get today's date string (DD/MM/YYYY)
+// --- HELPER: Shift Date Calculator ---
+const getShiftDate = (punchTime) => {
+    const d = new Date(punchTime);
+    if (d.getHours() < 6) { 
+        d.setDate(d.getDate() - 1);
+    }
+    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+};
+
 const getTodayStr = () => {
     const d = new Date();
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 };
 
-// @route   POST /api/attendance/checkin
-// @desc    User Check In
-router.post('/checkin', auth, async (req, res) => {
+// --- HELPER: Determine Shift Type ---
+const isNightShift = (dateObj) => {
+    const hour = dateObj.getHours();
+    return (hour >= 15 || hour < 6); 
+};
+
+// ==========================================
+// 🚀 1. BIOMETRIC UPLOAD ROUTE & CALCULATOR
+// ==========================================
+router.post('/upload', upload.any(), async (req, res) => {
     try {
-        const userId = req.user.id;
-        const dateStr = getTodayStr();
-        const now = new Date();
+        const rawBody = req.body.event_log;
+        if (!rawBody) return res.sendStatus(200);
 
-        // 1. Check if already checked in
-        let existingRecord = await Attendance.findOne({ userId, date: dateStr });
-        if (existingRecord) {
-            return res.status(400).json({ message: 'Already checked in for today.' });
+        const data = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
+        const event = data.AccessControllerEvent;
+
+        if (event.subEventType !== 38) return res.status(200).send("Ignored: System Event");
+
+        const biometricId = event.employeeNoString; 
+        const rawTimeStr = data.dateTime.substring(0, 19); 
+        const punchTime = new Date(rawTimeStr);
+        const direction = event.deviceName === 'Hik_In' ? 'IN' : 'OUT';
+
+        const user = await User.findOne({ employeeId: biometricId });
+        if (!user) {
+            console.log(`⚠️ Ignored: Punch for ${event.name} (${biometricId}) - Not mapped.`);
+            return res.status(200).send("User not mapped");
         }
 
-        // 2. Fetch Settings
-        let settings = await Settings.findOne();
-        if (!settings) {
-            settings = { officeStartTime: "09:30", gracePeriod: 15, halfDayThreshold: 30 };
-        }
+        const userId = user._id;
+        const shiftDate = getShiftDate(punchTime);
 
-        // 3. Logic: Calculate Lateness
-        const [startHour, startMin] = settings.officeStartTime.split(':').map(Number);
-
-        const officeStartTime = new Date();
-        officeStartTime.setHours(startHour, startMin, 0, 0);
-
-        // Difference in minutes
-        const diffMinutes = Math.floor((now - officeStartTime) / 60000);
-
-        let status = 'Present';
-        let note = '';
-
-        // --- HELPER: Format Minutes to "X hr Y min" ---
-        const formatLateTime = (mins) => {
-            const h = Math.floor(mins / 60);
-            const m = mins % 60;
-            if (h > 0) return `${h} hr ${m} min`;
-            return `${m} min`;
-        };
-        // ----------------------------------------------
-
-        if (diffMinutes > settings.halfDayThreshold) {
-            status = 'Half Day';
-            note = `Late by ${formatLateTime(diffMinutes)} (Auto-marked)`;
-        } else if (diffMinutes > settings.gracePeriod) {
-            status = 'Late';
-            note = `Late by ${formatLateTime(diffMinutes)}`;
-        }
-
-        // 4. Save to DB
-        const newAttendance = new Attendance({
-            userId,
-            date: dateStr,
-            checkIn: now,
-            status,
-            note
+        // --- 1. SAVE RAW LOG ---
+        await AttendanceLog.create({
+            userId, employeeId: biometricId, timestamp: punchTime, direction, deviceId: event.deviceName, shiftDate
         });
 
-        await newAttendance.save();
-        res.json(newAttendance);
+        // --- 2. FETCH ALL LOGS FOR THIS SHIFT ---
+        const shiftLogs = await AttendanceLog.find({ userId, shiftDate }).sort({ timestamp: 1 });
 
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
-    }
-});
+        // --- 3. DETERMINE SHIFT BOUNDARIES FOR BREAK CALCULATION ---
+        let settings = await Settings.findOne() || { 
+            dayShiftStartTime: "09:30", dayShiftEndTime: "18:30", 
+            nightShiftStartTime: "19:00", nightShiftEndTime: "04:00", 
+            gracePeriod: 15, halfDayThreshold: 30 
+        };
 
-// ... rest of the file (checkout, all-logs, etc.) remains same ...
+        const firstLogTime = shiftLogs[0].timestamp; 
+        const isNight = isNightShift(firstLogTime);
+        
+        const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:00") : (settings.dayShiftStartTime || "09:30");
+        const shiftEndStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:30");
 
-// @route   POST /api/attendance/checkout
-// @desc    User Check Out
-// @route   POST /api/attendance/checkout
-router.post('/checkout', auth, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const dateStr = getTodayStr(); // Function defined in previous step (DD/MM/YYYY)
-        const now = new Date();
+        const [startHour, startMin] = shiftStartStr.split(':').map(Number);
+        const [endHour, endMin] = shiftEndStr.split(':').map(Number);
+        const [d, m, y] = shiftDate.split('/').map(Number);
 
-        // 1. Find today's record
-        let record = await Attendance.findOne({ userId, date: dateStr });
+        const shiftStartObj = new Date(y, m - 1, d, startHour, startMin, 0, 0);
+        const shiftEndObj = new Date(y, m - 1, d, endHour, endMin, 0, 0);
+        
+        if (isNight && endHour < 12) {
+            shiftEndObj.setDate(shiftEndObj.getDate() + 1);
+        }
+
+        // --- 4. STATE MACHINE: OVERLAPPING BREAK TIME ---
+        let isInside = false;
+        let lastOutTime = null;
+        let breakMs = 0;
+        
+        let firstIn = null;
+        let lastOut = null;
+
+        shiftLogs.forEach(log => {
+            if (log.direction === 'IN') {
+                if (!firstIn) firstIn = log.timestamp; 
+                if (!isInside) {
+                    if (lastOutTime) {
+                        // Calculate break time only within official shift hours
+                        const breakStart = Math.max(lastOutTime.getTime(), shiftStartObj.getTime());
+                        const breakEnd = Math.min(log.timestamp.getTime(), shiftEndObj.getTime());
+                        
+                        if (breakEnd > breakStart) {
+                            breakMs += (breakEnd - breakStart);
+                        }
+                    }
+                    isInside = true;
+                }
+            } else if (log.direction === 'OUT') {
+                lastOut = log.timestamp; // Continually overwrite to get absolute last OUT
+                if (isInside) {
+                    lastOutTime = log.timestamp;
+                    isInside = false;
+                }
+            }
+        });
+
+        // --- GROSS TIME CALCULATION ---
+        let calculatedGrossHours = 0;
+        if (firstIn && lastOut && lastOut > firstIn) {
+            const grossMs = lastOut.getTime() - firstIn.getTime();
+            calculatedGrossHours = Number((grossMs / 3600000).toFixed(2));
+        }
+
+        const calculatedBreakMinutes = Math.floor(breakMs / 60000);
+
+        // --- 5. UPDATE OR CREATE DAILY AGGREGATE ---
+        let record = await Attendance.findOne({ userId, date: shiftDate });
+
         if (!record) {
-            return res.status(400).json({ message: 'No check-in record found for today.' });
+            // Create record only if the first punch was an IN punch
+            if (firstIn) {
+                let status = 'Present';
+                let note = 'Biometric Punch';
+
+                // Lateness Calculation
+                const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
+
+                if (diffMinutes > (settings.halfDayThreshold || 30)) {
+                    status = 'Half Day';
+                    note = `Late by ${formatLateTime(diffMinutes)}`;
+                } else if (diffMinutes > (settings.gracePeriod || 15)) {
+                    status = 'Late';
+                    note = `Late by ${formatLateTime(diffMinutes)}`;
+                }
+
+                record = new Attendance({
+                    userId, date: shiftDate, checkIn: firstIn, checkOut: lastOut, 
+                    status, note, totalHours: calculatedGrossHours, breakTimeTaken: calculatedBreakMinutes
+                });
+                await record.save();
+                console.log(`✅ [${isNight ? 'Night' : 'Day'} Shift] ${user.name} IN at ${firstIn.toLocaleTimeString()}`);
+            }
+        } else {
+            // Update existing record
+            record.checkIn = firstIn || record.checkIn;
+            record.checkOut = lastOut || record.checkOut;
+            record.totalHours = calculatedGrossHours; // Now stores GROSS time
+            record.breakTimeTaken = calculatedBreakMinutes;
+            await record.save();
+            
+            console.log(`🔄 [Updated] ${user.name} | Gross Work: ${calculatedGrossHours}h | Office-Hour Break: ${calculatedBreakMinutes}m`);
         }
 
-        // 2. Early Exit Logic (Before 14:30)
-        // 14:30 = 2:30 PM. We check if current hour is < 14 OR (hour is 14 AND minute < 30)
-        const currentHour = now.getHours();
-        const currentMin = now.getMinutes();
+        res.status(200).send({ status: "success" });
 
-        // Default to existing status (e.g., 'Present' or 'Late')
-        let finalStatus = record.status;
-        let note = record.note;
-
-        // If leaving before 14:30, force Half Day
-        if (currentHour < 14 || (currentHour === 14 && currentMin < 30)) {
-            finalStatus = 'Half Day';
-            note = (note ? note + '; ' : '') + 'Early exit before 14:30';
-        }
-
-        // 3. Calculate Total Hours
-        const checkInTime = new Date(record.checkIn);
-        const diffMs = now - checkInTime;
-        const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
-
-        // 4. Update Record
-        record.checkOut = now;
-        record.totalHours = Number(totalHours);
-        record.status = finalStatus;
-        record.note = note;
-
-        await record.save();
-        res.json(record);
-
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+    } catch (error) {
+        console.error("Processing Error:", error);
+        res.sendStatus(200); 
     }
 });
 
-// @route   GET /api/attendance/my-logs
-// @desc    Get current user's logs (and auto-close stale sessions)
+// ==========================================
+// 2. GET CURRENT USER LOGS & AUTO-CLEANUP
+// ==========================================
 router.get('/my-logs', auth, async (req, res) => {
     try {
         const userId = req.user.id;
         const dateStr = getTodayStr(); 
 
-        // --- 1. AUTO-CLEANUP STALE SESSIONS ---
         const staleSession = await Attendance.findOne({ 
-            userId, 
-            checkOut: null,
-            date: { $ne: dateStr } 
+            userId, checkOut: null, date: { $ne: dateStr } 
         });
 
-        if (staleSession) {
-            // A. Fetch Dynamic Settings
-            let settings = await Settings.findOne();
-            // Default to 18:30 if setting missing
-            const closeTimeStr = settings?.officeCloseTime || "18:30"; 
+        if (staleSession && staleSession.checkIn) {
+            let settings = await Settings.findOne() || { dayShiftEndTime: "18:30", nightShiftEndTime: "04:00" };
             
-            // Parse "18:30" -> [18, 30]
+            const isNight = isNightShift(staleSession.checkIn);
+            const closeTimeStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:30");
             const [closeH, closeM] = closeTimeStr.split(':').map(Number);
+            const [d, m, y] = staleSession.date.split('/').map(Number); 
 
-            // B. Set Auto-Out Time
-            const autoOutTime = new Date(staleSession.checkIn);
-            autoOutTime.setHours(closeH, closeM, 0, 0); 
+            const autoOutTime = new Date(y, m - 1, d, closeH, closeM, 0, 0); 
+            if (isNight && closeH < 12) autoOutTime.setDate(autoOutTime.getDate() + 1);
 
-            // Calculate hours
-            const diffMs = autoOutTime - new Date(staleSession.checkIn);
-            const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
+            if (autoOutTime > staleSession.checkIn) {
+                const diffMs = autoOutTime - new Date(staleSession.checkIn);
+                staleSession.totalHours = Number((diffMs / (1000 * 60 * 60)).toFixed(2));
+            }
 
-            // Update record
             staleSession.checkOut = autoOutTime;
-            staleSession.totalHours = Number(totalHours) > 0 ? Number(totalHours) : 0;
             staleSession.status = 'Absent'; 
-            staleSession.note = (staleSession.note || '') + ' [Auto-closed: Forgot Checkout]';
-            
+            staleSession.note = (staleSession.note || '') + ' [Auto-closed]';
             await staleSession.save();
         }
-        // ----------------------------------------
 
-        // --- 2. FETCH LOGS ---
-        const logs = await Attendance.find({ userId })
-            .sort({ createdAt: -1 })
-            .limit(30);
-
+        const logs = await Attendance.find({ userId }).sort({ createdAt: -1 }).limit(30);
         res.json(logs);
-
     } catch (err) {
-        console.error(err.message);
         res.status(500).send('Server Error');
     }
 });
 
-// @route   GET /api/attendance/all-logs
-// @desc    Get All Attendance Logs (Admin/HR Only)
+// ==========================================
+// 3. GET ALL LOGS (Admin/HR Only)
+// ==========================================
 router.get('/all-logs', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-
-        // Fetch logs and populate user details (name, email)
-        // Sort by most recent date (using createdAt is safer for sorting than string date)
-        const logs = await Attendance.find()
-            .populate('userId', 'name email')
-            .sort({ createdAt: -1 });
-
+        const logs = await Attendance.find().populate('userId', 'name email').sort({ createdAt: -1 });
         res.json(logs);
     } catch (err) {
-        console.error(err.message);
         res.status(500).send('Server Error');
     }
 });
 
-// @route   PUT /api/attendance/update/:id
-// @desc    Admin Manually Updates a Log
-router.put('/update/:id', auth, async (req, res) => {
-    try {
-        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-
-        const { checkIn, checkOut, status, note } = req.body;
-
-        let newStatus = status;
-
-        // --- AUTO-CALCULATION LOGIC ---
-        if (status === 'Auto') {
-            // 1. Fetch Settings
-            const settings = await Settings.findOne();
-            const officeStart = settings?.officeStartTime || '09:30';
-            const gracePeriod = settings?.gracePeriod || 15;
-            const halfDayThreshold = settings?.halfDayThreshold || 30;
-
-            // 2. Parse Times
-            const checkInDate = new Date(checkIn);
-
-            // Create "Office Start" date object for comparison
-            const [officeH, officeM] = officeStart.split(':');
-            const officeTime = new Date(checkInDate); // Clone the day
-            officeTime.setHours(officeH, officeM, 0, 0);
-
-            // 3. Calculate Difference in Minutes
-            const diffMs = checkInDate - officeTime;
-            const lateMinutes = Math.floor(diffMs / 60000);
-
-            // 4. Determine Status
-            if (lateMinutes > halfDayThreshold) {
-                newStatus = 'Half Day';
-            } else if (lateMinutes > gracePeriod) {
-                newStatus = 'Late';
-            } else {
-                newStatus = 'Present';
-            }
-        }
-
-        const updatedLog = await Attendance.findByIdAndUpdate(
-            req.params.id,
-            {
-                checkIn,
-                checkOut,
-                status: newStatus,
-                note
-            },
-            { new: true }
-        );
-
-        res.json(updatedLog);
-
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
-    }
-});
-
+// ==========================================
+// 4. GET LOGS BY USER ID
+// ==========================================
 router.get('/admin/user-logs/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
         const logs = await Attendance.find({ userId: req.params.id }).sort({ createdAt: -1 });
         res.json(logs);
     } catch (err) { res.status(500).send('Server Error'); }
+});
+
+// ==========================================
+// 5. MANUAL UPDATE / OVERRIDE (Admin/HR)
+// ==========================================
+router.put('/update/:id', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        const { checkIn, checkOut, status, note } = req.body;
+        let newStatus = status;
+
+        if (status === 'Auto') {
+            const settings = await Settings.findOne() || { dayShiftStartTime: "09:30", nightShiftStartTime: "19:00", gracePeriod: 15, halfDayThreshold: 30 };
+            const checkInDate = new Date(checkIn);
+            
+            const isNight = isNightShift(checkInDate);
+            const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:00") : (settings.dayShiftStartTime || "09:30");
+            const shiftDateStr = getShiftDate(checkInDate);
+            
+            const [startH, startM] = shiftStartStr.split(':').map(Number);
+            const [d, m, y] = shiftDateStr.split('/').map(Number);
+            
+            const officeTime = new Date(y, m - 1, d, startH, startM, 0, 0);
+            const diffMs = checkInDate - officeTime;
+            const lateMinutes = Math.floor(diffMs / 60000);
+
+            if (lateMinutes > (settings.halfDayThreshold || 30)) newStatus = 'Half Day';
+            else if (lateMinutes > (settings.gracePeriod || 15)) newStatus = 'Late';
+            else newStatus = 'Present';
+        }
+
+        // Keep existing totalHours/break logic intact if manually overridden,
+        // or recalculate gross time if checkOut changed
+        let updatePayload = { checkIn, checkOut, status: newStatus, note };
+        if (checkIn && checkOut) {
+            const cIn = new Date(checkIn);
+            const cOut = new Date(checkOut);
+            if (cOut > cIn) {
+                 updatePayload.totalHours = Number(((cOut - cIn) / 3600000).toFixed(2));
+            }
+        }
+
+        const updatedLog = await Attendance.findByIdAndUpdate(
+            req.params.id, updatePayload, { new: true }
+        );
+        res.json(updatedLog);
+
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
 });
 
 module.exports = router;
