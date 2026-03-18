@@ -360,6 +360,17 @@ const EmployeeProfile = () => {
                                 onChange={e => setUser({ ...user, salary: Number(e.target.value) })}
                             />
                         </div>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '10px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '10px', fontSize: '14px', fontWeight: 'bold', color: '#215D7B' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={user.isPurchaser || false}
+                                    onChange={e => setUser({ ...user, isPurchaser: e.target.checked })}
+                                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#215D7B' }}
+                                />
+                                Grant Purchaser Access
+                            </label>
+                        </div>
 
                         <div style={{ gridColumn: 'span 2', marginTop: '10px' }}>
                             <button type="submit" className="gts-btn primary">

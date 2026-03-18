@@ -15,7 +15,10 @@ import LeaveRequests from './pages/LeaveRequests';
 import CalendarPage from './pages/CalendarPage';
 import AdminSettings from './pages/AdminSettings';
 import AttendanceLogs from './pages/AttendanceLogs';
-import EmployeeProfile from './pages/EmployeeProfile'; // This was already imported
+import EmployeeProfile from './pages/EmployeeProfile';
+import Purchases from './pages/Purchases';
+import AdminPurchases from './pages/AdminPurchases';
+import RawPunches from './pages/RawPunches';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -63,6 +66,8 @@ function App() {
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
+            <Route path="/purchases" element={<Purchases />} />
+
 
             {/* HR & Admin Only Routes */}
             <Route
@@ -73,7 +78,7 @@ function App() {
                   : <Navigate to="/dashboard" />
               }
             />
-            
+
             {/* NEW: Employee Profile (View/Edit) */}
             <Route
               path="/employee/:id"
@@ -92,7 +97,14 @@ function App() {
                   : <Navigate to="/dashboard" />
               }
             />
-            
+            <Route
+              path="/raw-punches"
+              element={
+                (userRole === 'HR' || userRole === 'ADMIN')
+                  ? <RawPunches />
+                  : <Navigate to="/dashboard" />
+              }
+            />
             <Route
               path="/leave-requests"
               element={
@@ -108,6 +120,14 @@ function App() {
               element={
                 userRole === 'ADMIN'
                   ? <AdminSettings />
+                  : <Navigate to="/dashboard" />
+              }
+            />
+            <Route
+              path="/admin-purchases"
+              element={
+                (userRole === 'HR' || userRole === 'ADMIN')
+                  ? <AdminPurchases />
                   : <Navigate to="/dashboard" />
               }
             />

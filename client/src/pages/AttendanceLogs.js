@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faEdit, faFilter } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faEdit, faFilter, faFingerprint } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 
 const AttendanceLogs = () => {
+    const navigate = useNavigate();
     const [logs, setLogs] = useState([]);
     const [filteredLogs, setFilteredLogs] = useState([]);
     const [filterType, setFilterType] = useState('Today'); // Today, Week, Month, All, Custom
@@ -30,6 +32,12 @@ const AttendanceLogs = () => {
         if (filterType === 'Today') {
             const todayBackendFormat = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
             result = result.filter(log => log.date === todayBackendFormat);
+        }
+        else if (filterType === 'Yesterday') {
+            const yesterday = new Date();
+            yesterday.setDate(now.getDate() - 1);
+            const yesterdayBackendFormat = `${yesterday.getDate()}/${yesterday.getMonth() + 1}/${yesterday.getFullYear()}`;
+            result = result.filter(log => log.date === yesterdayBackendFormat);
         }
         else if (filterType === 'Week') {
             const oneWeekAgo = new Date();
@@ -83,14 +91,14 @@ const AttendanceLogs = () => {
         }
     };
 
-    // --- HELPER: CALCULATE DURATION ---
+    // --- NEW HELPER: CALCULATE DURATION ---
     const calculateDuration = (start, end) => {
-        if (!start || !end) return <span style={{color: '#999', fontStyle: 'italic', fontSize:'12px'}}>In Progress</span>;
-        
+        if (!start || !end) return <span style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>In Progress</span>;
+
         const startTime = new Date(start);
         const endTime = new Date(end);
         const diffMs = endTime - startTime;
-        
+
         if (diffMs < 0) return "-";
 
         const totalMinutes = Math.floor(diffMs / 60000);
@@ -98,15 +106,6 @@ const AttendanceLogs = () => {
         const minutes = totalMinutes % 60;
 
         return `${hours}h ${minutes}m`;
-    };
-
-    // --- NEW HELPER: FORMAT BREAK TIME ---
-    const formatBreakTime = (minutes) => {
-        if (!minutes || minutes <= 0) return "-";
-        const h = Math.floor(minutes / 60);
-        const m = minutes % 60;
-        if (h > 0) return `${h}h ${m}m`;
-        return `${m}m`;
     };
 
     const handleEdit = async (log) => {
@@ -120,7 +119,7 @@ const AttendanceLogs = () => {
         const outTime = toTimeStr(log.checkOut);
 
         const { value: formValues } = await Swal.fire({
-            title: `Edit Log: ${log.userId?.name || 'Unknown'}`,
+            title: `Edit Log: ${log.userId.name}`,
             html: `
                 <div style="text-align:left">
                     <p style="font-size:12px; color:#666; margin-bottom:10px;">
@@ -189,14 +188,20 @@ const AttendanceLogs = () => {
 
     return (
         <div className="attendance-container">
-            <h1 className="page-title">Attendance Logs</h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h1 className="page-title" style={{ margin: 0 }}>Attendance Logs</h1>
+
+                <button className="action-btn-primary" onClick={() => navigate('/raw-punches')} style={{ padding: '8px 15px', fontSize: '13px' }}>
+                    <FontAwesomeIcon icon={faFingerprint} style={{ marginRight: '8px' }} /> View Raw Punches
+                </button>
+            </div>
 
             {/* FILTERS BAR */}
             <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
 
                 {/* 1. Filter Buttons */}
                 <div className="button-group" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                    {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
+                    {['Today', 'Yesterday', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
                             key={type}
                             className={`gts-btn ${filterType === type ? 'primary' : 'warning'}`}
@@ -242,10 +247,10 @@ const AttendanceLogs = () => {
                         style={{
                             position: 'absolute',
                             left: '15px',
-                            top: '50%',                  
-                            transform: 'translateY(-50%)', 
+                            top: '50%',
+                            transform: 'translateY(-50%)',
                             color: '#aaa',
-                            pointerEvents: 'none'        
+                            pointerEvents: 'none'
                         }}
                     />
                     <input
@@ -268,8 +273,7 @@ const AttendanceLogs = () => {
                             <th>Date</th>
                             <th>In Time</th>
                             <th>Out Time</th>
-                            <th>Work Hours</th>
-                            <th>Break Time</th>
+                            <th>Working Hours</th>
                             <th>Status</th>
                             <th>Note</th>
                             <th>Action</th>
@@ -277,7 +281,7 @@ const AttendanceLogs = () => {
                     </thead>
                     <tbody>
                         {filteredLogs.length === 0 ? (
-                            <tr><td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: '#888' }}>No attendance records found for this selection.</td></tr>
+                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#888' }}>No attendance records found for this selection.</td></tr>
                         ) : (
                             filteredLogs.map(log => (
                                 <tr key={log._id}>
@@ -285,19 +289,15 @@ const AttendanceLogs = () => {
                                     <td>{log.date}</td>
                                     <td>{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                     <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
-                                    
+
+                                    {/* --- NEW COLUMN --- */}
                                     <td style={{ fontWeight: 'bold', color: '#555' }}>
                                         {calculateDuration(log.checkIn, log.checkOut)}
                                     </td>
 
-                                    {/* --- NEW COLUMN --- */}
-                                    <td style={{ fontWeight: 'bold', color: '#e67e22' }}>
-                                        {formatBreakTime(log.breakTimeTaken)}
-                                    </td>
-
                                     <td>
                                         <span className={`status-badge ${log.status === 'Present' ? 'success' :
-                                                log.status === 'Half Day' ? 'warning' : 'danger'
+                                            log.status === 'Half Day' ? 'warning' : 'danger'
                                             }`}>
                                             {log.status}
                                         </span>

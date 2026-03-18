@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['EMPLOYEE', 'ADMIN', 'HR'], default: 'EMPLOYEE' },
+    isPurchaser: { type: Boolean, default: false },
     status: { type: String, default: 'ACTIVE' },
     joiningDate: { type: Date, default: Date.now },
     profilePic: { type: String, default: "" },

@@ -1,14 +1,15 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
 import {
     faThLarge,
     faCalendarCheck,
     faUser,
     faFileAlt,
-    faUsers,        // Added this
-    faShieldAlt,    // Added this
+    faCalendarAlt,
+    faUsers,
+    faShieldAlt,
+    faBoxOpen       // <-- Added for Purchase & Inventory
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = () => {
@@ -45,6 +46,12 @@ const Sidebar = () => {
                     <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
                 </Link>
 
+                {(user.isPurchaser || userRole === 'HR' || userRole === 'ADMIN') && (
+                    <Link to="/purchases" className={`nav-link ${location.pathname === '/purchases' ? 'active' : ''}`}>
+                        <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>My Purchases</span>
+                    </Link>
+                )}
+
                 {/* HR & ADMIN ONLY: Employee Directory */}
                 {(userRole === 'HR' || userRole === 'ADMIN') && (
                     <>
@@ -61,8 +68,10 @@ const Sidebar = () => {
                         <Link to="/leave-requests" className={`nav-link ${location.pathname === '/leave-requests' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Requests</span>
                         </Link>
+                        <Link to="/admin-purchases" className={`nav-link ${location.pathname === '/admin-purchases' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>All Purchases</span>
+                        </Link>
                     </>
-
                 )}
 
                 {/* ADMIN ONLY: System Settings */}

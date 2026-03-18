@@ -37,7 +37,7 @@ router.post('/add', auth, async (req, res) => {
             name, email, password, role,
             joiningDate, aadhaar, emergencyContact,
             reportingManagerName, reportingManagerEmail,
-            employeeId // <--- Added Biometric ID
+            employeeId, isPurchaser
         } = req.body;
 
         let user = await User.findOne({ email });
@@ -53,7 +53,8 @@ router.post('/add', auth, async (req, res) => {
             emergencyContact,
             reportingManagerName, 
             reportingManagerEmail,
-            employeeId // <--- Added
+            employeeId,
+            isPurchaser: isPurchaser || false
         });
 
         const salt = await bcrypt.genSalt(10);
@@ -77,7 +78,7 @@ router.put('/:id', auth, async (req, res) => {
             aadhaar, emergencyContact, phoneNumber, address,
             salary, casualLeaveBalance, earnedLeaveBalance,
             reportingManagerName, reportingManagerEmail,
-            employeeId // <--- Added Biometric ID
+            employeeId, isPurchaser
         } = req.body;
 
         let updateData = {};
@@ -99,7 +100,8 @@ router.put('/:id', auth, async (req, res) => {
         if (reportingManagerName !== undefined) updateData.reportingManagerName = reportingManagerName;
         if (reportingManagerEmail !== undefined) updateData.reportingManagerEmail = reportingManagerEmail;
         
-        if (employeeId !== undefined) updateData.employeeId = employeeId; // <--- Added
+        if (employeeId !== undefined) updateData.employeeId = employeeId;
+        if (isPurchaser !== undefined) updateData.isPurchaser = isPurchaser;
 
         if (password && password.trim() !== "") {
             const salt = await bcrypt.genSalt(10);

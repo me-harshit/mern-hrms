@@ -70,7 +70,8 @@ router.post('/login', async (req, res) => {
         const payload = {
             user: {
                 id: user.id,
-                role: user.role
+                role: user.role,
+                isPurchaser: user.isPurchaser // Added here
             }
         };
 
@@ -82,7 +83,12 @@ router.post('/login', async (req, res) => {
                 if (err) throw err;
                 res.json({ 
                     token, 
-                    user: { id: user.id, name: user.name, role: user.role } 
+                    user: { 
+                        id: user.id, 
+                        name: user.name, 
+                        role: user.role,
+                        isPurchaser: user.isPurchaser // Added here! This goes to Local Storage
+                    } 
                 });
             }
         );

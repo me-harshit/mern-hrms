@@ -1,8 +1,13 @@
 import axios from 'axios';
 
-const baseURL = process.env.NODE_ENV === 'production'
-  ? '/api'
-  : 'http://localhost:5000/api';
+// --- 1. EXPORT THE SERVER URL ---
+// This handles your images and files perfectly in both Local and Live environments
+export const SERVER_URL = process.env.NODE_ENV === 'production'
+  ? '' // In production, files are served from the same domain (relative path)
+  : 'http://localhost:5000'; // In local dev, point to your backend port
+
+// --- 2. SET UP API BASE URL ---
+const baseURL = `${SERVER_URL}/api`;
 
 const api = axios.create({
   baseURL: baseURL,
@@ -23,7 +28,7 @@ api.interceptors.request.use(
 );
 
 api.interceptors.response.use(
-  (response) => response, // FIXED: changed 'res' to 'response'
+  (response) => response, 
   (error) => {
     // If the server rejects the token (Expired or Invalid)
     if (error.response && error.response.status === 401) {

@@ -236,6 +236,25 @@ router.get('/all-logs', auth, async (req, res) => {
     }
 });
 
+// @route   GET /api/attendance/raw-logs
+// @desc    Get all raw biometric punches (Admin/HR only)
+router.get('/raw-logs', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') {
+            return res.status(403).json({ message: 'Access Denied' });
+        }
+
+        const logs = await AttendanceLog.find()
+            .populate('userId', 'name email')
+            .sort({ timestamp: -1 }); // Newest punches first
+
+        res.json(logs);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // ==========================================
 // 4. GET LOGS BY USER ID
 // ==========================================
