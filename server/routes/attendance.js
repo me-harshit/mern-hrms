@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const upload = multer();
+const cron = require('node-cron');
 const auth = require('../middleware/authMiddleware');
 const Attendance = require('../models/Attendance');
 const AttendanceLog = require('../models/AttendanceLog');
@@ -16,10 +17,14 @@ const formatLateTime = (mins) => {
     return `${m} min`;
 };
 
-// --- HELPER: Shift Date Calculator ---
+// --- HELPER: Shift Date Calculator (Extended to 7:30 AM) ---
 const getShiftDate = (punchTime) => {
     const d = new Date(punchTime);
-    if (d.getHours() < 6) { 
+    // Convert time to a decimal (e.g., 7:30 AM = 7.5)
+    const timeInHours = d.getHours() + (d.getMinutes() / 60);
+    
+    // If the punch happens before 7:30 AM, it belongs to yesterday's shift
+    if (timeInHours <= 7.5) { 
         d.setDate(d.getDate() - 1);
     }
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
@@ -30,10 +35,11 @@ const getTodayStr = () => {
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 };
 
-// --- HELPER: Determine Shift Type ---
+// --- HELPER: Determine Shift Type (Extended to 7:30 AM) ---
 const isNightShift = (dateObj) => {
-    const hour = dateObj.getHours();
-    return (hour >= 15 || hour < 6); 
+    const timeInHours = dateObj.getHours() + (dateObj.getMinutes() / 60);
+    // Night shift spans from 3:00 PM (15.0) to 7:30 AM (7.5) the next day
+    return (timeInHours >= 15 || timeInHours <= 7.5); 
 };
 
 // ==========================================
@@ -71,16 +77,17 @@ router.post('/upload', upload.any(), async (req, res) => {
         // --- 2. FETCH ALL LOGS FOR THIS SHIFT ---
         const shiftLogs = await AttendanceLog.find({ userId, shiftDate }).sort({ timestamp: 1 });
 
-        // --- 3. DETERMINE SHIFT BOUNDARIES FOR BREAK CALCULATION ---
+        // --- BUG FIX: FIND ACTUAL 'IN' PUNCH TO DETERMINE SHIFT TYPE ---
+        const firstInLog = shiftLogs.find(log => log.direction === 'IN');
+        const referenceTime = firstInLog ? firstInLog.timestamp : shiftLogs[0].timestamp;
+        const isNight = isNightShift(referenceTime); 
+        
         let settings = await Settings.findOne() || { 
             dayShiftStartTime: "09:30", dayShiftEndTime: "18:30", 
             nightShiftStartTime: "19:00", nightShiftEndTime: "04:00", 
             gracePeriod: 15, halfDayThreshold: 30 
         };
 
-        const firstLogTime = shiftLogs[0].timestamp; 
-        const isNight = isNightShift(firstLogTime);
-        
         const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:00") : (settings.dayShiftStartTime || "09:30");
         const shiftEndStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:30");
 
@@ -108,7 +115,6 @@ router.post('/upload', upload.any(), async (req, res) => {
                 if (!firstIn) firstIn = log.timestamp; 
                 if (!isInside) {
                     if (lastOutTime) {
-                        // Calculate break time only within official shift hours
                         const breakStart = Math.max(lastOutTime.getTime(), shiftStartObj.getTime());
                         const breakEnd = Math.min(log.timestamp.getTime(), shiftEndObj.getTime());
                         
@@ -119,7 +125,7 @@ router.post('/upload', upload.any(), async (req, res) => {
                     isInside = true;
                 }
             } else if (log.direction === 'OUT') {
-                lastOut = log.timestamp; // Continually overwrite to get absolute last OUT
+                lastOut = log.timestamp; 
                 if (isInside) {
                     lastOutTime = log.timestamp;
                     isInside = false;
@@ -140,12 +146,10 @@ router.post('/upload', upload.any(), async (req, res) => {
         let record = await Attendance.findOne({ userId, date: shiftDate });
 
         if (!record) {
-            // Create record only if the first punch was an IN punch
             if (firstIn) {
                 let status = 'Present';
                 let note = 'Biometric Punch';
 
-                // Lateness Calculation
                 const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
 
                 if (diffMinutes > (settings.halfDayThreshold || 30)) {
@@ -164,14 +168,11 @@ router.post('/upload', upload.any(), async (req, res) => {
                 console.log(`✅ [${isNight ? 'Night' : 'Day'} Shift] ${user.name} IN at ${firstIn.toLocaleTimeString()}`);
             }
         } else {
-            // Update existing record
             record.checkIn = firstIn || record.checkIn;
             record.checkOut = lastOut || record.checkOut;
-            record.totalHours = calculatedGrossHours; // Now stores GROSS time
+            record.totalHours = calculatedGrossHours; 
             record.breakTimeTaken = calculatedBreakMinutes;
             await record.save();
-            
-            console.log(`🔄 [Updated] ${user.name} | Gross Work: ${calculatedGrossHours}h | Office-Hour Break: ${calculatedBreakMinutes}m`);
         }
 
         res.status(200).send({ status: "success" });
@@ -236,21 +237,16 @@ router.get('/all-logs', auth, async (req, res) => {
     }
 });
 
-// @route   GET /api/attendance/raw-logs
-// @desc    Get all raw biometric punches (Admin/HR only)
 router.get('/raw-logs', auth, async (req, res) => {
     try {
-        if (req.user.role === 'EMPLOYEE') {
-            return res.status(403).json({ message: 'Access Denied' });
-        }
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
         const logs = await AttendanceLog.find()
             .populate('userId', 'name email')
-            .sort({ timestamp: -1 }); // Newest punches first
+            .sort({ timestamp: -1 }); 
 
         res.json(logs);
     } catch (err) {
-        console.error(err.message);
         res.status(500).send('Server Error');
     }
 });
@@ -296,8 +292,6 @@ router.put('/update/:id', auth, async (req, res) => {
             else newStatus = 'Present';
         }
 
-        // Keep existing totalHours/break logic intact if manually overridden,
-        // or recalculate gross time if checkOut changed
         let updatePayload = { checkIn, checkOut, status: newStatus, note };
         if (checkIn && checkOut) {
             const cIn = new Date(checkIn);
@@ -314,6 +308,42 @@ router.put('/update/:id', auth, async (req, res) => {
 
     } catch (err) {
         res.status(500).send('Server Error');
+    }
+});
+
+cron.schedule('0 10 * * *', async () => {
+    console.log('Running daily absence check...');
+    try {
+        // Look at yesterday's date
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const formattedDate = `${yesterday.getDate()}/${yesterday.getMonth() + 1}/${yesterday.getFullYear()}`;
+
+        // Find all active employees
+        const employees = await User.find({ role: 'EMPLOYEE' });
+
+        for (const emp of employees) {
+            // Check if they have an attendance record for yesterday
+            const recordExists = await Attendance.findOne({ 
+                userId: emp._id, 
+                date: formattedDate 
+            });
+
+            // If no record exists, auto-generate an Absent log
+            if (!recordExists) {
+                await Attendance.create({
+                    userId: emp._id,
+                    date: formattedDate,
+                    status: 'Absent',
+                    checkIn: null,
+                    checkOut: null,
+                    note: 'Auto-marked absent (No punches)'
+                });
+                console.log(`❌ Marked ${emp.name} as Absent for ${formattedDate}`);
+            }
+        }
+    } catch (err) {
+        console.error('Error in daily absence check:', err);
     }
 });
 

@@ -3,8 +3,8 @@ import axios from 'axios';
 // --- 1. EXPORT THE SERVER URL ---
 // This handles your images and files perfectly in both Local and Live environments
 export const SERVER_URL = process.env.NODE_ENV === 'production'
-  ? '' // In production, files are served from the same domain (relative path)
-  : 'http://localhost:5000'; // In local dev, point to your backend port
+  ? ''
+  : 'http://localhost:5000';
 
 // --- 2. SET UP API BASE URL ---
 const baseURL = `${SERVER_URL}/api`;
