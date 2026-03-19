@@ -8,7 +8,8 @@ const Purchase = require('../models/Purchase');
 // @desc    Add a new purchase entry with files
 router.post('/', auth, upload.fields([
     { name: 'invoice', maxCount: 1 },
-    { name: 'paymentScreenshot', maxCount: 1 }
+    { name: 'paymentScreenshot', maxCount: 1 },
+    { name: 'productMedia', maxCount: 1 } // <-- 1. ADDED THIS
 ]), async (req, res) => {
     try {
         const {
@@ -19,6 +20,7 @@ router.post('/', auth, upload.fields([
         // Extract file paths if they were uploaded
         let invoiceUrl = '';
         let paymentScreenshotUrl = '';
+        let productMediaUrl = ''; // <-- 2. ADDED THIS
 
         if (req.files && req.files['invoice']) {
             invoiceUrl = `/uploads/purchases/${req.files['invoice'][0].filename}`;
@@ -26,17 +28,22 @@ router.post('/', auth, upload.fields([
         if (req.files && req.files['paymentScreenshot']) {
             paymentScreenshotUrl = `/uploads/purchases/${req.files['paymentScreenshot'][0].filename}`;
         }
+        // <-- 3. CATCH THE NEW FILE -->
+        if (req.files && req.files['productMedia']) {
+            productMediaUrl = `/uploads/purchases/${req.files['productMedia'][0].filename}`;
+        }
 
         const newPurchase = new Purchase({
             itemName,
             quantity: quantity || 1,
             projectName,
-            purchasedBy: req.user.id, // Auto-links to the logged-in user!
+            purchasedBy: req.user.id, 
             purchaseDate: purchaseDate || Date.now(),
             vendorName,
             amount,
             invoiceUrl,
             paymentScreenshotUrl,
+            productMediaUrl, // <-- 4. SAVE TO DB
             storageLocation,
             notes
         });

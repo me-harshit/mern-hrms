@@ -15,6 +15,7 @@ const purchaseSchema = new mongoose.Schema({
     // File paths for the uploads
     invoiceUrl: { type: String }, 
     paymentScreenshotUrl: { type: String },
+    productMediaUrl: { type: String },
     
     // Inventory Tracking
     storageLocation: { type: String }, // e.g., "A1", "Cupboard B3"

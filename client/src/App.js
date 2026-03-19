@@ -19,6 +19,7 @@ import EmployeeProfile from './pages/EmployeeProfile';
 import Purchases from './pages/Purchases';
 import AdminPurchases from './pages/AdminPurchases';
 import RawPunches from './pages/RawPunches';
+import AddPurchase from './pages/AddPurchase';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -67,6 +68,7 @@ function App() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
             <Route path="/purchases" element={<Purchases />} />
+            <Route path="/add-purchase" element={<AddPurchase />} />
 
 
             {/* HR & Admin Only Routes */}

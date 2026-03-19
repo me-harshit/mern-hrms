@@ -20,22 +20,26 @@ const storage = multer.diskStorage({
     }
 });
 
-// Filter to accept only Images and PDFs
+// Filter to accept Images, PDFs, and short Videos
 const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|pdf/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    // Allowed file extensions
+    const allowedExts = /jpeg|jpg|png|pdf|mp4|webm|mov/;
+    // Allowed MIME types (Note: .mov files have a MIME type of video/quicktime)
+    const allowedMimes = /jpeg|jpg|png|pdf|mp4|webm|quicktime/;
+
+    const extname = allowedExts.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedMimes.test(file.mimetype.toLowerCase());
 
     if (extname && mimetype) {
         cb(null, true);
     } else {
-        cb(new Error('Only images (jpeg, jpg, png) and PDFs are allowed!'), false);
+        cb(new Error('Only images (JPG/PNG), PDFs, and videos (MP4/WEBM/MOV) are allowed!'), false);
     }
 };
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 5MB limit per file
+    limits: { fileSize: 15 * 1024 * 1024 }, // Increased to 15MB to match frontend video limit
     fileFilter: fileFilter
 });
 
