@@ -13,7 +13,6 @@ const AdminPurchases = () => {
     const [filteredPurchases, setFilteredPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // --- FILTERS STATE ---
     const [filterType, setFilterType] = useState('All'); 
     const [searchTerm, setSearchTerm] = useState('');
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
@@ -35,13 +34,11 @@ const AdminPurchases = () => {
         }
     };
 
-    // --- FILTER LOGIC ---
     useEffect(() => {
         let result = purchases;
         const now = new Date();
         now.setHours(23, 59, 59, 999);
 
-        // 1. Time Filtering
         if (filterType === 'Today') {
             const startOfToday = new Date();
             startOfToday.setHours(0, 0, 0, 0);
@@ -81,7 +78,6 @@ const AdminPurchases = () => {
             }
         }
 
-        // 2. Search Filtering (Item, Project, Employee, Status, Amount)
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             result = result.filter(p => 
@@ -98,11 +94,9 @@ const AdminPurchases = () => {
         setFilteredPurchases(result);
     }, [purchases, filterType, searchTerm, customDates]);
 
-    // --- ONE-CLICK FILE VIEWER ---
     const viewFile = (url, title) => {
         const fullUrl = `${SERVER_URL}${url}`;
         const isPdf = url.toLowerCase().endsWith('.pdf');
-
         if (isPdf) {
             Swal.fire({
                 title: title,
@@ -123,15 +117,13 @@ const AdminPurchases = () => {
         }
     };
 
-    // --- EDIT INVENTORY/LOCATION ---
     const handleEditInventory = async (item) => {
         const { value: formValues } = await Swal.fire({
             title: `Update: ${item.itemName}`,
             html: `
                 <div style="text-align: left; padding: 0 10px;">
                     <label class="swal-custom-label">Storage Location</label>
-                    <input id="edit-storage" class="swal2-input" value="${item.storageLocation || ''}" placeholder="e.g. Cupboard B2">
-                    
+                    <input id="edit-storage" class="swal2-input" value="${item.storageLocation || ''}" placeholder="e.g. B2">
                     <label class="swal-custom-label">Inventory Status</label>
                     <select id="edit-status" class="swal2-select">
                         <option value="Available" ${item.inventoryStatus === 'Available' ? 'selected' : ''}>Available</option>
@@ -144,12 +136,10 @@ const AdminPurchases = () => {
             showCancelButton: true,
             confirmButtonText: 'Update Details',
             confirmButtonColor: '#215D7B',
-            preConfirm: () => {
-                return {
-                    storageLocation: document.getElementById('edit-storage').value,
-                    inventoryStatus: document.getElementById('edit-status').value
-                }
-            }
+            preConfirm: () => ({
+                storageLocation: document.getElementById('edit-storage').value,
+                inventoryStatus: document.getElementById('edit-status').value
+            })
         });
 
         if (formValues) {
@@ -166,16 +156,13 @@ const AdminPurchases = () => {
     const totalFilteredAmount = filteredPurchases.reduce((sum, p) => sum + p.amount, 0);
 
     return (
-        <div className="attendance-container">
+        <div className="attendance-container fade-in">
             <h1 className="page-title">
                 <FontAwesomeIcon icon={faBoxOpen} style={{ marginRight: '10px' }} />
                 All Company Purchases
             </h1>
 
-            {/* FILTERS BAR */}
             <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-
-                {/* 1. Filter Buttons */}
                 <div className="button-group" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
                     {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
@@ -190,63 +177,30 @@ const AdminPurchases = () => {
                     ))}
                 </div>
 
-                {/* 2. Custom Date Inputs (Conditional) */}
                 {filterType === 'Custom' && (
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '5px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>From:</span>
-                            <input
-                                type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
-                                value={customDates.from}
-                                onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })}
-                            />
+                            <input type="date" className="swal2-input" style={{ margin: 0, height: '35px', width: '130px' }} value={customDates.from} onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>To:</span>
-                            <input
-                                type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
-                                value={customDates.to}
-                                onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })}
-                            />
+                            <input type="date" className="swal2-input" style={{ margin: 0, height: '35px', width: '130px' }} value={customDates.to} onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })} />
                         </div>
                     </div>
                 )}
 
-                {/* 3. Search Bar */}
                 <div style={{ position: 'relative', minWidth: '250px' }}>
-                    <FontAwesomeIcon
-                        icon={faSearch}
-                        style={{
-                            position: 'absolute',
-                            left: '15px',
-                            top: '50%',                  
-                            transform: 'translateY(-50%)', 
-                            color: '#aaa',
-                            pointerEvents: 'none'        
-                        }}
-                    />
-                    <input
-                        type="text"
-                        placeholder="Search item, status, employee..."
-                        className="swal2-input"
-                        style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                    <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
+                    <input type="text" placeholder="Search item, status, employee..." className="swal2-input" style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
             </div>
 
-            {/* METRIC SUMMARY */}
             <div style={{ marginBottom: '20px', fontSize: '15px', fontWeight: '600', color: '#475569', display: 'flex', justifyContent: 'flex-end' }}>
                 Showing {filteredPurchases.length} records &nbsp;|&nbsp; Total Value: <span style={{ color: '#e67e22', marginLeft: '5px' }}>₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
             </div>
 
-            {/* TABLE */}
-            <div className="employee-table-container fade-in">
+            <div className="employee-table-container">
                 <table className="employee-table">
                     <thead>
                         <tr>
@@ -260,35 +214,32 @@ const AdminPurchases = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredPurchases.length === 0 ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No purchases found matching filters.</td></tr>
+                        {loading ? (
+                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>Loading...</td></tr>
+                        ) : filteredPurchases.length === 0 ? (
+                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No records found.</td></tr>
                         ) : (
                             filteredPurchases.map(item => (
                                 <tr key={item._id}>
-                                    <td>
+                                    <td data-label="Employee">
                                         <div style={{ fontWeight: 'bold', color: '#215D7B' }}>{item.purchasedBy?.name || 'Unknown'}</div>
                                         <div style={{ fontSize: '11px', color: '#777' }}>{item.purchasedBy?.employeeId || '-'}</div>
                                     </td>
-                                    <td>
-                                        <div style={{ fontWeight: '600', color: '#333' }}>{item.itemName} <span style={{fontSize:'12px', color:'#888'}}>(x{item.quantity})</span></div>
+                                    <td data-label="Item & Date">
+                                        <div style={{ fontWeight: '600' }}>{item.itemName} <span style={{fontSize:'12px', color:'#888'}}>(x{item.quantity})</span></div>
                                         <div style={{ fontSize: '12px', color: '#777' }}>{new Date(item.purchaseDate).toLocaleDateString()}</div>
                                     </td>
-                                    <td>
-                                        <div style={{ fontSize: '13px', fontWeight: '500' }}>{item.projectName || '-'}</div>
-                                    </td>
-                                    <td style={{ fontWeight: 'bold', color: '#1e293b' }}>
-                                        ₹ {item.amount.toLocaleString('en-IN')}
-                                    </td>
-                                    <td>
-                                        <div style={{ fontSize: '13px', color: '#555', marginBottom: '4px' }}>
-                                            <FontAwesomeIcon icon={faMapMarkerAlt} style={{ color: '#e67e22', marginRight: '4px' }} /> 
-                                            {item.storageLocation || 'Unassigned'}
+                                    <td data-label="Project"><div>{item.projectName || '-'}</div></td>
+                                    <td data-label="Amount"><div className="purchase-card-amount">₹ {item.amount.toLocaleString('en-IN')}</div></td>
+                                    <td data-label="Location/Status">
+                                        <div>
+                                            <div style={{ fontSize: '13px', color: '#555' }}><FontAwesomeIcon icon={faMapMarkerAlt} style={{ color: '#e67e22' }} /> {item.storageLocation || 'Unassigned'}</div>
+                                            <span className={`status-badge ${item.inventoryStatus === 'Available' ? 'success' : item.inventoryStatus === 'In Use' ? 'warning' : 'danger'}`}>{item.inventoryStatus}</span>
                                         </div>
-                                        <span className={`status-badge ${item.inventoryStatus === 'Available' ? 'success' : item.inventoryStatus === 'In Use' ? 'warning' : 'danger'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
-                                            {item.inventoryStatus}
-                                        </span>
                                     </td>
-                                    <td>
+                                    
+                                    {/* --- UPDATED DOCUMENTS SECTION --- */}
+                                    <td data-label="Documents">
                                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                             {item.invoiceUrl ? (
                                                 <button 
@@ -309,11 +260,22 @@ const AdminPurchases = () => {
                                                     <FontAwesomeIcon icon={faImage} style={{ marginRight: '4px' }}/> Proof
                                                 </button>
                                             ) : null}
+
+                                            {item.productMediaUrl ? (
+                                                <button 
+                                                    onClick={() => viewFile(item.productMediaUrl, 'Product Media')} 
+                                                    className="gts-btn"
+                                                    style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: '#ecfdf5', color: '#059669', border: '1px solid #6ee7b7' }}
+                                                >
+                                                    <FontAwesomeIcon icon={faBoxOpen} style={{ marginRight: '4px' }}/> Media
+                                                </button>
+                                            ) : null}
                                         </div>
                                     </td>
-                                    <td>
+                                    
+                                    <td data-label="Action">
                                         <button className="gts-btn primary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleEditInventory(item)}>
-                                            <FontAwesomeIcon icon={faEdit} style={{ marginRight: '4px' }} /> Edit
+                                            <FontAwesomeIcon icon={faEdit} style={{ marginRight: '5px' }} /> Edit
                                         </button>
                                     </td>
                                 </tr>

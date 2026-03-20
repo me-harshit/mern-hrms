@@ -1,17 +1,14 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUserCircle, faCog, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
+import { faUserCircle, faCog, faSignOutAlt, faBars } from '@fortawesome/free-solid-svg-icons';
 import Swal from 'sweetalert2';
 
-const Topbar = () => {
+const Topbar = ({ onToggleSidebar }) => {
     const navigate = useNavigate();
-    
-    // Get real user data from localStorage
     const userData = JSON.parse(localStorage.getItem('user'));
     const userName = userData?.name || "User";
     
-    // Generate Initials (e.g., "Harshit Tiwari" -> "HT")
     const initials = userName
         .split(' ')
         .map(n => n[0])
@@ -30,11 +27,8 @@ const Topbar = () => {
             cancelButtonText: 'Stay logged in'
         }).then((result) => {
             if (result.isConfirmed) {
-                // IMPORTANT: Clear user data so ProtectedRoutes work
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
-                
-                // Redirect and force a fresh state
                 navigate('/login');
                 window.location.reload(); 
             }
@@ -43,15 +37,19 @@ const Topbar = () => {
 
     return (
         <div className="topbar">
-            {/* 1. Logo Section */}
-            <div className="topbar-logo">
-                <img src="/GTS.png" alt="GTS Logo" />
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                {/* Mobile Menu Trigger */}
+                <button className="menu-toggle" onClick={onToggleSidebar}>
+                    <FontAwesomeIcon icon={faBars} />
+                </button>
+                <div className="topbar-logo">
+                    <img src="/GTS.png" alt="GTS Logo" />
+                </div>
             </div>
 
-            {/* 2. User Profile Section */}
             <div className="profile-trigger">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                    <span style={{ color: '#7A7A7A', fontSize: '14px', fontWeight: '500' }}>
+                    <span className="user-greeting-name" style={{ color: '#7A7A7A', fontSize: '14px', fontWeight: '500' }}>
                         Hi, {userName.split(' ')[0]}
                     </span>
                     <div className="profile-badge">{initials}</div>

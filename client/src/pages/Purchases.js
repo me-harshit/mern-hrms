@@ -249,17 +249,17 @@ const Purchases = () => {
                             ) : (
                                 filteredPurchases.map(item => (
                                     <tr key={item._id}>
-                                        <td>
+                                        <td data-label="Item Details">
                                             <div style={{ fontWeight: '600', color: '#215D7B' }}>{item.itemName}</div>
                                             <div style={{ fontSize: '12px', color: '#777' }}>Qty: {item.quantity} • {new Date(item.purchaseDate).toLocaleDateString()}</div>
                                         </td>
-                                        <td>
+                                        <td data-label="Project">
                                             <div style={{ fontSize: '13px', fontWeight: '500' }}>{item.projectName || '-'}</div>
                                         </td>
-                                        <td style={{ fontWeight: 'bold', color: '#1e293b' }}>
+                                        <td data-label="Amount" style={{ fontWeight: 'bold', color: '#1e293b' }}>
                                             ₹ {item.amount.toLocaleString('en-IN')}
                                         </td>
-                                        <td>
+                                        <td data-label="Storage / Status">
                                             <div style={{ fontSize: '13px', color: '#555', marginBottom: '4px' }}>
                                                 <FontAwesomeIcon icon={faMapMarkerAlt} style={{ color: '#e67e22', marginRight: '4px' }} />
                                                 {item.storageLocation || 'Unassigned'}
@@ -268,12 +268,12 @@ const Purchases = () => {
                                                 {item.inventoryStatus}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Notes">
                                             <div style={{ fontSize: '12px', color: '#666', maxWidth: '150px', wordWrap: 'break-word' }}>
                                                 {item.notes || '-'}
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-label="Files">
                                             <div style={{ display: 'flex', gap: '10px' }}>
                                                 {item.invoiceUrl ? (
                                                     <a href={`${SERVER_URL}${item.invoiceUrl}`} target="_blank" rel="noreferrer" title="View Invoice" style={{ color: '#215D7B', fontSize: '18px' }}>
@@ -287,7 +287,6 @@ const Purchases = () => {
                                                     </a>
                                                 ) : null}
 
-                                                {/* ADDED: Link to view the new product media if it exists */}
                                                 {item.productMediaUrl ? (
                                                     <a href={`${SERVER_URL}${item.productMediaUrl}`} target="_blank" rel="noreferrer" title="View Product Media" style={{ color: '#27ae60', fontSize: '18px' }}>
                                                         <FontAwesomeIcon icon={faBoxOpen} />
@@ -295,7 +294,7 @@ const Purchases = () => {
                                                 ) : null}
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <button className="gts-btn primary" style={{ padding: '5px 10px', fontSize: '12px' }} onClick={() => handleEditInventory(item)}>
                                                 <FontAwesomeIcon icon={faEdit} /> Location
                                             </button>

@@ -1,6 +1,6 @@
 import './styles/App.css';
 import './styles/Navigation.css';
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 // Pages
@@ -26,18 +26,32 @@ import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import ProtectedRoute from './components/ProtectedRoute';
 
-// Layout Component 
-const DashboardLayout = () => (
-  <div className="app-container">
-    <Sidebar />
-    <div className="content-wrapper">
-      <Topbar />
-      <div className="main-content">
-        <Outlet />
+// Layout Component manages the mobile sidebar state
+const DashboardLayout = () => {
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
+  const closeSidebar = () => setSidebarOpen(false);
+
+  return (
+    <div className="app-container">
+      {/* Background overlay for mobile drawer */}
+      <div 
+        className={`sidebar-overlay ${isSidebarOpen ? 'visible' : ''}`} 
+        onClick={closeSidebar}
+      />
+      
+      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
+      
+      <div className="content-wrapper">
+        <Topbar onToggleSidebar={toggleSidebar} />
+        <div className="main-content">
+          <Outlet />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 function App() {
   const isAuthenticated = !!localStorage.getItem('token');
@@ -53,15 +67,11 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Protected Dashboard Section (Requires Login) */}
         <Route element={<ProtectedRoute isAllowed={isAuthenticated} />}>
           <Route element={<DashboardLayout />}>
-
-            {/* Common Routes */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/attendance" element={<Attendance />} />
@@ -70,74 +80,37 @@ function App() {
             <Route path="/purchases" element={<Purchases />} />
             <Route path="/add-purchase" element={<AddPurchase />} />
 
-
-            {/* HR & Admin Only Routes */}
             <Route
               path="/employees"
-              element={
-                (userRole === 'HR' || userRole === 'ADMIN')
-                  ? <Employees />
-                  : <Navigate to="/dashboard" />
-              }
+              element={(userRole === 'HR' || userRole === 'ADMIN') ? <Employees /> : <Navigate to="/dashboard" />}
             />
-
-            {/* NEW: Employee Profile (View/Edit) */}
             <Route
               path="/employee/:id"
-              element={
-                (userRole === 'HR' || userRole === 'ADMIN')
-                  ? <EmployeeProfile />
-                  : <Navigate to="/dashboard" />
-              }
+              element={(userRole === 'HR' || userRole === 'ADMIN') ? <EmployeeProfile /> : <Navigate to="/dashboard" />}
             />
-
             <Route
               path="/attendance-logs"
-              element={
-                (userRole === 'HR' || userRole === 'ADMIN')
-                  ? <AttendanceLogs />
-                  : <Navigate to="/dashboard" />
-              }
+              element={(userRole === 'HR' || userRole === 'ADMIN') ? <AttendanceLogs /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/raw-punches"
-              element={
-                (userRole === 'HR' || userRole === 'ADMIN')
-                  ? <RawPunches />
-                  : <Navigate to="/dashboard" />
-              }
+              element={(userRole === 'HR' || userRole === 'ADMIN') ? <RawPunches /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/leave-requests"
-              element={
-                (userRole === 'HR' || userRole === 'ADMIN')
-                  ? <LeaveRequests />
-                  : <Navigate to="/dashboard" />
-              }
+              element={(userRole === 'HR' || userRole === 'ADMIN') ? <LeaveRequests /> : <Navigate to="/dashboard" />}
             />
-
-            {/* Admin Only Route */}
             <Route
               path="/admin-settings"
-              element={
-                userRole === 'ADMIN'
-                  ? <AdminSettings />
-                  : <Navigate to="/dashboard" />
-              }
+              element={userRole === 'ADMIN' ? <AdminSettings /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/admin-purchases"
-              element={
-                (userRole === 'HR' || userRole === 'ADMIN')
-                  ? <AdminPurchases />
-                  : <Navigate to="/dashboard" />
-              }
+              element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminPurchases /> : <Navigate to="/dashboard" />}
             />
-
           </Route>
         </Route>
 
-        {/* Fallback - Redirect any unknown route to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
