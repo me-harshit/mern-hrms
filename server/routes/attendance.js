@@ -2,12 +2,19 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const upload = multer();
-const cron = require('node-cron');
 const auth = require('../middleware/authMiddleware');
 const Attendance = require('../models/Attendance');
 const AttendanceLog = require('../models/AttendanceLog');
 const Settings = require('../models/Settings');
 const User = require('../models/User');
+
+// --- Try to load Leave model ---
+let Leave = null;
+try {
+    Leave = require('../models/Leave'); 
+} catch (e) {
+    console.log("Note: Leave model not found in attendance route, 'On Leave' status fallback disabled.");
+}
 
 // --- HELPER: Format Lateness ---
 const formatLateTime = (mins) => {
@@ -17,29 +24,17 @@ const formatLateTime = (mins) => {
     return `${m} min`;
 };
 
-// --- HELPER: Shift Date Calculator (Extended to 7:30 AM) ---
-const getShiftDate = (punchTime) => {
+// --- HELPER: Shift Date Calculator ---
+const getShiftDate = (punchTime, shiftType) => {
     const d = new Date(punchTime);
-    // Convert time to a decimal (e.g., 7:30 AM = 7.5)
-    const timeInHours = d.getHours() + (d.getMinutes() / 60);
-    
-    // If the punch happens before 7:30 AM, it belongs to yesterday's shift
-    if (timeInHours <= 7.5) { 
-        d.setDate(d.getDate() - 1);
+    if (shiftType === 'NIGHT') {
+        // Night shift spans from evening to morning. 
+        // Any punch before 2:00 PM (14:00) belongs to YESTERDAY'S shift.
+        if (d.getHours() < 14) { 
+            d.setDate(d.getDate() - 1);
+        }
     }
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-};
-
-const getTodayStr = () => {
-    const d = new Date();
-    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-};
-
-// --- HELPER: Determine Shift Type (Extended to 7:30 AM) ---
-const isNightShift = (dateObj) => {
-    const timeInHours = dateObj.getHours() + (dateObj.getMinutes() / 60);
-    // Night shift spans from 3:00 PM (15.0) to 7:30 AM (7.5) the next day
-    return (timeInHours >= 15 || timeInHours <= 7.5); 
 };
 
 // ==========================================
@@ -66,30 +61,26 @@ router.post('/upload', upload.any(), async (req, res) => {
             return res.status(200).send("User not mapped");
         }
 
+        // FIX: Explicitly default to DAY if it's missing in DB
         const userId = user._id;
-        const shiftDate = getShiftDate(punchTime);
+        const userShift = user.shiftType || 'DAY'; 
+        const isNight = userShift === 'NIGHT';
+        const shiftDate = getShiftDate(punchTime, userShift);
 
-        // --- 1. SAVE RAW LOG ---
         await AttendanceLog.create({
             userId, employeeId: biometricId, timestamp: punchTime, direction, deviceId: event.deviceName, shiftDate
         });
 
-        // --- 2. FETCH ALL LOGS FOR THIS SHIFT ---
         const shiftLogs = await AttendanceLog.find({ userId, shiftDate }).sort({ timestamp: 1 });
 
-        // --- BUG FIX: FIND ACTUAL 'IN' PUNCH TO DETERMINE SHIFT TYPE ---
-        const firstInLog = shiftLogs.find(log => log.direction === 'IN');
-        const referenceTime = firstInLog ? firstInLog.timestamp : shiftLogs[0].timestamp;
-        const isNight = isNightShift(referenceTime); 
-        
         let settings = await Settings.findOne() || { 
-            dayShiftStartTime: "09:30", dayShiftEndTime: "18:30", 
-            nightShiftStartTime: "19:00", nightShiftEndTime: "04:00", 
+            dayShiftStartTime: "09:30", dayShiftEndTime: "18:00", 
+            nightShiftStartTime: "19:30", nightShiftEndTime: "04:00", 
             gracePeriod: 15, halfDayThreshold: 30 
         };
 
-        const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:00") : (settings.dayShiftStartTime || "09:30");
-        const shiftEndStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:30");
+        const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:30") : (settings.dayShiftStartTime || "09:30");
+        const shiftEndStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:00");
 
         const [startHour, startMin] = shiftStartStr.split(':').map(Number);
         const [endHour, endMin] = shiftEndStr.split(':').map(Number);
@@ -98,42 +89,41 @@ router.post('/upload', upload.any(), async (req, res) => {
         const shiftStartObj = new Date(y, m - 1, d, startHour, startMin, 0, 0);
         const shiftEndObj = new Date(y, m - 1, d, endHour, endMin, 0, 0);
         
-        if (isNight && endHour < 12) {
+        // FIX: If shift ends the next day (e.g. 19:30 to 04:00 -> 4 < 19), push end object to tomorrow
+        if (endHour < startHour) {
             shiftEndObj.setDate(shiftEndObj.getDate() + 1);
         }
 
-        // --- 4. STATE MACHINE: OVERLAPPING BREAK TIME ---
         let isInside = false;
         let lastOutTime = null;
         let breakMs = 0;
-        
         let firstIn = null;
         let lastOut = null;
+        let currentInTime = null;
 
+        // --- ENHANCED BREAK CALCULATION ---
         shiftLogs.forEach(log => {
             if (log.direction === 'IN') {
                 if (!firstIn) firstIn = log.timestamp; 
-                if (!isInside) {
-                    if (lastOutTime) {
-                        const breakStart = Math.max(lastOutTime.getTime(), shiftStartObj.getTime());
+                if (!currentInTime) {
+                    currentInTime = log.timestamp;
+                    if (lastOut) {
+                        // Calculate break time strictly within the user's assigned shift bounds
+                        const breakStart = Math.max(lastOut.getTime(), shiftStartObj.getTime());
                         const breakEnd = Math.min(log.timestamp.getTime(), shiftEndObj.getTime());
-                        
-                        if (breakEnd > breakStart) {
-                            breakMs += (breakEnd - breakStart);
-                        }
+                        if (breakEnd > breakStart) breakMs += (breakEnd - breakStart);
                     }
-                    isInside = true;
                 }
             } else if (log.direction === 'OUT') {
                 lastOut = log.timestamp; 
-                if (isInside) {
-                    lastOutTime = log.timestamp;
-                    isInside = false;
+                if (currentInTime) {
+                    lastOut = log.timestamp;
+                    currentInTime = null;
                 }
             }
         });
 
-        // --- GROSS TIME CALCULATION ---
+        // Gross hours is the total elapsed time between first punch IN and last punch OUT
         let calculatedGrossHours = 0;
         if (firstIn && lastOut && lastOut > firstIn) {
             const grossMs = lastOut.getTime() - firstIn.getTime();
@@ -142,14 +132,12 @@ router.post('/upload', upload.any(), async (req, res) => {
 
         const calculatedBreakMinutes = Math.floor(breakMs / 60000);
 
-        // --- 5. UPDATE OR CREATE DAILY AGGREGATE ---
         let record = await Attendance.findOne({ userId, date: shiftDate });
 
         if (!record) {
             if (firstIn) {
                 let status = 'Present';
                 let note = 'Biometric Punch';
-
                 const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
 
                 if (diffMinutes > (settings.halfDayThreshold || 30)) {
@@ -165,7 +153,6 @@ router.post('/upload', upload.any(), async (req, res) => {
                     status, note, totalHours: calculatedGrossHours, breakTimeTaken: calculatedBreakMinutes
                 });
                 await record.save();
-                console.log(`✅ [${isNight ? 'Night' : 'Day'} Shift] ${user.name} IN at ${firstIn.toLocaleTimeString()}`);
             }
         } else {
             record.checkIn = firstIn || record.checkIn;
@@ -176,7 +163,6 @@ router.post('/upload', upload.any(), async (req, res) => {
         }
 
         res.status(200).send({ status: "success" });
-
     } catch (error) {
         console.error("Processing Error:", error);
         res.sendStatus(200); 
@@ -184,27 +170,238 @@ router.post('/upload', upload.any(), async (req, res) => {
 });
 
 // ==========================================
-// 2. GET CURRENT USER LOGS & AUTO-CLEANUP
+// 🚀 2. LIVE ABSENCE CALCULATOR (Optimized for Speed)
+// ==========================================
+router.get('/absent', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        // 1. ONE QUERY: Get all active employees
+        const employees = await User.find({ role: 'EMPLOYEE', status: 'ACTIVE' }).select('name email employeeId shiftType');
+        if (!employees.length) return res.json([]);
+
+        const now = new Date();
+        const employeeIds = employees.map(emp => emp._id);
+        
+        // Pre-calculate target dates so we know exactly what dates to ask the database for
+        const neededDates = new Set();
+        const empTargetDates = new Map();
+
+        for (const emp of employees) {
+            const shiftType = emp.shiftType || 'DAY';
+            const targetDateStr = getShiftDate(now, shiftType);
+            neededDates.add(targetDateStr);
+            empTargetDates.set(emp._id.toString(), targetDateStr);
+        }
+
+        // 2. ONE QUERY: Fetch all relevant attendances for ALL employees at once using $in
+        const attendances = await Attendance.find({
+            userId: { $in: employeeIds },
+            date: { $in: Array.from(neededDates) }
+        });
+
+        // 3. ONE QUERY: Fetch all overlapping approved leaves for ALL employees at once
+        let leaves = [];
+        if (Leave) {
+            // Check a wide enough net (last 2 days to tomorrow) to catch spanning leaves
+            const startCheck = new Date(now);
+            startCheck.setDate(startCheck.getDate() - 2); 
+            startCheck.setHours(0,0,0,0);
+            
+            leaves = await Leave.find({
+                userId: { $in: employeeIds },
+                status: 'Approved',
+                fromDate: { $lte: now },
+                toDate: { $gte: startCheck }
+            });
+        }
+
+        // Helper to check if a string date falls inside an approved leave date range
+        const isDateInLeave = (dateStr, leave) => {
+            const [d, m, y] = dateStr.split('/').map(Number);
+            const checkDate = new Date(y, m - 1, d);
+            const lFrom = new Date(leave.fromDate); lFrom.setHours(0,0,0,0);
+            const lTo = new Date(leave.toDate); lTo.setHours(23,59,59,999);
+            return checkDate >= lFrom && checkDate <= lTo;
+        };
+
+        const missingEmployees = [];
+
+        // 4. IN-MEMORY LOOP: Extremely fast, no `await` database calls here!
+        for (const emp of employees) {
+            const targetDateStr = empTargetDates.get(emp._id.toString());
+            
+            // Check memory array instead of querying DB
+            const record = attendances.find(a => 
+                a.userId.toString() === emp._id.toString() && 
+                a.date === targetDateStr &&
+                a.status !== 'Absent' // Ensure we don't count an 'Absent' record as a punch-in
+            );
+
+            if (!record) {
+                let currentStatus = 'Absent';
+
+                if (Leave) {
+                    const empLeaves = leaves.filter(l => l.userId.toString() === emp._id.toString());
+                    const onLeave = empLeaves.find(l => isDateInLeave(targetDateStr, l));
+                    if (onLeave) currentStatus = 'On Leave';
+                }
+
+                missingEmployees.push({
+                    _id: emp._id,
+                    name: emp.name,
+                    employeeId: emp.employeeId,
+                    shiftType: emp.shiftType || 'DAY',
+                    targetDate: targetDateStr,
+                    status: currentStatus
+                });
+            }
+        }
+
+        res.json(missingEmployees);
+    } catch (err) {
+        console.error("Absence Check Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 🚀 3. LIVE & HISTORICAL ABSENCE REPORT
+// ==========================================
+router.post('/absent-report', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        const { startDate, endDate, shiftType } = req.body; 
+        const targetShift = shiftType || 'DAY';
+
+        const shiftQueryConditions = [{ shiftType: targetShift }];
+        if (targetShift === 'DAY') {
+            shiftQueryConditions.push({ shiftType: null });
+            shiftQueryConditions.push({ shiftType: '' });
+            shiftQueryConditions.push({ shiftType: { $exists: false } });
+        }
+
+        const employees = await User.find({ 
+            role: 'EMPLOYEE', 
+            status: 'ACTIVE', 
+            $or: shiftQueryConditions
+        }).select('name email employeeId shiftType joiningDate');
+
+        let start = new Date(startDate);
+        start.setHours(0,0,0,0);
+        let end = new Date(endDate);
+        end.setHours(23,59,59,999);
+
+        const now = new Date();
+        let maxAllowedDate = new Date(now);
+        if (targetShift === 'NIGHT' && now.getHours() < 14) {
+            maxAllowedDate.setDate(maxAllowedDate.getDate() - 1);
+        }
+        maxAllowedDate.setHours(23,59,59,999);
+
+        if (end > maxAllowedDate) end = new Date(maxAllowedDate);
+        if (start > end) return res.json([]); 
+
+        const dateArray = [];
+        let currentDate = new Date(start);
+        while (currentDate <= end) {
+            dateArray.push(`${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`);
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        const attendances = await Attendance.find({
+            date: { $in: dateArray },
+            userId: { $in: employees.map(e => e._id) }
+        });
+
+        let leaves = [];
+        if (Leave) {
+            leaves = await Leave.find({
+                status: 'Approved',
+                userId: { $in: employees.map(e => e._id) },
+                $or: [
+                    { fromDate: { $lte: end }, toDate: { $gte: start } }
+                ]
+            });
+        }
+
+        const isDateInLeave = (dateStr, leave) => {
+            const [d, m, y] = dateStr.split('/').map(Number);
+            const checkDate = new Date(y, m - 1, d);
+            const lFrom = new Date(leave.fromDate); lFrom.setHours(0,0,0,0);
+            const lTo = new Date(leave.toDate); lTo.setHours(23,59,59,999);
+            return checkDate >= lFrom && checkDate <= lTo;
+        };
+
+        const missingList = [];
+
+        for (const dateStr of dateArray) {
+            for (const emp of employees) {
+                if (emp.joiningDate) {
+                    const [d, m, y] = dateStr.split('/').map(Number);
+                    const checkDate = new Date(y, m - 1, d);
+                    const joinDate = new Date(emp.joiningDate);
+                    joinDate.setHours(0,0,0,0);
+                    if (checkDate < joinDate) continue;
+                }
+
+                const record = attendances.find(a => a.date === dateStr && a.userId.toString() === emp._id.toString());
+                
+                if (!record || record.status === 'Absent') {
+                    let currentStatus = 'Absent';
+                    
+                    const empLeaves = leaves.filter(l => l.userId.toString() === emp._id.toString());
+                    const onLeave = empLeaves.find(l => isDateInLeave(dateStr, l));
+                    if (onLeave) currentStatus = 'On Leave';
+
+                    missingList.push({
+                        _id: `${emp._id}-${dateStr}`,
+                        name: emp.name,
+                        employeeId: emp.employeeId,
+                        shiftType: emp.shiftType || 'DAY',
+                        targetDate: dateStr,
+                        status: currentStatus
+                    });
+                }
+            }
+        }
+
+        missingList.sort((a, b) => {
+            const [d1, m1, y1] = a.targetDate.split('/').map(Number);
+            const [d2, m2, y2] = b.targetDate.split('/').map(Number);
+            return new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1);
+        });
+
+        res.json(missingList);
+    } catch (err) {
+        console.error("Absent Report Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 4. GET CURRENT USER LOGS
 // ==========================================
 router.get('/my-logs', auth, async (req, res) => {
     try {
-        const userId = req.user.id;
-        const dateStr = getTodayStr(); 
+        const user = await User.findById(req.user.id);
+        const shiftType = user.shiftType || 'DAY';
+        const dateStr = getShiftDate(new Date(), shiftType); 
 
         const staleSession = await Attendance.findOne({ 
-            userId, checkOut: null, date: { $ne: dateStr } 
+            userId: req.user.id, checkOut: null, date: { $ne: dateStr } 
         });
 
         if (staleSession && staleSession.checkIn) {
-            let settings = await Settings.findOne() || { dayShiftEndTime: "18:30", nightShiftEndTime: "04:00" };
-            
-            const isNight = isNightShift(staleSession.checkIn);
-            const closeTimeStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:30");
+            let settings = await Settings.findOne() || { dayShiftEndTime: "18:00", nightShiftEndTime: "04:00" };
+            const isNight = shiftType === 'NIGHT';
+            const closeTimeStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:00");
             const [closeH, closeM] = closeTimeStr.split(':').map(Number);
             const [d, m, y] = staleSession.date.split('/').map(Number); 
 
             const autoOutTime = new Date(y, m - 1, d, closeH, closeM, 0, 0); 
-            if (isNight && closeH < 12) autoOutTime.setDate(autoOutTime.getDate() + 1);
+            if (isNight && closeH < 14) autoOutTime.setDate(autoOutTime.getDate() + 1);
 
             if (autoOutTime > staleSession.checkIn) {
                 const diffMs = autoOutTime - new Date(staleSession.checkIn);
@@ -217,7 +414,7 @@ router.get('/my-logs', auth, async (req, res) => {
             await staleSession.save();
         }
 
-        const logs = await Attendance.find({ userId }).sort({ createdAt: -1 }).limit(30);
+        const logs = await Attendance.find({ userId: req.user.id }).sort({ createdAt: -1 }).limit(30);
         res.json(logs);
     } catch (err) {
         res.status(500).send('Server Error');
@@ -225,12 +422,12 @@ router.get('/my-logs', auth, async (req, res) => {
 });
 
 // ==========================================
-// 3. GET ALL LOGS (Admin/HR Only)
+// 5. GET ALL LOGS
 // ==========================================
 router.get('/all-logs', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-        const logs = await Attendance.find().populate('userId', 'name email').sort({ createdAt: -1 });
+        const logs = await Attendance.find().populate('userId', 'name email shiftType').sort({ createdAt: -1 });
         res.json(logs);
     } catch (err) {
         res.status(500).send('Server Error');
@@ -240,11 +437,7 @@ router.get('/all-logs', auth, async (req, res) => {
 router.get('/raw-logs', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-
-        const logs = await AttendanceLog.find()
-            .populate('userId', 'name email')
-            .sort({ timestamp: -1 }); 
-
+        const logs = await AttendanceLog.find().populate('userId', 'name email shiftType').sort({ timestamp: -1 }); 
         res.json(logs);
     } catch (err) {
         res.status(500).send('Server Error');
@@ -252,7 +445,7 @@ router.get('/raw-logs', auth, async (req, res) => {
 });
 
 // ==========================================
-// 4. GET LOGS BY USER ID
+// 6. GET LOGS BY USER ID
 // ==========================================
 router.get('/admin/user-logs/:id', auth, async (req, res) => {
     try {
@@ -263,7 +456,7 @@ router.get('/admin/user-logs/:id', auth, async (req, res) => {
 });
 
 // ==========================================
-// 5. MANUAL UPDATE / OVERRIDE (Admin/HR)
+// 7. MANUAL UPDATE / OVERRIDE
 // ==========================================
 router.put('/update/:id', auth, async (req, res) => {
     try {
@@ -272,13 +465,17 @@ router.put('/update/:id', auth, async (req, res) => {
         const { checkIn, checkOut, status, note } = req.body;
         let newStatus = status;
 
+        const currentRecord = await Attendance.findById(req.params.id).populate('userId');
+        if (!currentRecord) return res.status(404).json({ message: 'Log not found' });
+
         if (status === 'Auto') {
-            const settings = await Settings.findOne() || { dayShiftStartTime: "09:30", nightShiftStartTime: "19:00", gracePeriod: 15, halfDayThreshold: 30 };
+            const settings = await Settings.findOne() || { dayShiftStartTime: "09:30", nightShiftStartTime: "19:30", gracePeriod: 15, halfDayThreshold: 30 };
             const checkInDate = new Date(checkIn);
+            const userShift = currentRecord.userId.shiftType || 'DAY';
             
-            const isNight = isNightShift(checkInDate);
-            const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:00") : (settings.dayShiftStartTime || "09:30");
-            const shiftDateStr = getShiftDate(checkInDate);
+            const isNight = userShift === 'NIGHT';
+            const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:30") : (settings.dayShiftStartTime || "09:30");
+            const shiftDateStr = getShiftDate(checkInDate, userShift);
             
             const [startH, startM] = shiftStartStr.split(':').map(Number);
             const [d, m, y] = shiftDateStr.split('/').map(Number);
@@ -308,42 +505,6 @@ router.put('/update/:id', auth, async (req, res) => {
 
     } catch (err) {
         res.status(500).send('Server Error');
-    }
-});
-
-cron.schedule('0 10 * * *', async () => {
-    console.log('Running daily absence check...');
-    try {
-        // Look at yesterday's date
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const formattedDate = `${yesterday.getDate()}/${yesterday.getMonth() + 1}/${yesterday.getFullYear()}`;
-
-        // Find all active employees
-        const employees = await User.find({ role: 'EMPLOYEE' });
-
-        for (const emp of employees) {
-            // Check if they have an attendance record for yesterday
-            const recordExists = await Attendance.findOne({ 
-                userId: emp._id, 
-                date: formattedDate 
-            });
-
-            // If no record exists, auto-generate an Absent log
-            if (!recordExists) {
-                await Attendance.create({
-                    userId: emp._id,
-                    date: formattedDate,
-                    status: 'Absent',
-                    checkIn: null,
-                    checkOut: null,
-                    note: 'Auto-marked absent (No punches)'
-                });
-                console.log(`❌ Marked ${emp.name} as Absent for ${formattedDate}`);
-            }
-        }
-    } catch (err) {
-        console.error('Error in daily absence check:', err);
     }
 });
 

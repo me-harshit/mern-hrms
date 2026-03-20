@@ -15,6 +15,7 @@ import LeaveRequests from './pages/LeaveRequests';
 import CalendarPage from './pages/CalendarPage';
 import AdminSettings from './pages/AdminSettings';
 import AttendanceLogs from './pages/AttendanceLogs';
+import AbsentEmployees from './pages/AbsentEmployees';
 import EmployeeProfile from './pages/EmployeeProfile';
 import Purchases from './pages/Purchases';
 import AdminPurchases from './pages/AdminPurchases';
@@ -79,6 +80,7 @@ function App() {
             <Route path="/leaves" element={<Leaves />} />
             <Route path="/purchases" element={<Purchases />} />
             <Route path="/add-purchase" element={<AddPurchase />} />
+            <Route path="/absent-employees" element={<AbsentEmployees />} />
 
             <Route
               path="/employees"

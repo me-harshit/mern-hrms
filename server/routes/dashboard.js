@@ -14,14 +14,23 @@ router.get('/admin-stats', auth, async (req, res) => {
         const now = new Date();
         const todayStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
 
-        const [totalEmployees, presentToday, pendingLeaves, onLeaveToday] = await Promise.all([
-            User.countDocuments({}),
-            Attendance.countDocuments({ date: todayStr }),
-            Leave.countDocuments({ status: 'Pending' }),
-            Leave.countDocuments({ status: 'Approved', fromDate: { $lte: now }, toDate: { $gte: now } })
+        // 1. Fetch all ACTIVE, NON-ADMIN user IDs to filter all stats accurately
+        const nonAdminIds = await User.find({ status: 'ACTIVE', role: { $ne: 'ADMIN' } }).distinct('_id');
+
+        // 2. Count metrics strictly for those non-admin IDs
+        const [presentToday, pendingLeaves, onLeaveToday] = await Promise.all([
+            Attendance.countDocuments({ date: todayStr, userId: { $in: nonAdminIds } }),
+            Leave.countDocuments({ status: 'Pending', userId: { $in: nonAdminIds } }),
+            Leave.countDocuments({ status: 'Approved', fromDate: { $lte: now }, toDate: { $gte: now }, userId: { $in: nonAdminIds } })
         ]);
 
-        res.json({ totalEmployees, presentToday, pendingLeaves, onLeaveToday });
+        // totalEmployees is simply the length of the nonAdminIds array
+        res.json({ 
+            totalEmployees: nonAdminIds.length, 
+            presentToday, 
+            pendingLeaves, 
+            onLeaveToday 
+        });
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -35,10 +44,9 @@ router.get('/employee-stats', auth, async (req, res) => {
         const userId = req.user.id;
         const now = new Date();
 
-        // 1. Calculate Leave Balance (Static quota 12 for now)
-        const approvedLeaves = await Leave.find({ userId, status: 'Approved' });
-        const usedLeaves = approvedLeaves.reduce((acc, curr) => acc + curr.days, 0);
-        const leaveBalance = 12 - usedLeaves;
+        // 1. Calculate Real Leave Balance from the Database
+        const currentUser = await User.findById(userId);
+        const leaveBalance = (currentUser.casualLeaveBalance || 0) + (currentUser.earnedLeaveBalance || 0);
 
         // 2. My Pending Requests
         const myPending = await Leave.countDocuments({ userId, status: 'Pending' });
@@ -47,14 +55,14 @@ router.get('/employee-stats', auth, async (req, res) => {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const presentDays = await Attendance.countDocuments({
             userId,
-            createdAt: { $gte: startOfMonth } // Approximate check
+            createdAt: { $gte: startOfMonth } 
         });
 
         res.json({
             leaveBalance,
             myPending,
             presentDays,
-            totalLeaves: 12
+            totalLeaves: leaveBalance // Updating this to reflect their live balance pool
         });
     } catch (err) {
         console.error(err);

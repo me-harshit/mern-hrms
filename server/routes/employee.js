@@ -34,8 +34,8 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/add', auth, async (req, res) => {
     try {
         const {
-            name, email, password, role,
-            joiningDate, aadhaar, emergencyContact,
+            name, email, password, role, shiftType,  // <-- Added shiftType
+            joiningDate, dateOfBirth, aadhaar, emergencyContact, // <-- Added dateOfBirth
             reportingManagerName, reportingManagerEmail,
             employeeId, isPurchaser
         } = req.body;
@@ -48,7 +48,9 @@ router.post('/add', auth, async (req, res) => {
             email,
             password,
             role,
+            shiftType: shiftType || 'DAY', // Default to DAY if missing
             joiningDate,
+            dateOfBirth,
             aadhaar,
             emergencyContact,
             reportingManagerName, 
@@ -74,7 +76,7 @@ router.put('/:id', auth, async (req, res) => {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Denied' });
 
         const { 
-            name, email, role, status, joiningDate, password, 
+            name, email, role, shiftType, status, joiningDate, dateOfBirth, password, // <-- Added shiftType & dateOfBirth
             aadhaar, emergencyContact, phoneNumber, address,
             salary, casualLeaveBalance, earnedLeaveBalance,
             reportingManagerName, reportingManagerEmail,
@@ -85,8 +87,10 @@ router.put('/:id', auth, async (req, res) => {
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (role) updateData.role = role;
+        if (shiftType) updateData.shiftType = shiftType; // <-- Added
         if (status) updateData.status = status;
         if (joiningDate) updateData.joiningDate = joiningDate;
+        if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth; // <-- Added (Using undefined check to allow clearing it if needed)
         
         if (aadhaar !== undefined) updateData.aadhaar = aadhaar;
         if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;

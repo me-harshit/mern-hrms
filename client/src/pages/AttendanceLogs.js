@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faEdit, faFilter, faFingerprint } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faEdit, faUserTimes, faFilter, faFingerprint } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 
 const AttendanceLogs = () => {
@@ -188,12 +188,22 @@ const AttendanceLogs = () => {
 
     return (
         <div className="attendance-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 className="page-title" style={{ margin: 0 }}>Attendance Logs</h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+                <div>
+                    <h1 className="page-title" style={{ margin: 0 }}>Attendance Logs</h1>
+                </div>
 
-                <button className="action-btn-primary" onClick={() => navigate('/raw-punches')} style={{ padding: '8px 15px', fontSize: '13px' }}>
-                    <FontAwesomeIcon icon={faFingerprint} style={{ marginRight: '8px' }} /> View Raw Punches
-                </button>
+                {/* Wrapped the buttons in a flex div with a gap of 15px */}
+                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                    {/* Changed to a red/danger theme with the faUserTimes icon */}
+                    <button className="gts-btn danger" onClick={() => navigate('/absent-employees')} style={{ padding: '8px 15px', fontSize: '13px' }}>
+                        <FontAwesomeIcon icon={faUserTimes} style={{ marginRight: '8px' }} /> View Absent Employees
+                    </button>
+
+                    <button className="action-btn-primary" onClick={() => navigate('/raw-punches')} style={{ padding: '8px 15px', fontSize: '13px' }}>
+                        <FontAwesomeIcon icon={faFingerprint} style={{ marginRight: '8px' }} /> View Raw Punches
+                    </button>
+                </div>
             </div>
 
             {/* FILTERS BAR */}

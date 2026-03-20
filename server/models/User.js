@@ -7,6 +7,12 @@ const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['EMPLOYEE', 'ADMIN', 'HR'], default: 'EMPLOYEE' },
+    
+    // 👇 NEW FIELDS ADDED HERE 👇
+    shiftType: { type: String, enum: ['DAY', 'NIGHT'], default: 'DAY' }, 
+    dateOfBirth: { type: Date }, 
+    // 👆 ======================= 👆
+
     isPurchaser: { type: Boolean, default: false },
     status: { type: String, default: 'ACTIVE' },
     joiningDate: { type: Date, default: Date.now },
@@ -18,7 +24,7 @@ const userSchema = new mongoose.Schema({
     aadhaar: { type: String, default: "" },
     emergencyContact: { type: String, default: "" },
 
-    // --- REPORTING MANAGER (New) ---
+    // --- REPORTING MANAGER ---
     reportingManagerName: { type: String, default: "" },
     reportingManagerEmail: { type: String, default: "" },
 
