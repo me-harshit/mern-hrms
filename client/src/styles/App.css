@@ -1,3 +1,6 @@
+/* ==========================================================================
+   GLOBAL VARIABLES & BASE STYLES
+   ========================================================================== */
 :root {
   --primary: #215D7B;
   --secondary: #A6477F;
@@ -15,33 +18,98 @@
   font-family: 'Poppins', sans-serif !important;
 }
 
-body {
-  font-family: 'Poppins', sans-serif;
+body,
+html {
   background-color: var(--bg-page);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body,
-html {
-  margin: 0;
-  padding: 0;
-  background-color: #f8fafc;
-  font-family: 'Inter', sans-serif;
+/* Minor Utility Additions */
+.mb-5 {
+  margin-bottom: 5px;
 }
 
-/* The Main Layout Grid */
+.flex-row {
+  display: flex;
+  align-items: center;
+}
+
+.gap-10 {
+  gap: 10px;
+}
+
+.file-icon-link {
+  font-size: 18px;
+  transition: opacity 0.2s;
+}
+
+.file-icon-link:hover {
+  opacity: 0.7;
+}
+
+.text-purple {
+  color: #8e44ad;
+}
+
+.text-green {
+  color: #27ae60;
+}
+
+
+.table-summary-text {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* General Utility additions */
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.align-start {
+  align-items: flex-start;
+}
+
+.text-nowrap {
+  white-space: nowrap;
+}
+
+.gap-5 {
+  gap: 5px;
+}
+
+.mr-5 {
+  margin-right: 5px;
+}
+
+.fs-14 {
+  font-size: 14px;
+}
+
+.text-dark-blue {
+  color: #1e293b;
+}
+
+
+/* ==========================================================================
+   LAYOUT STRUCTURE
+   ========================================================================== */
 .app-container {
   display: flex;
 }
 
 .content-wrapper {
   margin-left: 260px;
-  /* Space for the sidebar */
   margin-top: 65px;
   width: calc(100% - 260px);
-  /* Take up the remaining width */
   display: flex;
   flex-direction: column;
 }
@@ -50,7 +118,6 @@ html {
   padding: 40px;
 }
 
-/* Reusable Page Components */
 .page-card {
   background: white;
   padding: 25px;
@@ -65,21 +132,30 @@ html {
   margin-bottom: 20px;
 }
 
+/* ==========================================================================
+   DASHBOARD & STATS CARDS
+   ========================================================================== */
+.welcome-banner h1 {
+  margin-bottom: 5px;
+}
+
+.welcome-banner p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
 .stats-grid {
   display: flex;
-  /* Switch from grid to flex */
   flex-direction: row;
-  /* Force horizontal alignment */
   justify-content: space-between;
   gap: 25px;
   margin-top: 20px;
   width: 100%;
-  /* Ensure it takes full width */
+  flex-wrap: wrap;
 }
 
 .stat-card {
   flex: 1;
-  /* This makes all cards the same width */
   background: white;
   padding: 25px;
   border-radius: 15px;
@@ -89,11 +165,15 @@ html {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   transition: transform 0.2s;
   min-width: 200px;
-  /* Prevents them from getting too squashed */
+  border: 1px solid transparent;
 }
 
 .stat-card:hover {
   transform: translateY(-5px);
+}
+
+.clickable-card {
+  cursor: pointer;
 }
 
 .stat-icon {
@@ -104,23 +184,6 @@ html {
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  color: white;
-}
-
-.teal-bg {
-  background-color: #215D7B;
-}
-
-.plum-bg {
-  background-color: #A6477F;
-}
-
-.border-teal {
-  border-bottom: 4px solid #215D7B;
-}
-
-.border-plum {
-  border-bottom: 4px solid #A6477F;
 }
 
 .stat-info p {
@@ -136,13 +199,117 @@ html {
   margin: 5px 0 0 0;
 }
 
+.text-danger {
+  color: #dc2626 !important;
+}
+
+/* Dashboard Stat Card Themes */
+.theme-blue {
+  border-color: #e0f2fe;
+}
+
+.theme-blue .stat-icon {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.theme-green {
+  border-color: #dcfce7;
+}
+
+.theme-green .stat-icon {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.theme-red {
+  border-color: #fee2e2;
+}
+
+.theme-red .stat-icon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.theme-yellow {
+  border-color: #fef3c7;
+}
+
+.theme-yellow .stat-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.theme-purple {
+  border-color: #f3e8ff;
+}
+
+.theme-purple .stat-icon {
+  background: #f3e8ff;
+  color: #db2777;
+}
+
+/* Dashboard Quick Actions */
+.quick-actions-section {
+  margin-top: 40px;
+}
+
+.quick-actions-grid {
+  display: flex;
+  gap: 15px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   BUTTONS & FORMS
+   ========================================================================== */
+.gts-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  transition: 0.3s;
+}
+
+.gts-btn.primary {
+  background: #215D7B;
+  color: white;
+}
+
+.gts-btn.primary:hover {
+  background: #1a4a63;
+}
+
+.gts-btn.danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.gts-btn.danger:hover {
+  background: #fecaca;
+}
+
+.gts-btn.warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.gts-btn.warning:hover {
+  background: #fde68a;
+}
+
 .action-btn-primary {
   background-color: var(--primary);
   color: white;
   padding: 12px 24px;
   border: none;
   border-radius: 8px;
-  font-family: 'Poppins';
   font-weight: 500;
   cursor: pointer;
 }
@@ -153,13 +320,246 @@ html {
   border: 2px solid var(--secondary);
   padding: 10px 22px;
   border-radius: 8px;
-  font-family: 'Poppins';
   font-weight: 500;
   cursor: pointer;
 }
 
-/* Employee Page CSS */
+/* Document Viewing Buttons (Used in Purchases / AdminPurchases) */
+.doc-btn {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  border: 1px solid !important;
+}
 
+.doc-invoice {
+  background-color: #f1f5f9 !important;
+  color: #215D7B !important;
+  border-color: #cbd5e1 !important;
+}
+
+.doc-proof {
+  background-color: #fdf4ff !important;
+  color: #8e44ad !important;
+  border-color: #f0abfc !important;
+}
+
+.doc-media {
+  background-color: #ecfdf5 !important;
+  color: #059669 !important;
+  border-color: #6ee7b7 !important;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.custom-input {
+  width: 100% !important;
+  margin: 5px 0 0 0 !important;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.input-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #4b5563;
+  margin-bottom: 5px;
+  display: block;
+}
+
+/* General Layout Utilities */
+.page-header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.m-0 {
+  margin: 0 !important;
+}
+
+.my-30 {
+  margin: 30px 0;
+}
+
+/* Typography */
+.section-title {
+  margin-bottom: 20px;
+  color: var(--primary);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Form Layout Utilities */
+.full-width {
+  grid-column: 1 / -1;
+  /* Forces the input to span the entire row in a CSS Grid */
+}
+
+/* File Input Styling */
+.custom-file-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background-color: #f8fafc;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  margin-top: 5px;
+}
+
+.custom-file-input::file-selector-button {
+  background-color: #e2e8f0;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: #334155;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: 0.2s;
+}
+
+.custom-file-input::file-selector-button:hover {
+  background-color: #cbd5e1;
+}
+
+
+/* ==========================================================================
+   COMMON FILTER BAR (DESKTOP)
+   ========================================================================== */
+.filter-bar-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 15px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.filter-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.filter-btn {
+  padding: 8px 15px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.filter-btn.inactive {
+  opacity: 0.7;
+}
+
+.filter-icon {
+  margin-right: 5px;
+}
+
+.custom-date-filters {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 15px;
+  background: #f8fafc;
+  padding: 5px 15px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.date-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.date-picker-small {
+  margin: 0 !important;
+  height: 35px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  width: 140px !important;
+}
+
+.search-wrapper {
+  position: relative;
+  flex-grow: 1;
+  max-width: 300px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #aaa;
+  pointer-events: none;
+}
+
+.search-input {
+  margin: 0 !important;
+  padding-left: 40px !important;
+  width: 100% !important;
+  height: 40px !important;
+  font-size: 14px !important;
+}
+
+/* Layout Utilities used in AttendanceLogs */
+.page-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.btn-small {
+  padding: 8px 15px !important;
+  font-size: 13px !important;
+}
+
+.btn-icon {
+  margin-right: 8px;
+}
+
+.note-cell {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   EMPLOYEES PAGE STYLES
+   ========================================================================== */
 .employee-table-container {
   background: white;
   border-radius: 12px;
@@ -187,6 +587,17 @@ html {
   border-bottom: 1px solid #f1f5f9;
   font-size: 15px;
   color: #334155;
+}
+
+.table-avatar {
+  width: 35px;
+  height: 35px;
+  background: #f1f5f9;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
 }
 
 .role-tag {
@@ -217,92 +628,6 @@ html {
   font-weight: 600;
 }
 
-/* --- GTS Styled SweetAlert2 Popup --- */
-
-/* The main modal container */
-.swal2-popup {
-  border-radius: 16px !important;
-  padding: 2rem !important;
-  font-family: 'Poppins', sans-serif !important;
-}
-
-/* Modal Title */
-.swal2-title {
-  color: #215D7B !important;
-  /* Primary Teal */
-  font-weight: 700 !important;
-  font-size: 24px !important;
-  margin-bottom: 20px !important;
-}
-
-/* Custom Input Styling inside Popup */
-.swal2-input,
-.swal2-select {
-  height: 45px !important;
-  border: 1px solid #e2e8f0 !important;
-  border-radius: 8px !important;
-  font-size: 14px !important;
-  box-shadow: none !important;
-  transition: border-color 0.3s ease !important;
-  margin: 10px auto !important;
-  width: 90% !important;
-}
-
-.swal2-input:focus,
-.swal2-select:focus {
-  border-color: #215D7B !important;
-  box-shadow: 0 0 0 3px rgba(33, 93, 123, 0.1) !important;
-}
-
-/* Buttons Styling */
-.swal2-confirm {
-  background-color: #215D7B !important;
-  /* Primary Teal */
-  border-radius: 8px !important;
-  padding: 12px 30px !important;
-  font-weight: 600 !important;
-}
-
-.swal2-cancel {
-  background-color: #f1f5f9 !important;
-  color: #64748b !important;
-  border-radius: 8px !important;
-  padding: 12px 30px !important;
-  font-weight: 600 !important;
-}
-
-/* Success/Error Icon Colors */
-.swal2-success-ring {
-  border-color: #215D7B !important;
-}
-
-.swal2-success-line-tip,
-.swal2-success-line-long {
-  background-color: #215D7B !important;
-}
-
-/* Swall Labels */
-.swal-custom-label {
-  font-size: 12px;
-  color: #7A7A7A;
-  font-weight: 600;
-  display: block;
-  margin: 10px 0 -5px 5px;
-}
-
-/* Avatar Circle in Table */
-.table-avatar {
-  width: 35px;
-  height: 35px;
-  background: #f1f5f9;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-}
-
-/* Status: Inactive */
 .status-inactive {
   background: #f1f5f9;
   color: #94a3b8;
@@ -312,7 +637,6 @@ html {
   font-weight: 700;
 }
 
-/* Action: Edit Button */
 .edit-btn {
   background: transparent;
   color: var(--primary);
@@ -330,7 +654,9 @@ html {
   background: #f0f7f9;
 }
 
-
+/* ==========================================================================
+   PROFILE PAGE STYLES
+   ========================================================================== */
 .profile-card {
   background: white;
   border-radius: 16px;
@@ -357,6 +683,44 @@ html {
   justify-content: center;
   font-size: 28px;
   font-weight: 700;
+}
+
+.profile-avatar-container {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.profile-img-large {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-edit-icon {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: var(--primary);
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 2px solid white;
+  font-size: 14px;
+  transition: 0.3s;
+}
+
+.avatar-edit-icon:hover {
+  background: var(--secondary);
+  transform: scale(1.1);
 }
 
 .edit-profile-btn {
@@ -405,7 +769,6 @@ html {
   color: #1e293b;
 }
 
-/* Form Styles */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -443,260 +806,734 @@ html {
   cursor: pointer;
 }
 
-
-.profile-avatar-container {
-    position: relative;
-    width: 100px;
-    height: 100px;
-}
-
-.profile-img-large {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid #fff;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.avatar-edit-icon {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    background: var(--primary);
-    color: white;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    border: 2px solid white;
-    font-size: 14px;
-    transition: 0.3s;
-}
-
-.avatar-edit-icon:hover {
-    background: var(--secondary);
-    transform: scale(1.1);
-}
-
-/* --- LEAVES PAGE STYLES --- */
-
+/* ==========================================================================
+   LEAVES PAGE STYLES
+   ========================================================================== */
 .leaves-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
 }
 
-/* Status Badges */
+.leaves-stats-grid.two-cols {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* --- Compact Overrides specifically for Leaves Cards --- */
+.leaves-stats-grid .stat-card {
+  padding: 15px 20px;
+  /* Reduced padding */
+  gap: 15px;
+  /* Tighter spacing between icon and text */
+  min-width: unset;
+}
+
+.leaves-stats-grid .stat-icon {
+  width: 45px;
+  /* Smaller icon box */
+  height: 45px;
+  font-size: 18px;
+  /* Smaller icon */
+}
+
+.leaves-stats-grid .stat-info h3 {
+  font-size: 18px;
+  /* Smaller number text */
+  margin-top: 2px;
+}
+
+/* --- Custom Colors for Leaves Icons --- */
+.border-teal {
+  border-color: #ccfbf1;
+  border-width: 2px;
+}
+
+.teal-bg {
+  background-color: #ccfbf1;
+  color: #0f766e;
+}
+
+.border-plum {
+  border-color: #f3e8ff;
+  border-width: 2px;
+}
+
+.plum-bg {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+}
+
+/* --- Badges --- */
 .status-badge {
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .status-badge.success {
-    background-color: #dcfce7;
-    color: #16a34a;
+  background-color: #dcfce7;
+  color: #16a34a;
 }
 
 .status-badge.danger {
-    background-color: #fee2e2;
-    color: #dc2626;
+  background-color: #fee2e2;
+  color: #dc2626;
 }
 
 .status-badge.warning {
-    background-color: #fef3c7;
-    color: #d97706;
+  background-color: #fef3c7;
+  color: #d97706;
 }
 
-/* Responsive Grid */
-@media (max-width: 768px) {
-    .leaves-stats-grid {
-        grid-template-columns: 1fr;
-    }
+/* ==========================================================================
+   ATTENDANCE & LOGS SPECIFIC STYLES
+   ========================================================================== */
+
+/* Typography & Utility Classes */
+.header-no-margin {
+  margin: 0;
 }
 
+.italic {
+  font-style: italic;
+}
 
-/* --- ATTENDANCE PAGE STYLES (Compact Redesign) --- */
+.fw-600 {
+  font-weight: 600;
+}
 
+.fw-bold {
+  font-weight: bold;
+}
+
+.text-dark-gray {
+  color: #555;
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.text-orange {
+  color: #e67e22;
+}
+
+.text-small {
+  font-size: 13px;
+}
+
+.empty-table-message {
+  text-align: center;
+  color: #999;
+  padding: 40px !important;
+}
+
+/* Clock Refinements */
 .attendance-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
-.digital-clock {
-    background: #215D7B;
-    color: white;
-    padding: 8px 16px;       /* Smaller padding */
-    border-radius: 6px;
-    font-size: 18px;         /* Smaller font */
-    font-weight: 700;
-    font-family: 'Courier New', monospace;
-    box-shadow: 0 4px 10px rgba(33, 93, 123, 0.3);
+.clock-light {
+  background: #fff;
+  color: var(--primary);
+  padding: 10px 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  font-size: 18px;
+  font-weight: bold;
 }
 
-.control-card {
-    background: white;
-    border-radius: 12px;
-    padding: 25px;           /* Reduced padding */
-    box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-    
-    /* FLEXBOX MAGIC: This creates the side-by-side layout */
-    display: flex;
-    flex-direction: row;     /* Horizontal alignment */
-    align-items: center;     /* Vertically center items */
-    justify-content: center; /* Center the group horizontally */
-    gap: 50px;               /* Space between Ring and Buttons */
-    
-    margin-bottom: 25px;
+.clock-icon {
+  margin-right: 8px;
+  color: #94a3b8;
 }
 
-/* Status Ring - Made Smaller */
-.status-ring {
-    width: 130px;            /* Reduced from 200px */
-    height: 130px;           /* Reduced from 200px */
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* Removed margin-bottom since it's now side-by-side */
-    transition: 0.5s;
-    border: 6px solid #f1f5f9;
-    flex-shrink: 0;          /* Prevents ring from squishing */
+/* Table Header */
+.table-header-title {
+  padding: 20px;
+  font-size: 16px;
+  margin: 0;
+  border-bottom: 1px solid #eee;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
 }
 
-.status-ring.working { border-color: #16a34a; box-shadow: 0 0 15px rgba(22, 163, 74, 0.2); }
-.status-ring.break { border-color: #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.2); }
-.status-ring.out { border-color: #cbd5e1; }
-
-.inner-status {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
-    font-size: 16px;         /* Smaller text */
-    font-weight: 700;
-    color: #475569;
+.table-header-icon {
+  margin-right: 10px;
 }
 
-/* Timer Text Sizes */
-.timer-normal { font-size: 24px; color: #f59e0b; }
-.timer-danger { font-size: 24px; color: #dc2626; animation: blink 1s infinite; }
-
-@keyframes blink { 50% { opacity: 0.5; } }
-
-/* Actions Area - Aligned Left */
-.actions-area {
-    width: auto;             /* Let it take natural width */
-    text-align: left;        /* Align text left */
+.tracking-wide {
+  letter-spacing: 1px;
 }
 
-.half-day-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start; /* Align toggle start */
+.fw-500 {
+  font-weight: 500;
+}
+
+.fw-normal {
+  font-weight: normal;
+}
+
+.profile-divider {
+  border: none;
+  border-top: 1px solid #f1f5f9;
+  margin: 25px 0;
+}
+
+.profile-info-text h2 {
+  margin: 0 0 5px 0;
+  color: #1e293b;
+  font-size: 20px;
+}
+
+/* Layout Utilities */
+.leaves-stats-grid.two-cols {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.mt-30 {
+  margin-top: 30px;
+}
+
+.mx-1 {
+  margin: 0 5px;
+}
+
+/* --- Tabs & Profile Details Utilities --- */
+.tab-buttons-wrapper {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  padding: 10px 20px !important;
+  font-size: 14px !important;
+  transition: all 0.3s ease;
+}
+
+.tab-btn.inactive {
+  opacity: 0.7;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--primary);
+}
+
+.custom-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.balances-wrapper {
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.balance-input {
+  width: 150px !important;
+  margin: 0 !important;
+}
+
+.flex-align-end {
+  display: flex;
+  align-items: flex-end;
+}
+
+.btn-tall {
+  height: 46px;
+  /* Matches standard input heights */
+}
+
+.btn-large {
+  padding: 10px 20px !important;
+  font-size: 16px !important;
+}
+
+/* General spacing / layout helpers */
+.p-15 {
+  padding: 15px;
+}
+
+.mb-20 {
+  margin-bottom: 20px;
+}
+
+.mb-25 {
+  margin-bottom: 25px;
+}
+
+.pb-10 {
+  padding-bottom: 10px;
+}
+
+.mt-10 {
+  margin-top: 10px;
+}
+
+.d-block {
+  display: block;
+}
+
+.border-bottom {
+  border-bottom: 1px solid #eee;
+}
+
+/* ==========================================================================
+   ABSENT EMPLOYEES SPECIFIC STYLES (DESKTOP)
+   ========================================================================== */
+.absent-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.shift-dropdown-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0f7f9;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid #bce1f1;
+  width: auto;
+  /* Ensures it doesn't stretch on desktop */
+}
+
+.shift-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.shift-select {
+  margin: 0 !important;
+  height: 35px !important;
+  font-size: 13px !important;
+  padding: 0 30px 0 10px !important;
+  width: 140px !important;
+  border-color: var(--primary) !important;
+}
+
+.absence-summary {
+  margin-bottom: 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #475569;
+  text-align: right;
+}
+
+.absence-summary-count {
+  color: #dc2626;
+  font-size: 18px;
+  margin-left: 5px;
+}
+
+.shift-badge {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Utilities */
+.fs-15 {
+  font-size: 15px;
+}
+
+.text-moon {
+  color: #8b5cf6;
+}
+
+.text-sun {
+  color: #f59e0b;
+}
+
+.text-success {
+  color: #16a34a;
+}
+
+/* ==========================================================================
+   SWEET ALERT CUSTOMIZATION
+   ========================================================================== */
+.swal2-popup {
+  border-radius: 16px !important;
+  padding: 2rem !important;
+  font-family: 'Poppins', sans-serif !important;
+}
+
+.swal2-title {
+  color: #215D7B !important;
+  font-weight: 700 !important;
+  font-size: 24px !important;
+  margin-bottom: 20px !important;
+}
+
+.swal2-input,
+.swal2-select {
+  height: 45px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+  transition: border-color 0.3s ease !important;
+  margin: 10px auto !important;
+  width: 90% !important;
+}
+
+.swal2-input:focus,
+.swal2-select:focus {
+  border-color: #215D7B !important;
+  box-shadow: 0 0 0 3px rgba(33, 93, 123, 0.1) !important;
+}
+
+.swal2-confirm {
+  background-color: #215D7B !important;
+  border-radius: 8px !important;
+  padding: 12px 30px !important;
+  font-weight: 600 !important;
+}
+
+.swal2-cancel {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  border-radius: 8px !important;
+  padding: 12px 30px !important;
+  font-weight: 600 !important;
+}
+
+.swal2-success-ring {
+  border-color: #215D7B !important;
+}
+
+.swal2-success-line-tip,
+.swal2-success-line-long {
+  background-color: #215D7B !important;
+}
+
+.swal-custom-label {
+  font-size: 12px;
+  color: #7A7A7A;
+  font-weight: 600;
+  display: block;
+  margin: 10px 0 -5px 5px;
+}
+
+/* ==========================================================================
+   EMPLOYEES PAGE SPECIFIC HEADER (DESKTOP)
+   ========================================================================== */
+.employee-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.employee-header-actions {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   GLOBAL MEDIA QUERIES (MOBILE RESPONSIVENESS)
+   ========================================================================== */
+
+/* Tablets & Small Desktops */
+@media screen and (max-width: 991px) {
+  .main-content {
+    padding: 20px;
+  }
+}
+
+/* Mobile Devices */
+@media screen and (max-width: 768px) {
+
+  /* Ensure the page-header-left logic scales nicely on mobile */
+  .page-header-left {
+    flex-wrap: wrap;
+  }
+
+  /* =========================================
+     DASHBOARD SPECIFIC OVERRIDES 
+     ========================================= */
+  .stats-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 10px;
-    margin-bottom: 15px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 14px;
-    color: #64748b;
-}
+  }
 
-.toggle-active { color: #215D7B; font-size: 22px; }
-.toggle-inactive { color: #cbd5e1; font-size: 22px; }
+  .stats-grid .stat-card {
+    width: calc(50% - 5px);
+    flex: none;
+    min-width: 0;
+    padding: 15px 10px;
+    gap: 10px;
+  }
 
-.button-group {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-start; /* Align buttons start */
-}
+  .stats-grid .stat-icon {
+    width: 35px;
+    height: 35px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
 
-.gts-btn {
-    padding: 10px 24px;      /* Compact buttons */
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    transition: 0.3s;
-}
+  .stats-grid .stat-info p {
+    font-size: 11px;
+  }
 
-.gts-btn.primary { background: #215D7B; color: white; }
-.gts-btn.primary:hover { background: #1a4a63; }
+  .stats-grid .stat-info h3 {
+    font-size: 16px;
+    margin-top: 2px;
+  }
 
-.gts-btn.danger { background: #fee2e2; color: #dc2626; }
-.gts-btn.danger:hover { background: #fecaca; }
+  .quick-actions-grid {
+    flex-direction: column;
+  }
 
-.gts-btn.warning { background: #fef3c7; color: #d97706; }
-.gts-btn.warning:hover { background: #fde68a; }
+  .gts-btn {
+    width: 100%;
+    justify-content: center;
+  }
 
-/* Responsive: Stack vertically on mobile */
-@media (max-width: 600px) {
-    .control-card {
-        flex-direction: column;
-        gap: 30px;
-    }
-    .actions-area {
-        width: 100%;
-        text-align: center;
-    }
-    .button-group, .half-day-toggle {
-        justify-content: center;
-    }
-}
+  /* =========================================
+     LEAVES PAGE OVERRIDES 
+     ========================================= */
+  .leaves-stats-grid,
+  .leaves-stats-grid.two-cols {
+    display: flex !important;
+    flex-direction: column;
+    gap: 15px;
+  }
 
+  .leaves-stats-grid .stat-card {
+    width: 100%;
+    padding: 20px;
+  }
 
-/* Card Style */
-.control-card {
-    background: white;
-    padding: 25px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    border: 1px solid #eef2f6;
-    margin-bottom: 25px;
-}
-
-/* Custom Input Styling to override Swal default if needed */
-.custom-input {
+  /* =========================================
+     RESPONSIVE TABLE FIXES 
+     ========================================= */
+  .empty-table-message {
+    display: block !important;
+    text-align: center !important;
     width: 100% !important;
-    margin: 5px 0 0 0 !important;
-    box-sizing: border-box;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    padding: 10px;
-    font-size: 14px;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  .empty-table-message::before {
+    display: none !important;
+  }
+
+  /* =========================================
+     PROFILE PAGE OVERRIDES 
+     ========================================= */
+  .profile-details-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .edit-profile-btn {
+    position: relative;
+    margin-top: 15px;
+  }
+
+  /* =========================================
+     EMPLOYEE PROFILE (ADMIN) OVERRIDES
+     ========================================= */
+  .tab-buttons-wrapper .tab-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .checkbox-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .checkbox-container button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .balances-wrapper {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .balances-wrapper .balance-input,
+  .balances-wrapper button {
+    width: 100% !important;
+  }
+
+  /* =========================================
+     COMMON FILTER BAR MOBILE OVERRIDES 
+     ========================================= */
+  .filter-bar-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .filter-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .filter-btn {
+    width: 100% !important;
+    justify-content: center;
+    padding: 8px 4px !important;
+    font-size: 11px !important;
+  }
+
+  .filter-btn:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+
+  .custom-date-filters {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 15px;
+  }
+
+  .date-picker-small {
+    width: 100% !important;
+  }
+
+  .date-input-group {
+    justify-content: space-between;
+  }
+
+  .search-wrapper {
+    max-width: 100%;
+  }
+
+  /* Handles the 4-button filter layout on the Leave Requests page */
+  .filter-buttons:has(> :nth-child(4):last-child) .filter-btn:last-child {
+    grid-column: span 3;
+  }
+
+  /* =========================================
+     PAGE HEADER ROW (LEAVES/PURCHASES ONE-LINER)
+     ========================================= */
+  .page-header-row {
+    flex-wrap: nowrap !important;
+    gap: 10px !important;
+  }
+
+  .page-header-row .page-title {
+    font-size: 16px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .page-header-row button,
+  .page-header-row .action-btn-primary {
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+    white-space: nowrap;
+    width: auto !important;
+    flex-shrink: 0;
+  }
+
+  /* =========================================
+     EMPLOYEES PAGE HEADER OVERRIDE
+     ========================================= */
+  .employee-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .employee-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .employee-header-actions .search-wrapper {
+    max-width: 100%;
+  }
+
+  .employee-header-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* =========================================
+     ABSENT EMPLOYEES MOBILE OVERRIDES
+     ========================================= */
+  .absent-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions-group {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .shift-dropdown-wrapper {
+    flex: 1;
+    justify-content: space-between;
+  }
+
+  .absence-summary {
+    text-align: left;
+  }
 }
 
-.input-label {
-    font-weight: 600;
-    font-size: 14px;
-    color: #4b5563;
-    margin-bottom: 5px;
-    display: block;
-}
-
-.hint-text {
-    color: #94a3b8;
-    font-size: 12px;
-    margin-top: 4px;
-    display: block;
-}
-
-/* Table Enhancements */
-.holiday-table tr:hover {
-    background-color: #f8fafc;
-}
+/* END OF APP.CSS */

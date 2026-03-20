@@ -68,50 +68,33 @@ const LeaveRequests = () => {
     };
 
     return (
-        <div className="attendance-container">
-            <h1 className="page-title">Leave Requests</h1>
+        <div className="attendance-container fade-in">
+            <h1 className="page-title header-no-margin mb-20">Leave Requests</h1>
 
             {/* --- FILTER & SEARCH BAR --- */}
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
+            <div className="filter-bar-card fade-in">
                 
                 {/* 1. Status Filter Buttons */}
-                <div className="button-group" style={{ display: 'flex', gap: '10px' }}>
+                <div className="filter-buttons">
                     {['All', 'Pending', 'Approved', 'Rejected'].map(status => (
                         <button
                             key={status}
-                            className={`gts-btn ${filterStatus === status ? 'primary' : 'warning'}`}
-                            style={{ 
-                                opacity: filterStatus === status ? 1 : 0.7, 
-                                padding: '8px 16px', 
-                                fontSize: '13px',
-                                textTransform: 'capitalize'
-                            }}
+                            className={`gts-btn filter-btn capitalize ${filterStatus === status ? 'primary active' : 'warning inactive'}`}
                             onClick={() => setFilterStatus(status)}
                         >
-                            {status === 'All' && <FontAwesomeIcon icon={faFilter} style={{ marginRight: '6px' }} />}
+                            {status === 'All' && <FontAwesomeIcon icon={faFilter} className="filter-icon" />}
                             {status}
                         </button>
                     ))}
                 </div>
 
                 {/* 2. Employee Search */}
-                <div style={{ position: 'relative', minWidth: '250px' }}>
-                    <FontAwesomeIcon 
-                        icon={faSearch} 
-                        style={{ 
-                            position: 'absolute', 
-                            left: '15px', 
-                            top: '50%', 
-                            transform: 'translateY(-50%)', 
-                            color: '#aaa',
-                            pointerEvents: 'none' 
-                        }} 
-                    />
+                <div className="search-wrapper">
+                    <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input
                         type="text"
                         placeholder="Search Employee..."
-                        className="swal2-input"
-                        style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }}
+                        className="swal2-input search-input"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -119,7 +102,7 @@ const LeaveRequests = () => {
             </div>
 
             {/* --- TABLE --- */}
-            <div className="employee-table-container">
+            <div className="employee-table-container fade-in">
                 <table className="employee-table">
                     <thead>
                         <tr>
@@ -135,23 +118,36 @@ const LeaveRequests = () => {
                     <tbody>
                         {filteredRequests.length === 0 ? (
                             <tr>
-                                <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                                <td colSpan="7" className="empty-table-message">
                                     No {filterStatus !== 'All' ? filterStatus.toLowerCase() : ''} leave requests found matching "{searchTerm}".
                                 </td>
                             </tr>
                         ) : (
                             filteredRequests.map(req => (
                                 <tr key={req._id}>
-                                    <td style={{ fontWeight: 'bold', color: '#215D7B' }}>{req.userId?.name || 'Unknown'}</td>
-                                    <td><span className="role-tag employee" style={{fontSize: '11px'}}>{req.leaveType}</span></td>
-                                    <td style={{ fontSize: '13px' }}>
+                                    <td data-label="Employee" className="fw-bold text-primary">
+                                        {req.userId?.name || 'Unknown'}
+                                    </td>
+                                    
+                                    <td data-label="Leave Type">
+                                        <span className="role-tag employee text-small">{req.leaveType}</span>
+                                    </td>
+                                    
+                                    <td data-label="Dates" className="text-dark-gray text-small">
                                         {new Date(req.fromDate).toLocaleDateString()} 
-                                        <span style={{color:'#ccc', margin: '0 5px'}}>➜</span> 
+                                        <span className="text-muted mx-1">➜</span> 
                                         {new Date(req.toDate).toLocaleDateString()}
                                     </td>
-                                    <td style={{ fontWeight: '500' }}>{req.days} Days</td>
-                                    <td style={{ maxWidth: '250px', fontSize: '12px', color: '#555' }}>{req.reason}</td>
-                                    <td>
+                                    
+                                    <td data-label="Duration" className="fw-500">
+                                        {req.days} Days
+                                    </td>
+                                    
+                                    <td data-label="Reason" className="note-cell text-muted text-small">
+                                        {req.reason}
+                                    </td>
+                                    
+                                    <td data-label="Status">
                                         <span className={`status-badge ${
                                             req.status === 'Approved' ? 'success' : 
                                             req.status === 'Rejected' ? 'danger' : 'warning'
@@ -159,20 +155,19 @@ const LeaveRequests = () => {
                                             {req.status}
                                         </span>
                                     </td>
-                                    <td>
+                                    
+                                    <td data-label="Action">
                                         {req.status === 'Pending' ? (
-                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                            <div className="flex-row gap-10">
                                                 <button 
-                                                    className="gts-btn primary" 
-                                                    style={{ padding: '6px 10px', fontSize: '12px' }}
+                                                    className="gts-btn primary btn-small" 
                                                     onClick={() => handleAction(req._id, 'Approved', req.userId.name)}
                                                     title="Approve"
                                                 >
                                                     <FontAwesomeIcon icon={faCheck} />
                                                 </button>
                                                 <button 
-                                                    className="gts-btn danger" 
-                                                    style={{ padding: '6px 10px', fontSize: '12px' }}
+                                                    className="gts-btn danger btn-small" 
                                                     onClick={() => handleAction(req._id, 'Rejected', req.userId.name)}
                                                     title="Reject"
                                                 >
@@ -180,7 +175,7 @@ const LeaveRequests = () => {
                                                 </button>
                                             </div>
                                         ) : (
-                                            <span style={{ fontSize: '12px', color: '#aaa', fontStyle: 'italic' }}>Completed</span>
+                                            <span className="text-muted text-small italic">Completed</span>
                                         )}
                                     </td>
                                 </tr>

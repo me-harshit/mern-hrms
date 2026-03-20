@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faUser, faEnvelope, faPhone, faMapMarkerAlt, 
     faEdit, faSave, faTimes, faCamera,
-    faIdCard, faFirstAid, faUserTie // <--- Added faUserTie
+    faIdCard, faFirstAid, faUserTie 
 } from '@fortawesome/free-solid-svg-icons';
 
 const Profile = () => {
@@ -87,7 +87,7 @@ const Profile = () => {
     const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
 
     return (
-        <div className="profile-container">
+        <div className="profile-container fade-in">
             <h1 className="page-title">My Profile</h1>
             
             <div className="profile-card">
@@ -130,32 +130,32 @@ const Profile = () => {
                 <hr className="profile-divider" />
 
                 {isEditing ? (
-                    <form onSubmit={handleUpdate} className="profile-form">
+                    <form onSubmit={handleUpdate} className="profile-form fade-in">
                         <div className="form-grid">
                             <div className="form-group">
-                                <label>Full Name</label>
-                                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
+                                <label className="input-label">Full Name</label>
+                                <input className="custom-input" type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
                             </div>
                             <div className="form-group">
-                                <label>Work Email</label>
-                                <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
+                                <label className="input-label">Work Email</label>
+                                <input className="custom-input" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
                             </div>
                             <div className="form-group">
-                                <label>Phone Number</label>
-                                <input type="text" value={formData.phoneNumber} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} placeholder="+91 ..." />
+                                <label className="input-label">Phone Number</label>
+                                <input className="custom-input" type="text" value={formData.phoneNumber} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} placeholder="+91 ..." />
                             </div>
                             <div className="form-group">
-                                <label>Address</label>
-                                <input type="text" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="City, Country" />
+                                <label className="input-label">Address</label>
+                                <input className="custom-input" type="text" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="City, Country" />
                             </div>
                         </div>
                         <div className="profile-actions">
-                            <button type="submit" className="save-btn"><FontAwesomeIcon icon={faSave} /> Save Changes</button>
-                            <button type="button" className="cancel-btn" onClick={() => setIsEditing(false)}><FontAwesomeIcon icon={faTimes} /> Cancel</button>
+                            <button type="submit" className="save-btn"><FontAwesomeIcon icon={faSave} className="btn-icon" /> Save Changes</button>
+                            <button type="button" className="cancel-btn" onClick={() => setIsEditing(false)}><FontAwesomeIcon icon={faTimes} className="btn-icon" /> Cancel</button>
                         </div>
                     </form>
                 ) : (
-                    <div className="profile-details-grid">
+                    <div className="profile-details-grid fade-in">
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faEnvelope} className="detail-icon" />
                             <div><label>Email Address</label><p>{user.email}</p></div>
@@ -169,7 +169,7 @@ const Profile = () => {
                             <FontAwesomeIcon icon={faIdCard} className="detail-icon" />
                             <div>
                                 <label>Aadhaar Number</label>
-                                <p style={{ letterSpacing: '1px', fontWeight: '600' }}>
+                                <p className="tracking-wide fw-600">
                                     {user.aadhaar || 'Pending HR Update'}
                                 </p>
                             </div>
@@ -178,26 +178,25 @@ const Profile = () => {
                             <FontAwesomeIcon icon={faFirstAid} className="detail-icon" />
                             <div>
                                 <label>Emergency Contact</label>
-                                <p style={{ letterSpacing: '1px', fontWeight: '600' }}>{user.emergencyContact || 'Not provided'}</p>
+                                <p className="tracking-wide fw-600">{user.emergencyContact || 'Not provided'}</p>
                             </div>
                         </div>
 
-                        {/* --- NEW: REPORTING MANAGER FIELD --- */}
+                        {/* --- REPORTING MANAGER FIELD --- */}
                         <div className="detail-item">
-                            <FontAwesomeIcon icon={faUserTie} className="detail-icon" style={{ color: '#215D7B' }} />
+                            <FontAwesomeIcon icon={faUserTie} className="detail-icon text-primary" />
                             <div>
                                 <label>Reporting Manager</label>
                                 {user.reportingManagerName ? (
-                                    <p style={{ fontWeight: '500' }}>
+                                    <p className="fw-500">
                                         {user.reportingManagerName} <br />
-                                        <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>{user.reportingManagerEmail}</span>
+                                        <span className="text-small text-muted fw-normal">{user.reportingManagerEmail}</span>
                                     </p>
                                 ) : (
-                                    <p style={{ color: '#999', fontStyle: 'italic' }}>Not Assigned</p>
+                                    <p className="text-muted italic">Not Assigned</p>
                                 )}
                             </div>
                         </div>
-                        {/* ------------------------------------- */}
 
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faMapMarkerAlt} className="detail-icon" />

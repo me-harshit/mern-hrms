@@ -3,12 +3,10 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import api from '../utils/api';
 import { faPlus, faCalendarDay, faCheckCircle, faTimesCircle, faClock, faWallet } from '@fortawesome/free-solid-svg-icons';
+import '../styles/App.css';
 
 const Leaves = () => {
-    const [balances, setBalances] = useState({
-        CL: 0,
-        EL: 0
-    });
+    const [balances, setBalances] = useState({ CL: 0, EL: 0 });
     const [leaveHistory, setLeaveHistory] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -20,7 +18,7 @@ const Leaves = () => {
         try {
             const res = await api.get('/leaves/my-leaves');
             setLeaveHistory(res.data.history);
-            setBalances(res.data.balances); // { CL: 2, EL: 5 }
+            setBalances(res.data.balances);
             setLoading(false);
         } catch (err) {
             console.error("Error fetching leaves");
@@ -29,7 +27,6 @@ const Leaves = () => {
     };
 
     const handleApplyLeave = async () => {
-        // Build Dropdown Options Dynamically
         let options = '';
 
         if (balances.CL > 0) {
@@ -38,7 +35,6 @@ const Leaves = () => {
         if (balances.EL > 0) {
             options += `<option value="EL">Earned Leave (Balance: ${balances.EL})</option>`;
         }
-        // Unpaid Leave is always available
         options += `<option value="UL">Unpaid Leave (UL)</option>`;
 
         const { value: formValues } = await Swal.fire({
@@ -104,41 +100,38 @@ const Leaves = () => {
     if (loading) return <div className="main-content">Loading Leaves...</div>;
 
     return (
-        <div className="leaves-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                <h1 className="page-title">Leave Management</h1>
+        <div className="leaves-container fade-in">
+            <div className="page-header-row">
+                <h1 className="page-title header-no-margin">Leave Management</h1>
                 <button className="action-btn-primary" onClick={handleApplyLeave}>
-                    <FontAwesomeIcon icon={faPlus} /> Apply for Leave
+                    <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Apply for Leave
                 </button>
             </div>
 
             {/* --- BALANCE CARDS --- */}
-            <div className="leaves-stats-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-
-                {/* Casual Leave Card */}
+            <div className="leaves-stats-grid two-cols">
                 <div className="stat-card border-teal">
                     <div className="stat-icon teal-bg"><FontAwesomeIcon icon={faCalendarDay} /></div>
                     <div className="stat-info">
                         <p>Casual Leave (CL)</p>
                         <h3>{balances.CL} Available</h3>
-                        <small style={{ color: '#777' }}>+1 per month (Resets Jan 1st)</small>
+                        <small className="text-muted text-small">+1 per month (Resets Jan 1st)</small>
                     </div>
                 </div>
 
-                {/* Earned Leave Card */}
                 <div className="stat-card border-plum">
                     <div className="stat-icon plum-bg"><FontAwesomeIcon icon={faWallet} /></div>
                     <div className="stat-info">
                         <p>Earned Leave (EL)</p>
                         <h3>{balances.EL} Available</h3>
-                        <small style={{ color: '#777' }}>Added by HR</small>
+                        <small className="text-muted text-small">Added by HR</small>
                     </div>
                 </div>
             </div>
 
             {/* --- HISTORY TABLE --- */}
-            <div className="employee-table-container" style={{ marginTop: '30px' }}>
-                <h3 style={{ padding: '20px', margin: 0, borderBottom: '1px solid #eee', color: '#215D7B' }}>Application History</h3>
+            <div className="employee-table-container mt-30 fade-in">
+                <h3 className="table-header-title">Application History</h3>
                 <table className="employee-table">
                     <thead>
                         <tr>
@@ -151,19 +144,23 @@ const Leaves = () => {
                     </thead>
                     <tbody>
                         {leaveHistory.length === 0 ? (
-                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No leave history found.</td></tr>
+                            <tr>
+                                <td colSpan="5" className="empty-table-message">No leave history found.</td>
+                            </tr>
                         ) : (
                             leaveHistory.map(leave => (
                                 <tr key={leave._id}>
-                                    <td style={{ fontWeight: '600' }}>{leave.leaveType}</td>
-                                    <td style={{ fontSize: '14px', color: '#555' }}>
+                                    <td data-label="Leave Type" className="fw-600">{leave.leaveType}</td>
+                                    <td data-label="Dates" className="text-dark-gray text-small">
                                         {new Date(leave.fromDate).toLocaleDateString()}
-                                        <span style={{ color: '#aaa', margin: '0 5px' }}>to</span>
+                                        <span className="text-muted mx-1">to</span>
                                         {new Date(leave.toDate).toLocaleDateString()}
                                     </td>
-                                    <td>{leave.days}</td>
-                                    <td style={{ maxWidth: '200px', fontSize: '13px', color: '#777' }}>{leave.reason}</td>
-                                    <td>{getStatusBadge(leave.status)}</td>
+                                    <td data-label="Days">{leave.days}</td>
+                                    <td data-label="Reason" className="note-cell text-muted text-small">
+                                        {leave.reason}
+                                    </td>
+                                    <td data-label="Status">{getStatusBadge(leave.status)}</td>
                                 </tr>
                             ))
                         )}

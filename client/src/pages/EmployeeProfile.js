@@ -69,7 +69,7 @@ const EmployeeProfile = () => {
 
     // --- HELPER: CALCULATE DURATION ---
     const calculateDuration = (start, end) => {
-        if (!start || !end) return <span style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>In Progress</span>;
+        if (!start || !end) return <span className="text-muted italic text-small">In Progress</span>;
 
         const startTime = new Date(start);
         const endTime = new Date(end);
@@ -163,78 +163,66 @@ const EmployeeProfile = () => {
         }
     };
 
-    const getTabStyle = (tabName) => ({
-        opacity: activeTab === tabName ? 1 : 0.7,
-        padding: '10px 20px',
-        fontSize: '14px',
-        transition: 'all 0.3s ease'
-    });
-
     if (loading) return <div className="main-content">Loading Profile...</div>;
 
     return (
         <div className="dashboard-container fade-in">
             {/* HEADER */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
-                <button className="gts-btn" onClick={() => navigate('/employees')}>
-                    <FontAwesomeIcon icon={faArrowLeft} /> Back
+            <div className="page-header-left">
+                <button className="gts-btn cancel-btn m-0" onClick={() => navigate('/employees')}>
+                    <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back
                 </button>
-                <h1 className="page-title" style={{ margin: 0 }}>{user.name}'s Profile</h1>
+                <h1 className="page-title header-no-margin">{user.name}'s Profile</h1>
             </div>
 
             {/* TABS */}
-            <div className="control-card" style={{ padding: '15px', marginBottom: '25px' }}>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <div className="control-card p-15 mb-25">
+                <div className="tab-buttons-wrapper">
                     <button
-                        className={`gts-btn ${activeTab === 'details' ? 'primary' : 'warning'}`}
-                        style={getTabStyle('details')}
+                        className={`gts-btn tab-btn ${activeTab === 'details' ? 'primary' : 'warning inactive'}`}
                         onClick={() => setActiveTab('details')}
                     >
-                        <FontAwesomeIcon icon={faUser} style={{ marginRight: '8px' }} /> Details & Config
+                        <FontAwesomeIcon icon={faUser} className="btn-icon" /> Details & Config
                     </button>
 
                     <button
-                        className={`gts-btn ${activeTab === 'leaves' ? 'primary' : 'warning'}`}
-                        style={getTabStyle('leaves')}
+                        className={`gts-btn tab-btn ${activeTab === 'leaves' ? 'primary' : 'warning inactive'}`}
                         onClick={() => setActiveTab('leaves')}
                     >
-                        <FontAwesomeIcon icon={faPlaneDeparture} style={{ marginRight: '8px' }} /> Leaves & Balances
+                        <FontAwesomeIcon icon={faPlaneDeparture} className="btn-icon" /> Leaves & Balances
                     </button>
 
                     <button
-                        className={`gts-btn ${activeTab === 'attendance' ? 'primary' : 'warning'}`}
-                        style={getTabStyle('attendance')}
+                        className={`gts-btn tab-btn ${activeTab === 'attendance' ? 'primary' : 'warning inactive'}`}
                         onClick={() => setActiveTab('attendance')}
                     >
-                        <FontAwesomeIcon icon={faClock} style={{ marginRight: '8px' }} /> Attendance Logs
+                        <FontAwesomeIcon icon={faClock} className="btn-icon" /> Attendance Logs
                     </button>
                 </div>
             </div>
 
             {/* --- TAB CONTENT: DETAILS --- */}
             {activeTab === 'details' && (
-                <div className="control-card fade-in" style={{ display: 'block' }}>
-
-                    <h3 className="card-title" style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+                <div className="control-card fade-in d-block">
+                    <h3 className="section-title border-bottom pb-10">
                         Personal & Employment Details
                     </h3>
 
-                    <form onSubmit={handleUpdateProfile} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-
+                    <form onSubmit={handleUpdateProfile} className="form-grid">
                         {/* ROW 1: Basics */}
                         <div className="form-group">
                             <label className="input-label">Full Name</label>
-                            <input className="swal2-input custom-input" value={user.name || ''} onChange={e => setUser({ ...user, name: e.target.value })} />
+                            <input className="custom-input" value={user.name || ''} onChange={e => setUser({ ...user, name: e.target.value })} />
                         </div>
 
                         <div className="form-group">
                             <label className="input-label">Email</label>
-                            <input className="swal2-input custom-input" value={user.email || ''} onChange={e => setUser({ ...user, email: e.target.value })} />
+                            <input className="custom-input" value={user.email || ''} onChange={e => setUser({ ...user, email: e.target.value })} />
                         </div>
 
                         <div className="form-group">
-                            <label className="input-label" style={{ color: '#215D7B', fontWeight: 'bold' }}>Employee / Biometric ID</label>
-                            <input className="swal2-input custom-input" placeholder="e.g. GTS003" value={user.employeeId || ''} onChange={e => setUser({ ...user, employeeId: e.target.value })} />
+                            <label className="input-label text-primary fw-bold">Employee / Biometric ID</label>
+                            <input className="custom-input" placeholder="e.g. GTS003" value={user.employeeId || ''} onChange={e => setUser({ ...user, employeeId: e.target.value })} />
                         </div>
 
                         {/* ROW 2: Dates */}
@@ -242,7 +230,7 @@ const EmployeeProfile = () => {
                             <label className="input-label">Date of Birth</label>
                             <input 
                                 type="date" 
-                                className="swal2-input custom-input" 
+                                className="custom-input" 
                                 value={user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : ''} 
                                 onChange={e => setUser({ ...user, dateOfBirth: e.target.value })} 
                             />
@@ -252,7 +240,7 @@ const EmployeeProfile = () => {
                             <label className="input-label">Joining Date</label>
                             <input 
                                 type="date" 
-                                className="swal2-input custom-input" 
+                                className="custom-input" 
                                 value={user.joiningDate ? new Date(user.joiningDate).toISOString().split('T')[0] : ''} 
                                 onChange={e => setUser({ ...user, joiningDate: e.target.value })} 
                             />
@@ -261,22 +249,22 @@ const EmployeeProfile = () => {
                         {/* ROW 3: Contact & Emergency */}
                         <div className="form-group">
                             <label className="input-label">Phone Number</label>
-                            <input className="swal2-input custom-input" placeholder="+91..." value={user.phoneNumber || ''} onChange={e => setUser({ ...user, phoneNumber: e.target.value })} />
+                            <input className="custom-input" placeholder="+91..." value={user.phoneNumber || ''} onChange={e => setUser({ ...user, phoneNumber: e.target.value })} />
                         </div>
 
                         <div className="form-group">
                             <label className="input-label">Address</label>
-                            <input className="swal2-input custom-input" value={user.address || ''} onChange={e => setUser({ ...user, address: e.target.value })} />
+                            <input className="custom-input" value={user.address || ''} onChange={e => setUser({ ...user, address: e.target.value })} />
                         </div>
 
                         <div className="form-group">
                             <label className="input-label">Aadhaar Number</label>
-                            <input className="swal2-input custom-input" value={user.aadhaar || ''} onChange={e => setUser({ ...user, aadhaar: e.target.value })} />
+                            <input className="custom-input" value={user.aadhaar || ''} onChange={e => setUser({ ...user, aadhaar: e.target.value })} />
                         </div>
 
                         <div className="form-group">
                             <label className="input-label">Emergency Contact</label>
-                            <input className="swal2-input custom-input" value={user.emergencyContact || ''} onChange={e => setUser({ ...user, emergencyContact: e.target.value })} />
+                            <input className="custom-input" value={user.emergencyContact || ''} onChange={e => setUser({ ...user, emergencyContact: e.target.value })} />
                         </div>
 
                         {/* ROW 4: System Config */}
@@ -308,28 +296,33 @@ const EmployeeProfile = () => {
                         {/* ROW 5: Managers */}
                         <div className="form-group">
                             <label className="input-label">Reporting Manager Name</label>
-                            <input className="swal2-input custom-input" placeholder="Manager's Full Name" value={user.reportingManagerName || ''} onChange={e => setUser({ ...user, reportingManagerName: e.target.value })} />
+                            <input className="custom-input" placeholder="Manager's Full Name" value={user.reportingManagerName || ''} onChange={e => setUser({ ...user, reportingManagerName: e.target.value })} />
                         </div>
 
                         <div className="form-group">
                             <label className="input-label">Reporting Manager Email</label>
-                            <input type="email" className="swal2-input custom-input" placeholder="manager@gts.ai" value={user.reportingManagerEmail || ''} onChange={e => setUser({ ...user, reportingManagerEmail: e.target.value })} />
+                            <input type="email" className="custom-input" placeholder="manager@gts.ai" value={user.reportingManagerEmail || ''} onChange={e => setUser({ ...user, reportingManagerEmail: e.target.value })} />
                         </div>
 
                         <div className="form-group">
                             <label className="input-label">Salary (Monthly) (₹)</label>
-                            <input type="number" className="swal2-input custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} />
+                            <input type="number" className="custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} />
                         </div>
 
                         {/* Checkbox & Save */}
-                        <div className="form-group" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '10px', fontSize: '14px', fontWeight: 'bold', color: '#215D7B' }}>
-                                <input type="checkbox" checked={user.isPurchaser || false} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#215D7B' }} />
+                        <div className="form-group full-width checkbox-container mt-10">
+                            <label className="checkbox-label">
+                                <input 
+                                    type="checkbox" 
+                                    className="custom-checkbox"
+                                    checked={user.isPurchaser || false} 
+                                    onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} 
+                                />
                                 Grant Purchaser Access
                             </label>
                             
-                            <button type="submit" className="gts-btn primary" style={{ padding: '10px 20px', fontSize: '16px' }}>
-                                <FontAwesomeIcon icon={faSave} style={{ marginRight: '8px' }} /> Save Profile Changes
+                            <button type="submit" className="gts-btn primary btn-large">
+                                <FontAwesomeIcon icon={faSave} className="btn-icon" /> Save Profile Changes
                             </button>
                         </div>
                     </form>
@@ -339,31 +332,30 @@ const EmployeeProfile = () => {
             {/* --- TAB CONTENT: LEAVES --- */}
             {activeTab === 'leaves' && (
                 <div className="fade-in">
-                    <div className="control-card" style={{ marginBottom: '20px', display: 'block' }}>
-                        <h3 className="card-title" style={{ marginBottom: '15px' }}>Manage Leave Balances</h3>
+                    <div className="control-card d-block mb-20">
+                        <h3 className="section-title">Manage Leave Balances</h3>
 
-                        <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
+                        <div className="balances-wrapper">
                             <div className="form-group">
-                                <label style={{ fontWeight: 'bold', color: '#215D7B', display: 'block', marginBottom: '5px' }}>Casual Leave (CL)</label>
-                                <input type="number" className="swal2-input custom-input" style={{ width: '150px', margin: 0 }} value={user.casualLeaveBalance || 0} onChange={e => setUser({ ...user, casualLeaveBalance: Number(e.target.value) })} />
+                                <label className="input-label text-primary fw-bold">Casual Leave (CL)</label>
+                                <input type="number" className="custom-input balance-input" value={user.casualLeaveBalance || 0} onChange={e => setUser({ ...user, casualLeaveBalance: Number(e.target.value) })} />
                             </div>
 
                             <div className="form-group">
-                                <label style={{ fontWeight: 'bold', color: '#215D7B', display: 'block', marginBottom: '5px' }}>Earned Leave (EL)</label>
-                                <input type="number" className="swal2-input custom-input" style={{ width: '150px', margin: 0 }} value={user.earnedLeaveBalance || 0} onChange={e => setUser({ ...user, earnedLeaveBalance: Number(e.target.value) })} />
+                                <label className="input-label text-primary fw-bold">Earned Leave (EL)</label>
+                                <input type="number" className="custom-input balance-input" value={user.earnedLeaveBalance || 0} onChange={e => setUser({ ...user, earnedLeaveBalance: Number(e.target.value) })} />
                             </div>
 
-                            <div className="form-group">
-                                <label style={{ display: 'block', marginBottom: '5px', visibility: 'hidden' }}>Spacer</label>
-                                <button className="gts-btn primary" onClick={handleUpdateBalance} style={{ height: '46px' }}>
-                                    <FontAwesomeIcon icon={faSave} style={{ marginRight: '8px' }} /> Update Balances
+                            <div className="form-group flex-align-end">
+                                <button className="gts-btn primary btn-tall" onClick={handleUpdateBalance}>
+                                    <FontAwesomeIcon icon={faSave} className="btn-icon" /> Update Balances
                                 </button>
                             </div>
                         </div>
                     </div>
 
                     <div className="employee-table-container">
-                        <h3 style={{ padding: '15px', borderBottom: '1px solid #eee', margin: 0 }}>Leave History</h3>
+                        <h3 className="table-header-title">Leave History</h3>
                         <table className="employee-table">
                             <thead>
                                 <tr>
@@ -378,11 +370,15 @@ const EmployeeProfile = () => {
                                 {leaveStats.history && leaveStats.history.length > 0 ? (
                                     leaveStats.history.map(l => (
                                         <tr key={l._id}>
-                                            <td><span className="role-tag employee" style={{ fontSize: '11px' }}>{l.leaveType}</span></td>
-                                            <td style={{ fontSize: '13px' }}>{new Date(l.fromDate).toLocaleDateString()} <span style={{ color: '#ccc' }}>➜</span> {new Date(l.toDate).toLocaleDateString()}</td>
-                                            <td style={{ fontWeight: '600' }}>{l.days}</td>
-                                            <td style={{ maxWidth: '250px', fontSize: '12px', color: '#555' }}>{l.reason}</td>
-                                            <td>
+                                            <td data-label="Type"><span className="role-tag employee text-small">{l.leaveType}</span></td>
+                                            <td data-label="Dates" className="text-dark-gray text-small">
+                                                {new Date(l.fromDate).toLocaleDateString()} 
+                                                <span className="text-muted mx-1">➜</span> 
+                                                {new Date(l.toDate).toLocaleDateString()}
+                                            </td>
+                                            <td data-label="Days" className="fw-600">{l.days}</td>
+                                            <td data-label="Reason" className="note-cell text-muted text-small">{l.reason}</td>
+                                            <td data-label="Status">
                                                 <span className={`status-badge ${l.status === 'Approved' ? 'success' : l.status === 'Rejected' ? 'danger' : 'warning'}`}>
                                                     {l.status}
                                                 </span>
@@ -390,7 +386,7 @@ const EmployeeProfile = () => {
                                         </tr>
                                     ))
                                 ) : (
-                                    <tr><td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#999' }}>No leave history found.</td></tr>
+                                    <tr><td colSpan="5" className="empty-table-message">No leave history found.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -401,7 +397,7 @@ const EmployeeProfile = () => {
             {/* --- TAB CONTENT: ATTENDANCE --- */}
             {activeTab === 'attendance' && (
                 <div className="employee-table-container fade-in">
-                    <h3 style={{ padding: '15px', borderBottom: '1px solid #eee', margin: 0 }}>Attendance Logs</h3>
+                    <h3 className="table-header-title">Attendance Logs</h3>
                     <table className="employee-table">
                         <thead>
                             <tr>
@@ -418,27 +414,27 @@ const EmployeeProfile = () => {
                             {attendanceLogs.length > 0 ? (
                                 attendanceLogs.map(log => (
                                     <tr key={log._id}>
-                                        <td style={{ fontWeight: '500' }}>{log.date}</td>
-                                        <td>{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                        <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
-                                        <td style={{ fontWeight: 'bold', color: '#555' }}>
+                                        <td data-label="Date" className="fw-500">{log.date}</td>
+                                        <td data-label="Check In">{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                        <td data-label="Check Out">{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                                        <td data-label="Working Hours" className="fw-bold text-dark-gray">
                                             {calculateDuration(log.checkIn, log.checkOut)}
                                         </td>
-                                        <td>
+                                        <td data-label="Status">
                                             <span className={`status-badge ${log.status === 'Present' ? 'success' : log.status === 'Half Day' ? 'warning' : 'danger'}`}>
                                                 {log.status}
                                             </span>
                                         </td>
-                                        <td style={{ fontSize: '12px', color: '#666' }}>{log.note || '-'}</td>
-                                        <td>
-                                            <button className="gts-btn primary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleEdit(log)}>
-                                                <FontAwesomeIcon icon={faEdit} /> Edit
+                                        <td data-label="Note" className="note-cell text-muted text-small">{log.note || '-'}</td>
+                                        <td data-label="Action">
+                                            <button className="gts-btn primary btn-small" onClick={() => handleEdit(log)}>
+                                                <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
                                             </button>
                                         </td>
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#999' }}>No logs found.</td></tr>
+                                <tr><td colSpan="7" className="empty-table-message">No logs found.</td></tr>
                             )}
                         </tbody>
                     </table>

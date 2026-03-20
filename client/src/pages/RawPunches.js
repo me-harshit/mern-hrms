@@ -101,55 +101,52 @@ const RawPunches = () => {
     }, [rawLogs, filterType, searchTerm, customDates]);
 
     return (
-        <div className="attendance-container">
+        <div className="attendance-container fade-in">
             {/* HEADER */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
-                <button className="gts-btn warning" onClick={() => navigate('/attendance-logs')} style={{ padding: '8px 15px' }}>
-                    <FontAwesomeIcon icon={faArrowLeft} /> Back to Logs
+            <div className="page-header-left">
+                <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/attendance-logs')}>
+                    <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back to Logs
                 </button>
-                <h1 className="page-title" style={{ margin: 0 }}>
-                    <FontAwesomeIcon icon={faFingerprint} style={{ marginRight: '10px', color: '#215D7B' }} />
+                <h1 className="page-title header-no-margin flex-row gap-10">
+                    <FontAwesomeIcon icon={faFingerprint} className="text-primary" />
                     Raw Biometric Punches
                 </h1>
             </div>
 
             {/* EXACT MATCH FILTER BAR */}
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <div className="filter-bar-card fade-in">
 
                 {/* 1. Filter Buttons */}
-                <div className="button-group" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                <div className="filter-buttons">
                     {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
                             key={type}
-                            className={`gts-btn ${filterType === type ? 'primary' : 'warning'}`}
-                            style={{ opacity: filterType === type ? 1 : 0.7, padding: '8px 15px', fontSize: '13px' }}
+                            className={`gts-btn filter-btn ${filterType === type ? 'primary active' : 'warning inactive'}`}
                             onClick={() => setFilterType(type)}
                         >
-                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} style={{ marginRight: '5px' }} />}
+                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} className="filter-icon" />}
                             {type}
                         </button>
                     ))}
                 </div>
 
-                {/* 2. Custom Date Inputs (Conditional) */}
+                {/* 2. Custom Date Inputs */}
                 {filterType === 'Custom' && (
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '5px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>From:</span>
+                    <div className="custom-date-filters fade-in">
+                        <div className="date-input-group">
+                            <span className="date-label">From:</span>
                             <input
                                 type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                className="swal2-input date-picker-small"
                                 value={customDates.from}
                                 onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })}
                             />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>To:</span>
+                        <div className="date-input-group">
+                            <span className="date-label">To:</span>
                             <input
                                 type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                className="swal2-input date-picker-small"
                                 value={customDates.to}
                                 onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })}
                             />
@@ -158,23 +155,12 @@ const RawPunches = () => {
                 )}
 
                 {/* 3. Search Bar */}
-                <div style={{ position: 'relative', minWidth: '250px' }}>
-                    <FontAwesomeIcon
-                        icon={faSearch}
-                        style={{
-                            position: 'absolute',
-                            left: '15px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: '#aaa',
-                            pointerEvents: 'none'
-                        }}
-                    />
+                <div className="search-wrapper">
+                    <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input
                         type="text"
                         placeholder="Search employee, Bio ID, or Device..."
-                        className="swal2-input"
-                        style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }}
+                        className="swal2-input search-input"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -182,8 +168,8 @@ const RawPunches = () => {
             </div>
 
             {/* METRIC SUMMARY */}
-            <div style={{ marginBottom: '20px', fontSize: '14px', fontWeight: '600', color: '#64748b', display: 'flex', justifyContent: 'flex-end' }}>
-                Showing {filteredLogs.length} raw punches
+            <div className="table-summary-text fade-in">
+                Showing <span className="text-primary fw-bold mx-1 fs-15">{filteredLogs.length}</span> raw punches
             </div>
 
             {/* TABLE */}
@@ -200,29 +186,39 @@ const RawPunches = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading raw punches...</td></tr>
+                            <tr><td colSpan="5" className="empty-table-message">Loading raw punches...</td></tr>
                         ) : filteredLogs.length === 0 ? (
-                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No punches found matching filters.</td></tr>
+                            <tr><td colSpan="5" className="empty-table-message">No punches found matching filters.</td></tr>
                         ) : (
                             filteredLogs.map(log => (
                                 <tr key={log._id}>
-                                    <td style={{ fontWeight: 'bold', color: '#215D7B' }}>{log.userId?.name || 'Unknown'}</td>
-                                    <td style={{ fontSize: '13px', color: '#555', fontWeight: '600' }}>{log.employeeId}</td>
-                                    <td>
-                                        <div style={{ fontWeight: '600', color: '#333' }}>
+                                    <td data-label="Employee" className="fw-bold text-primary">
+                                        {log.userId?.name || 'Unknown'}
+                                    </td>
+                                    
+                                    <td data-label="Biometric ID" className="fw-600 text-dark-gray text-small">
+                                        {log.employeeId}
+                                    </td>
+                                    
+                                    <td data-label="Date & Time">
+                                        <div className="fw-600 text-dark-gray">
                                             {new Date(log.timestamp).toLocaleDateString()}
                                         </div>
-                                        <div style={{ fontSize: '12px', color: '#777' }}>
+                                        <div className="text-small text-muted">
                                             {new Date(log.timestamp).toLocaleTimeString()}
                                         </div>
                                     </td>
-                                    <td>
-                                        <span className={`status-badge ${log.direction === 'IN' ? 'success' : 'danger'}`} style={{ padding: '4px 10px', fontSize: '11px', letterSpacing: '1px' }}>
+                                    
+                                    <td data-label="Direction">
+                                        <span className={`status-badge ${log.direction === 'IN' ? 'success' : 'danger'} tracking-wide`} style={{ padding: '4px 10px', fontSize: '11px' }}>
                                             {log.direction}
                                         </span>
                                     </td>
-                                    <td>
-                                        <div style={{ fontSize: '13px', color: '#333' }}>Device: <strong>{log.deviceId}</strong></div>
+                                    
+                                    <td data-label="Device">
+                                        <div className="text-small text-dark-gray">
+                                            Device: <strong>{log.deviceId}</strong>
+                                        </div>
                                     </td>
                                 </tr>
                             ))

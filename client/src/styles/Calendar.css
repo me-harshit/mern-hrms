@@ -1,82 +1,168 @@
+/* ==========================================================================
+   CALENDAR LAYOUT & HEADER
+   ========================================================================== */
 .calendar-page-container {
-    padding-bottom: 50px;
+    padding-bottom: 40px;
 }
 
-.calendar-header {
+.calendar-top-section {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.calendar-header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 15px;
 }
 
-/* Legend Styling */
+/* --- MINIMAL VIEW TOGGLE --- */
+.view-toggle-container {
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 8px;
+    display: flex;
+    gap: 4px;
+    border: 1px solid #e2e8f0;
+}
+
+.view-toggle-btn {
+    padding: 6px 14px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+}
+
+.view-toggle-btn .toggle-icon {
+    margin-right: 6px;
+    font-size: 12px;
+}
+
+.view-toggle-btn.active {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.view-toggle-btn:hover:not(.active) {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+/* --- LEGEND (RESPONSIVE) --- */
 .calendar-legend {
     display: flex;
-    gap: 20px;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 10px 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    border: 1px solid #eef2f6;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    font-size: 13px;
-    color: #64748b;
+    font-size: 12px;
+    color: #475569;
     font-weight: 500;
+    white-space: nowrap;
 }
 
 .dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    margin-right: 8px;
+    margin-right: 6px;
+    display: inline-block;
 }
 
-.dot.sunday { background: #fee2e2; border: 1px solid #ef4444; }
-.dot.holiday { background: #fef3c7; border: 1px solid #d97706; }
-.dot.leave { background: #dcfce7; border: 1px solid #16a34a; }
-.dot.absent { background: #ef4444; }
+/* Legend Colors (Update with your specific theme colors) */
+.dot.holiday { background-color: #3b82f6; } /* Blue */
+.dot.leave { background-color: #d946ef; }   /* Purple/Pink */
+.dot.half-day { background-color: #f59e0b; }/* Orange */
+.dot.absent { background-color: #ef4444; }  /* Red */
+.dot.sunday { background-color: #cbd5e1; }  /* Gray */
 
-/* The 12-Month Grid (3 Columns) */
-.year-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr); /* 3 Columns Fixed */
-    gap: 25px;
-}
 
-@media (max-width: 1100px) {
-    .year-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-@media (max-width: 768px) {
-    .year-grid { grid-template-columns: 1fr; }
-}
-
-/* Individual Month Card */
+/* ==========================================================================
+   MONTH CARD & SLIDER STRUCTURE
+   ========================================================================== */
 .month-card {
     background: white;
     border-radius: 12px;
     padding: 20px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
     border: 1px solid #f1f5f9;
 }
 
-.month-title {
-    text-align: center;
-    color: var(--primary);
+.slider-mode {
+    width: 100%;
+    max-width: 500px; /* Keep slider focused and clean */
+    padding: 25px;
+}
+
+.month-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 15px;
-    font-size: 16px;
+}
+
+.month-nav-btn {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--primary);
+    transition: 0.2s;
+}
+
+.month-nav-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.month-title {
+    margin: 0;
+    color: var(--primary);
     font-weight: 700;
 }
 
-/* Days Grid Logic */
+.slider-title {
+    font-size: 1.5rem;
+}
+
+.grid-title {
+    font-size: 1.1rem;
+    text-align: center;
+    width: 100%;
+}
+
 .week-header {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 12px;
     color: #94a3b8;
     margin-bottom: 10px;
@@ -84,284 +170,98 @@
 
 .days-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr); /* 7 Days a week */
-    gap: 5px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
 }
 
 .calendar-day {
-    height: 35px;
+    aspect-ratio: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 13px;
-    color: #334155;
     border-radius: 6px;
-    transition: 0.2s;
-}
-
-.calendar-day:hover {
-    background-color: #f8fafc;
-}
-
-/* Status Colors */
-.status-sunday {
-    background-color: #fff1f2;
-    color: #e11d48;
-    font-weight: 600;
-}
-
-.status-holiday {
-    background-color: #fffbeb;
-    color: #b45309;
-    font-weight: 600;
-    border: 1px dashed #f59e0b;
-}
-
-.status-leave {
-    background-color: #dcfce7;
-    color: #15803d;
-    font-weight: 700;
-}
-
-.status-absent {
-    background-color: #ef4444;
-    color: white;
-    font-weight: 700;
-}
-
-.empty {
-    background: transparent;
-    pointer-events: none;
-}
-
-
-/* --- CALENDAR STATUS COLORS --- */
-
-/* Holiday (Purple/Plum) */
-.calendar-day.status-holiday, .dot.holiday {
-    background-color: #A6477F; 
-    color: white;
-    font-weight: bold;
-}
-
-/* Leave (Orange) */
-.calendar-day.status-leave, .dot.leave {
-    background-color: #f59e0b;
-    color: white;
-}
-
-/* Half Day (Yellow/Dark Text) */
-.calendar-day.status-half-day, .dot.half-day {
-    background: linear-gradient(135deg, #fef08a 50%, #fff 50%); /* Half colored effect */
-    border: 1px solid #fef08a;
-    color: #854d0e;
-}
-
-/* Absent (Red) */
-.calendar-day.status-absent, .dot.absent {
-    background-color: #fee2e2;
-    color: #dc2626;
-    border: 1px solid #fca5a5;
-}
-
-/* Sunday (Light Gray) */
-.calendar-day.status-sunday, .dot.sunday {
-    background-color: #f1f5f9;
-    color: #94a3b8;
-}
-
-/* Tooltip behavior handled by standard HTML 'title' attribute or custom if preferred */
-.calendar-day {
-    cursor: default;
-}
-
-
-/* --- ADMIN HOLIDAY MANAGEMENT SECTION --- */
-
-.admin-holiday-card {
-    margin-top: 40px;
-    width: 100%;
-    padding: 0;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    background-color: #fff;
-}
-
-/* Header Area */
-.admin-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 30px;
     background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.header-left {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.header-icon-box {
-    background: #e0f2fe;
-    color: #0284c7;
-    width: 45px;
-    height: 45px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-}
-
-.header-title {
-    margin: 0;
-    color: #1e293b;
-    font-size: 18px;
-    font-weight: 700;
-}
-
-.header-subtitle {
-    margin: 4px 0 0;
-    color: #64748b;
-    font-size: 13px;
-}
-
-.add-holiday-btn {
-    padding: 10px 20px;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(33, 93, 123, 0.2);
-}
-
-/* Table Area */
-.admin-table-wrapper {
-    padding: 0;
-    margin: 0;
-}
-
-.holiday-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0;
-}
-
-.holiday-table thead {
-    background: #fff;
-    border-bottom: 2px solid #f1f5f9;
-}
-
-.holiday-table th {
-    padding: 18px 30px;
-    text-align: left;
-    color: #64748b;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-/* Column specific alignment */
-.holiday-table th.text-right, 
-.holiday-table td.text-right {
-    text-align: right;
-}
-
-.holiday-table tbody tr {
-    border-bottom: 1px solid #f1f5f9;
-    transition: background 0.2s;
-}
-
-.holiday-table tbody tr:hover {
-    background-color: #fcfcfc;
-}
-
-.holiday-table td {
-    padding: 20px 30px;
-}
-
-/* Table Content Styling */
-.td-date {
-    font-weight: 600;
     color: #334155;
-}
-
-.td-name {
-    font-size: 15px;
+    cursor: default;
     font-weight: 500;
-    color: #0f172a;
 }
 
-/* Empty State */
-.empty-state-container {
-    text-align: center;
-    padding: 50px;
-    color: #94a3b8;
+.calendar-day.empty {
+    background: transparent;
 }
 
-.empty-icon {
-    margin-bottom: 10px;
-    font-size: 24px;
-    opacity: 0.4;
-}
+/* Day Status Colors */
+.calendar-day.status-holiday { background-color: #bfdbfe; color: #1d4ed8; }
+.calendar-day.status-leave { background-color: #fbcfe8; color: #be185d; }
+.calendar-day.status-half-day { background-color: #fef3c7; color: #b45309; }
+.calendar-day.status-absent { background-color: #fee2e2; color: #b91c1c; }
+.calendar-day.status-sunday { background-color: #f1f5f9; color: #94a3b8; }
 
-/* --- Slider View Specific Styles --- */
-
-/* Make the card bigger in slider mode */
-.month-card.slider-mode {
-    max-width: 900px !important; /* Increased width */
-    width: 100%;
-    margin: 0 auto;
-    padding: 30px; /* More breathing room */
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-/* Make the specific days bigger in slider view */
-.month-card.slider-mode .days-grid {
-    grid-template-rows: repeat(auto-fill, minmax(100px, 1fr)); /* Taller cells */
-}
-
-.month-card.slider-mode .calendar-day {
-    min-height: 60px; /* Force taller cells */
-    font-size: 1.1rem;
+/* ==========================================================================
+   ANIMATIONS & LAYOUTS
+   ========================================================================== */
+.slider-view-wrapper {
     display: flex;
-    align-items: flex-start;
-    padding: 10px;
+    justify-content: center;
+    padding: 10px 0 20px 0;
+    overflow: hidden;
 }
 
-/* --- Animations --- */
-
-.slide-in-right {
-    animation: slideInRight 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+.slider-anim-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
-.slide-in-left {
-    animation: slideInLeft 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+.year-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
 }
 
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(30px);
+/* Keyframes for sliding (Ensure these match your existing animations if you had them) */
+.slide-in-right { animation: slideRight 0.3s ease-out forwards; }
+.slide-in-left { animation: slideLeft 0.3s ease-out forwards; }
+
+@keyframes slideRight {
+    0% { opacity: 0; transform: translateX(30px); }
+    100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideLeft {
+    0% { opacity: 0; transform: translateX(-30px); }
+    100% { opacity: 1; transform: translateX(0); }
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVENESS
+   ========================================================================== */
+@media screen and (max-width: 768px) {
+    .calendar-header-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
     }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
 
-@keyframes slideInLeft {
-    from {
-        opacity: 0;
-        transform: translateX(-30px);
+    .view-toggle-container {
+        width: 100%;
     }
-    to {
-        opacity: 1;
-        transform: translateX(0);
+
+    .view-toggle-btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .calendar-legend {
+        justify-content: center; /* Center legend items on mobile */
+        gap: 10px;
+    }
+    
+    .slider-mode {
+        padding: 15px; /* Reduce padding on small screens */
+    }
+
+    .slider-title {
+        font-size: 1.25rem;
     }
 }

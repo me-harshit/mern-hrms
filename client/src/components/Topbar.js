@@ -37,7 +37,7 @@ const Topbar = ({ onToggleSidebar }) => {
 
     return (
         <div className="topbar">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="topbar-left-section">
                 {/* Mobile Menu Trigger */}
                 <button className="menu-toggle" onClick={onToggleSidebar}>
                     <FontAwesomeIcon icon={faBars} />
@@ -48,8 +48,8 @@ const Topbar = ({ onToggleSidebar }) => {
             </div>
 
             <div className="profile-trigger">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                    <span className="user-greeting-name" style={{ color: '#7A7A7A', fontSize: '14px', fontWeight: '500' }}>
+                <div className="profile-trigger-wrapper">
+                    <span className="user-greeting-name">
                         Hi, {userName.split(' ')[0]}
                     </span>
                     <div className="profile-badge">{initials}</div>

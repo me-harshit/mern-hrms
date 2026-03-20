@@ -20,7 +20,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
     // Auto-close sidebar on mobile after clicking a link
     const handleLinkClick = () => {
-        if (window.innerWidth <= 991) {
+        if (window.innerWidth <= 768) {
             onClose();
         }
     };

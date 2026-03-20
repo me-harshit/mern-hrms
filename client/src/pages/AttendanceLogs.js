@@ -10,7 +10,7 @@ const AttendanceLogs = () => {
     const navigate = useNavigate();
     const [logs, setLogs] = useState([]);
     const [filteredLogs, setFilteredLogs] = useState([]);
-    const [filterType, setFilterType] = useState('Today'); // Today, Week, Month, All, Custom
+    const [filterType, setFilterType] = useState('Today'); // Today, Yesterday, Week, Month, All, Custom
     const [searchTerm, setSearchTerm] = useState('');
 
     // State for Custom Date Range
@@ -91,9 +91,9 @@ const AttendanceLogs = () => {
         }
     };
 
-    // --- NEW HELPER: CALCULATE DURATION ---
+    // --- HELPER: CALCULATE DURATION ---
     const calculateDuration = (start, end) => {
-        if (!start || !end) return <span style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>In Progress</span>;
+        if (!start || !end) return <span className="text-muted italic text-small">In Progress</span>;
 
         const startTime = new Date(start);
         const endTime = new Date(end);
@@ -122,8 +122,8 @@ const AttendanceLogs = () => {
             title: `Edit Log: ${log.userId.name}`,
             html: `
                 <div style="text-align:left">
-                    <p style="font-size:12px; color:#666; margin-bottom:10px;">
-                        <span style="color:#dc2626">*</span> Changing time will auto-recalculate Status.
+                    <p class="text-small text-muted" style="margin-bottom:10px;">
+                        <span class="text-danger">*</span> Changing time will auto-recalculate Status.
                     </p>
 
                     <label class="swal-custom-label">Check In Time</label>
@@ -188,61 +188,54 @@ const AttendanceLogs = () => {
 
     return (
         <div className="attendance-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-                <div>
-                    <h1 className="page-title" style={{ margin: 0 }}>Attendance Logs</h1>
-                </div>
-
-                {/* Wrapped the buttons in a flex div with a gap of 15px */}
-                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-                    {/* Changed to a red/danger theme with the faUserTimes icon */}
-                    <button className="gts-btn danger" onClick={() => navigate('/absent-employees')} style={{ padding: '8px 15px', fontSize: '13px' }}>
-                        <FontAwesomeIcon icon={faUserTimes} style={{ marginRight: '8px' }} /> View Absent Employees
+            
+            <div className="page-header-row">
+                <h1 className="page-title header-no-margin">Attendance Logs</h1>
+                
+                <div className="header-actions">
+                    <button className="gts-btn danger btn-small" onClick={() => navigate('/absent-employees')}>
+                        <FontAwesomeIcon icon={faUserTimes} className="btn-icon" /> View Absent Employees
                     </button>
-
-                    <button className="action-btn-primary" onClick={() => navigate('/raw-punches')} style={{ padding: '8px 15px', fontSize: '13px' }}>
-                        <FontAwesomeIcon icon={faFingerprint} style={{ marginRight: '8px' }} /> View Raw Punches
+                    <button className="action-btn-primary btn-small" onClick={() => navigate('/raw-punches')}>
+                        <FontAwesomeIcon icon={faFingerprint} className="btn-icon" /> View Raw Punches
                     </button>
                 </div>
             </div>
 
-            {/* FILTERS BAR */}
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
-
+            {/* FILTERS BAR (Reusing the CSS from earlier) */}
+            <div className="filter-bar-card fade-in">
+                
                 {/* 1. Filter Buttons */}
-                <div className="button-group" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                <div className="filter-buttons">
                     {['Today', 'Yesterday', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
                             key={type}
-                            className={`gts-btn ${filterType === type ? 'primary' : 'warning'}`}
-                            style={{ opacity: filterType === type ? 1 : 0.7, padding: '8px 15px', fontSize: '13px' }}
+                            className={`gts-btn filter-btn ${filterType === type ? 'primary active' : 'warning inactive'}`}
                             onClick={() => setFilterType(type)}
                         >
-                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} style={{ marginRight: '5px' }} />}
+                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} className="filter-icon" />}
                             {type}
                         </button>
                     ))}
                 </div>
 
-                {/* 2. Custom Date Inputs (Conditional) */}
+                {/* 2. Custom Date Inputs */}
                 {filterType === 'Custom' && (
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '5px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>From:</span>
+                    <div className="custom-date-filters fade-in">
+                        <div className="date-input-group">
+                            <span className="date-label">From:</span>
                             <input
                                 type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                className="swal2-input date-picker-small"
                                 value={customDates.from}
                                 onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })}
                             />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>To:</span>
+                        <div className="date-input-group">
+                            <span className="date-label">To:</span>
                             <input
                                 type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                className="swal2-input date-picker-small"
                                 value={customDates.to}
                                 onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })}
                             />
@@ -251,23 +244,12 @@ const AttendanceLogs = () => {
                 )}
 
                 {/* 3. Search Bar */}
-                <div style={{ position: 'relative', minWidth: '250px' }}>
-                    <FontAwesomeIcon
-                        icon={faSearch}
-                        style={{
-                            position: 'absolute',
-                            left: '15px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: '#aaa',
-                            pointerEvents: 'none'
-                        }}
-                    />
+                <div className="search-wrapper">
+                    <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input
                         type="text"
                         placeholder="Search Employee..."
-                        className="swal2-input"
-                        style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }}
+                        className="swal2-input search-input"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -275,7 +257,7 @@ const AttendanceLogs = () => {
             </div>
 
             {/* TABLE */}
-            <div className="employee-table-container">
+            <div className="employee-table-container fade-in">
                 <table className="employee-table">
                     <thead>
                         <tr>
@@ -291,31 +273,42 @@ const AttendanceLogs = () => {
                     </thead>
                     <tbody>
                         {filteredLogs.length === 0 ? (
-                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#888' }}>No attendance records found for this selection.</td></tr>
+                            <tr>
+                                <td colSpan="8" className="empty-table-message">
+                                    No attendance records found for this selection.
+                                </td>
+                            </tr>
                         ) : (
                             filteredLogs.map(log => (
                                 <tr key={log._id}>
-                                    <td style={{ fontWeight: 'bold', color: '#215D7B' }}>{log.userId?.name || 'Unknown'}</td>
-                                    <td>{log.date}</td>
-                                    <td>{new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                    <td>{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                                    <td data-label="Employee" className="fw-bold text-primary">
+                                        {log.userId?.name || 'Unknown'}
+                                    </td>
+                                    <td data-label="Date">{log.date}</td>
+                                    <td data-label="In Time">
+                                        {new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </td>
+                                    <td data-label="Out Time">
+                                        {log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                    </td>
 
-                                    {/* --- NEW COLUMN --- */}
-                                    <td style={{ fontWeight: 'bold', color: '#555' }}>
+                                    <td data-label="Working Hours" className="fw-bold text-dark-gray">
                                         {calculateDuration(log.checkIn, log.checkOut)}
                                     </td>
 
-                                    <td>
+                                    <td data-label="Status">
                                         <span className={`status-badge ${log.status === 'Present' ? 'success' :
                                             log.status === 'Half Day' ? 'warning' : 'danger'
-                                            }`}>
+                                        }`}>
                                             {log.status}
                                         </span>
                                     </td>
-                                    <td style={{ fontSize: '12px', maxWidth: '180px', color: '#555' }}>{log.note || '-'}</td>
-                                    <td>
-                                        <button className="gts-btn primary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleEdit(log)}>
-                                            <FontAwesomeIcon icon={faEdit} /> Edit
+                                    <td data-label="Note" className="text-small text-muted note-cell">
+                                        {log.note || '-'}
+                                    </td>
+                                    <td data-label="Action">
+                                        <button className="gts-btn primary btn-small" onClick={() => handleEdit(log)}>
+                                            <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
                                         </button>
                                     </td>
                                 </tr>

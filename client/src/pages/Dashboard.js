@@ -61,14 +61,13 @@ const Dashboard = () => {
             {!isEmployee && (
                 <div className="stats-grid">
                     
-                    {/* Total Employees -> Navigates to Employees */}
+                    {/* Total Employees */}
                     <div 
-                        className="stat-card" 
+                        className="stat-card theme-blue clickable-card" 
                         onClick={() => navigate('/employees')} 
-                        style={{ cursor: 'pointer', border: '1px solid #e0f2fe' }}
                         title="View Employee Directory"
                     >
-                        <div className="stat-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+                        <div className="stat-icon">
                             <FontAwesomeIcon icon={faUsers} />
                         </div>
                         <div className="stat-info">
@@ -77,14 +76,13 @@ const Dashboard = () => {
                         </div>
                     </div>
                     
-                    {/* Present Today -> Navigates to Attendance Logs */}
+                    {/* Present Today */}
                     <div 
-                        className="stat-card" 
+                        className="stat-card theme-green clickable-card" 
                         onClick={() => navigate('/attendance-logs')} 
-                        style={{ cursor: 'pointer', border: '1px solid #dcfce7' }}
                         title="View Attendance Logs"
                     >
-                        <div className="stat-icon" style={{ background: '#dcfce7', color: '#16a34a' }}>
+                        <div className="stat-icon">
                             <FontAwesomeIcon icon={faUserCheck} />
                         </div>
                         <div className="stat-info">
@@ -93,30 +91,28 @@ const Dashboard = () => {
                         </div>
                     </div>
 
-                    {/* Live Absence -> Navigates to Absent Employees */}
+                    {/* Live Absence */}
                     <div 
-                        className="stat-card" 
+                        className="stat-card theme-red clickable-card" 
                         onClick={() => navigate('/absent-employees')} 
-                        style={{ cursor: 'pointer', border: '1px solid #fee2e2' }}
                         title="View Live Absence Dashboard"
                     >
-                        <div className="stat-icon" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                        <div className="stat-icon">
                             <FontAwesomeIcon icon={faUserTimes} />
                         </div>
                         <div className="stat-info">
                             <p>Live Absence</p>
-                            <h3 style={{ color: '#dc2626' }}>{stats.absentToday}</h3>
+                            <h3 className="text-danger">{stats.absentToday}</h3>
                         </div>
                     </div>
 
-                    {/* Pending Actions -> Navigates to Leave Requests */}
+                    {/* Pending Actions */}
                     <div 
-                        className="stat-card" 
+                        className="stat-card theme-yellow clickable-card" 
                         onClick={() => navigate('/leave-requests')} 
-                        style={{ cursor: 'pointer', border: '1px solid #fef3c7' }}
                         title="View Leave Requests"
                     >
-                        <div className="stat-icon" style={{ background: '#fef3c7', color: '#d97706' }}>
+                        <div className="stat-icon">
                             <FontAwesomeIcon icon={faClipboardList} />
                         </div>
                         <div className="stat-info">
@@ -125,14 +121,13 @@ const Dashboard = () => {
                         </div>
                     </div>
                     
-                    {/* On Leave -> Navigates to Leave Requests */}
+                    {/* On Leave */}
                     <div 
-                        className="stat-card" 
+                        className="stat-card theme-purple clickable-card" 
                         onClick={() => navigate('/leave-requests')} 
-                        style={{ cursor: 'pointer', border: '1px solid #f3e8ff' }}
                         title="View Leave Requests"
                     >
-                        <div className="stat-icon" style={{ background: '#f3e8ff', color: '#db2777' }}>
+                        <div className="stat-icon">
                             <FontAwesomeIcon icon={faPlaneDeparture} />
                         </div>
                         <div className="stat-info">
@@ -146,22 +141,22 @@ const Dashboard = () => {
             {/* --- EMPLOYEE VIEW --- */}
             {isEmployee && (
                 <div className="stats-grid">
-                    <div className="stat-card">
-                        <div className="stat-icon" style={{ background: '#dcfce7', color: '#16a34a' }}><FontAwesomeIcon icon={faCalendarCheck} /></div>
+                    <div className="stat-card theme-green">
+                        <div className="stat-icon"><FontAwesomeIcon icon={faCalendarCheck} /></div>
                         <div className="stat-info">
                             <p>Attendance (Month)</p>
                             <h3>{stats.presentDays} Days</h3>
                         </div>
                     </div>
-                    <div className="stat-card">
-                        <div className="stat-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}><FontAwesomeIcon icon={faBriefcase} /></div>
+                    <div className="stat-card theme-blue">
+                        <div className="stat-icon"><FontAwesomeIcon icon={faBriefcase} /></div>
                         <div className="stat-info">
                             <p>Leave Balance</p>
                             <h3>{stats.leaveBalance} / {stats.totalLeaves}</h3>
                         </div>
                     </div>
-                    <div className="stat-card">
-                        <div className="stat-icon" style={{ background: '#fef9c3', color: '#ca8a04' }}><FontAwesomeIcon icon={faClock} /></div>
+                    <div className="stat-card theme-yellow">
+                        <div className="stat-icon"><FontAwesomeIcon icon={faClock} /></div>
                         <div className="stat-info">
                             <p>Pending Requests</p>
                             <h3>{stats.myPending}</h3>
@@ -171,9 +166,9 @@ const Dashboard = () => {
             )}
 
             {/* --- COMMON QUICK ACTIONS --- */}
-            <div className="recent-activity-section" style={{ marginTop: '30px' }}>
+            <div className="quick-actions-section">
                 <h3>Quick Actions</h3>
-                <div className="quick-actions-grid" style={{ display: 'flex', gap: '15px', marginTop: '15px' }}>
+                <div className="quick-actions-grid">
                     <button className="gts-btn primary" onClick={() => navigate('/attendance')}>
                         Mark Attendance
                     </button>

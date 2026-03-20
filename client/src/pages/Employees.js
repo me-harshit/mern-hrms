@@ -4,6 +4,7 @@ import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faUserTie, faEdit, faCalendarAlt, faSearch, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
+import '../styles/App.css';
 
 const Employees = () => {
     const [employees, setEmployees] = useState([]);
@@ -77,7 +78,7 @@ const Employees = () => {
             showCancelButton: true,
             confirmButtonText: 'Create Account',
             confirmButtonColor: '#215D7B',
-            width: '600px', // Made slightly wider for the new inputs
+            width: '600px', 
             preConfirm: () => {
                 return {
                     name: document.getElementById('add-name').value,
@@ -126,37 +127,35 @@ const Employees = () => {
 
     return (
         <div className="employee-page fade-in">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
-                <h1 className="page-title" style={{ margin: 0 }}>Employee Directory</h1>
+            {/* HEADER (Using Isolated Classes) */}
+            <div className="employee-page-header">
+                <h1 className="page-title header-no-margin">Employee Directory</h1>
                 
-                <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ position: 'relative', minWidth: '250px' }}>
-                        <FontAwesomeIcon 
-                            icon={faSearch} 
-                            style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} 
-                        />
+                <div className="employee-header-actions">
+                    <div className="search-wrapper">
+                        <FontAwesomeIcon icon={faSearch} className="search-icon" />
                         <input
                             type="text"
                             placeholder="Search by name, email, or ID..."
-                            className="swal2-input"
-                            style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }}
+                            className="swal2-input search-input"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
 
-                    <button className="action-btn-primary" onClick={handleAddEmployee} style={{ whiteSpace: 'nowrap' }}>
-                        <FontAwesomeIcon icon={faPlus} style={{ marginRight: '5px' }} /> Add Employee
+                    {/* Button restored to standard size for desktop */}
+                    <button className="gts-btn primary" onClick={handleAddEmployee}>
+                        <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Add Employee
                     </button>
                 </div>
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: '50px', color: '#7A7A7A' }}>
+                <div className="empty-table-message">
                     <p>Loading employee records...</p>
                 </div>
             ) : (
-                <div className="employee-table-container">
+                <div className="employee-table-container fade-in">
                     <table className="employee-table">
                         <thead>
                             <tr>
@@ -170,55 +169,58 @@ const Employees = () => {
                         <tbody>
                             {processedEmployees.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#999' }}>
+                                    <td colSpan="5" className="empty-table-message">
                                         No employees found matching your search.
                                     </td>
                                 </tr>
                             ) : (
                                 processedEmployees.map(emp => (
                                     <tr key={emp._id}>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <td data-label="Employee">
+                                            <div className="flex-row gap-10">
                                                 <div className="table-avatar">
                                                     <FontAwesomeIcon icon={faUserTie} />
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontWeight: '600', color: '#1e293b' }}>{emp.name}</div>
-                                                    <div style={{ fontSize: '12px', color: '#7A7A7A' }}>
-                                                        <span style={{ fontWeight: 'bold', color: '#215D7B' }}>{emp.employeeId || 'No ID'}</span> • {emp.email}
+                                                    <div className="fw-600 text-dark-blue">{emp.name}</div>
+                                                    <div className="text-small text-muted">
+                                                        <span className="fw-bold text-primary">{emp.employeeId || 'No ID'}</span> • {emp.email}
                                                     </div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>
-                                            <div style={{ fontSize: '14px', color: '#475569' }}>
-                                                <FontAwesomeIcon icon={faCalendarAlt} style={{ marginRight: '8px', color: '#cbd5e1' }} />
+                                        
+                                        <td data-label="Joining Date">
+                                            <div className="fs-14 text-dark-gray">
+                                                <FontAwesomeIcon icon={faCalendarAlt} className="text-muted mr-5" />
                                                 {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-GB') : 'N/A'}
                                             </div>
                                         </td>
-                                        <td>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                                        
+                                        <td data-label="Role / Shift">
+                                            <div className="flex-col align-start gap-5">
                                                 <span className={`role-tag ${emp.role.toLowerCase()}`}>
                                                     {emp.role}
                                                 </span>
-                                                {/* NEW SHIFT BADGE */}
-                                                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                <span className="shift-badge">
                                                     {emp.shiftType === 'NIGHT' ? (
-                                                        <><FontAwesomeIcon icon={faMoon} style={{ color: '#8b5cf6', marginRight: '4px' }} /> Night Shift</>
+                                                        <><FontAwesomeIcon icon={faMoon} className="text-moon" /> Night Shift</>
                                                     ) : (
-                                                        <><FontAwesomeIcon icon={faSun} style={{ color: '#f59e0b', marginRight: '4px' }} /> Day Shift</>
+                                                        <><FontAwesomeIcon icon={faSun} className="text-sun" /> Day Shift</>
                                                     )}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td>
+                                        
+                                        <td data-label="Status">
                                             <span className={emp.status === 'ACTIVE' ? 'status-active' : 'status-inactive'}>
                                                 {emp.status}
                                             </span>
                                         </td>
-                                        <td>
+                                        
+                                        <td data-label="Actions">
                                             <button className="edit-btn" onClick={() => handleEditEmployee(emp)}>
-                                                <FontAwesomeIcon icon={faEdit} style={{ marginRight: '5px' }} /> Edit
+                                                <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
                                             </button>
                                         </td>
                                     </tr>

@@ -43,7 +43,7 @@ const Attendance = () => {
 
     // --- HELPER: CALCULATE WORKING HOURS ---
     const calculateDuration = (start, end) => {
-        if (!start || !end) return <span style={{color: '#999', fontStyle: 'italic'}}>Ongoing</span>;
+        if (!start || !end) return <span className="text-muted italic">Ongoing</span>;
         
         const startTime = new Date(start);
         const endTime = new Date(end);
@@ -118,27 +118,26 @@ const Attendance = () => {
         <div className="attendance-container">
             
             {/* Header with Clock */}
-            <div className="attendance-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-                <h2 className="page-title" style={{ fontSize: '24px', margin: 0 }}>My Attendance</h2>
-                <div className="digital-clock" style={{ fontSize: '18px', fontWeight: 'bold', color: '#215D7B', background: '#fff', padding: '10px 20px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                    <FontAwesomeIcon icon={faClock} style={{ marginRight: '8px', color: '#94a3b8' }} />
+            <div className="attendance-header">
+                <h2 className="page-title header-no-margin">My Attendance</h2>
+                <div className="digital-clock clock-light">
+                    <FontAwesomeIcon icon={faClock} className="clock-icon" />
                     {currentTime.toLocaleTimeString()}
                 </div>
             </div>
 
             {/* FILTER CONTROLS */}
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', marginBottom: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="control-card filter-bar-card">
                 
                 {/* 1. Filter Buttons */}
-                <div className="button-group" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                <div className="button-group filter-buttons">
                     {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
                             key={type}
-                            className={`gts-btn ${filterType === type ? 'primary' : 'warning'}`}
-                            style={{ opacity: filterType === type ? 1 : 0.7, padding: '8px 15px', fontSize: '13px' }}
+                            className={`gts-btn filter-btn ${filterType === type ? 'primary active' : 'warning inactive'}`}
                             onClick={() => setFilterType(type)}
                         >
-                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} style={{ marginRight: '5px' }} />}
+                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} className="filter-icon" />}
                             {type}
                         </button>
                     ))}
@@ -146,23 +145,21 @@ const Attendance = () => {
 
                 {/* 2. Custom Date Inputs (Conditional) */}
                 {filterType === 'Custom' && (
-                    <div className="fade-in" style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '5px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>From:</span>
+                    <div className="fade-in custom-date-filters">
+                        <div className="date-input-group">
+                            <span className="date-label">From:</span>
                             <input
                                 type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                className="swal2-input date-picker-small"
                                 value={customDates.from}
                                 onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })}
                             />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>To:</span>
+                        <div className="date-input-group">
+                            <span className="date-label">To:</span>
                             <input
                                 type="date"
-                                className="swal2-input"
-                                style={{ margin: 0, height: '35px', padding: '0 10px', fontSize: '13px', width: '130px' }}
+                                className="swal2-input date-picker-small"
                                 value={customDates.to}
                                 onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })}
                             />
@@ -171,23 +168,12 @@ const Attendance = () => {
                 )}
 
                 {/* 3. Search Bar */}
-                <div style={{ position: 'relative', minWidth: '250px' }}>
-                    <FontAwesomeIcon
-                        icon={faSearch}
-                        style={{
-                            position: 'absolute',
-                            left: '15px',
-                            top: '50%',                  
-                            transform: 'translateY(-50%)', 
-                            color: '#aaa',
-                            pointerEvents: 'none'        
-                        }}
-                    />
+                <div className="search-wrapper">
+                    <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input
                         type="text"
                         placeholder="Search records..."
-                        className="swal2-input"
-                        style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }}
+                        className="swal2-input search-input"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -196,8 +182,8 @@ const Attendance = () => {
 
             {/* LOGS TABLE */}
             <div className="employee-table-container fade-in">
-                <h3 style={{ padding: '20px', fontSize: '16px', margin: 0, borderBottom: '1px solid #eee', color: '#215D7B', display: 'flex', alignItems: 'center' }}>
-                    <FontAwesomeIcon icon={faHistory} style={{ marginRight: '10px' }} /> Activity Log
+                <h3 className="table-header-title">
+                    <FontAwesomeIcon icon={faHistory} className="table-header-icon" /> Activity Log
                 </h3>
                 <table className="employee-table">
                     <thead>
@@ -214,37 +200,35 @@ const Attendance = () => {
                     <tbody>
                         {filteredLogs.length === 0 ? (
                             <tr>
-                                <td colSpan="7" style={{ textAlign: 'center', color: '#999', padding: '40px' }}>
+                                <td colSpan="7" className="empty-table-message">
                                     No records match your filters.
                                 </td>
                             </tr>
                         ) : (
                             filteredLogs.map((log, index) => (
                                 <tr key={index}>
-                                    <td style={{ fontWeight: '600', color: '#555' }}>{log.date}</td>
-                                    <td>
+                                    <td data-label="Date" className="fw-600 text-dark-gray">{log.date}</td>
+                                    <td data-label="Time In">
                                         {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
                                     </td>
-                                    <td>
+                                    <td data-label="Time Out">
                                         {log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
                                     </td>
                                     
-                                    {/* WORKING HOURS COLUMN */}
-                                    <td style={{ fontWeight: 'bold', color: '#215D7B' }}>
+                                    <td data-label="Work Hours" className="fw-bold text-primary">
                                         {calculateDuration(log.checkIn, log.checkOut)}
                                     </td>
 
-                                    {/* BREAK TIME COLUMN */}
-                                    <td style={{ fontWeight: 'bold', color: '#e67e22' }}>
+                                    <td data-label="Break Time" className="fw-bold text-orange">
                                         {formatBreakTime(log.breakTimeTaken)}
                                     </td>
 
-                                    <td>
+                                    <td data-label="Status">
                                         <span className={`status-badge ${log.status === 'Half Day' || log.status === 'Late' ? 'warning' : 'success'}`}>
                                             {log.status}
                                         </span>
                                     </td>
-                                    <td style={{ fontSize: '13px', color: '#777' }}>
+                                    <td data-label="Note" className="text-small text-muted">
                                         {log.note || '-'}
                                     </td>
                                 </tr>

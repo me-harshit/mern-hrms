@@ -157,50 +157,73 @@ const AdminPurchases = () => {
 
     return (
         <div className="attendance-container fade-in">
-            <h1 className="page-title">
-                <FontAwesomeIcon icon={faBoxOpen} style={{ marginRight: '10px' }} />
-                All Company Purchases
-            </h1>
+            
+            <div className="page-header-row mb-20">
+                <h1 className="page-title header-no-margin">
+                    <FontAwesomeIcon icon={faBoxOpen} className="btn-icon" />
+                    All Company Purchases
+                </h1>
+            </div>
 
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', padding: '20px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <div className="button-group" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            {/* EXACT MATCH FILTER BAR */}
+            <div className="filter-bar-card fade-in">
+
+                {/* 1. Filter Buttons */}
+                <div className="filter-buttons">
                     {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
                             key={type}
-                            className={`gts-btn ${filterType === type ? 'primary' : 'warning'}`}
-                            style={{ opacity: filterType === type ? 1 : 0.7, padding: '8px 15px', fontSize: '13px' }}
+                            className={`gts-btn filter-btn ${filterType === type ? 'primary active' : 'warning inactive'}`}
                             onClick={() => setFilterType(type)}
                         >
-                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} style={{ marginRight: '5px' }} />}
+                            {type === 'Custom' && <FontAwesomeIcon icon={faFilter} className="filter-icon" />}
                             {type}
                         </button>
                     ))}
                 </div>
 
+                {/* 2. Custom Date Inputs */}
                 {filterType === 'Custom' && (
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '5px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>From:</span>
-                            <input type="date" className="swal2-input" style={{ margin: 0, height: '35px', width: '130px' }} value={customDates.from} onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })} />
+                    <div className="custom-date-filters fade-in">
+                        <div className="date-input-group">
+                            <span className="date-label">From:</span>
+                            <input 
+                                type="date" 
+                                className="swal2-input date-picker-small" 
+                                value={customDates.from} 
+                                onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })} 
+                            />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>To:</span>
-                            <input type="date" className="swal2-input" style={{ margin: 0, height: '35px', width: '130px' }} value={customDates.to} onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })} />
+                        <div className="date-input-group">
+                            <span className="date-label">To:</span>
+                            <input 
+                                type="date" 
+                                className="swal2-input date-picker-small" 
+                                value={customDates.to} 
+                                onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })} 
+                            />
                         </div>
                     </div>
                 )}
 
-                <div style={{ position: 'relative', minWidth: '250px' }}>
-                    <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
-                    <input type="text" placeholder="Search item, status, employee..." className="swal2-input" style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                {/* 3. Search Bar */}
+                <div className="search-wrapper">
+                    <FontAwesomeIcon icon={faSearch} className="search-icon" />
+                    <input 
+                        type="text" 
+                        placeholder="Search item, status, employee..." 
+                        className="swal2-input search-input" 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)} 
+                    />
                 </div>
             </div>
 
-            <div style={{ marginBottom: '20px', fontSize: '15px', fontWeight: '600', color: '#475569', display: 'flex', justifyContent: 'flex-end' }}>
-                Showing {filteredPurchases.length} records &nbsp;|&nbsp; Total Value: <span style={{ color: '#e67e22', marginLeft: '5px' }}>₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
+            <div className="table-summary-text fade-in">
+                Showing {filteredPurchases.length} records &nbsp;|&nbsp; Total Value: <span className="text-orange mx-1">₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
             </div>
 
-            <div className="employee-table-container">
+            <div className="employee-table-container fade-in">
                 <table className="employee-table">
                     <thead>
                         <tr>
@@ -215,67 +238,74 @@ const AdminPurchases = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>Loading...</td></tr>
+                            <tr><td colSpan="7" className="empty-table-message">Loading...</td></tr>
                         ) : filteredPurchases.length === 0 ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No records found.</td></tr>
+                            <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
                         ) : (
                             filteredPurchases.map(item => (
                                 <tr key={item._id}>
                                     <td data-label="Employee">
-                                        <div style={{ fontWeight: 'bold', color: '#215D7B' }}>{item.purchasedBy?.name || 'Unknown'}</div>
-                                        <div style={{ fontSize: '11px', color: '#777' }}>{item.purchasedBy?.employeeId || '-'}</div>
-                                    </td>
-                                    <td data-label="Item & Date">
-                                        <div style={{ fontWeight: '600' }}>{item.itemName} <span style={{fontSize:'12px', color:'#888'}}>(x{item.quantity})</span></div>
-                                        <div style={{ fontSize: '12px', color: '#777' }}>{new Date(item.purchaseDate).toLocaleDateString()}</div>
-                                    </td>
-                                    <td data-label="Project"><div>{item.projectName || '-'}</div></td>
-                                    <td data-label="Amount"><div className="purchase-card-amount">₹ {item.amount.toLocaleString('en-IN')}</div></td>
-                                    <td data-label="Location/Status">
-                                        <div>
-                                            <div style={{ fontSize: '13px', color: '#555' }}><FontAwesomeIcon icon={faMapMarkerAlt} style={{ color: '#e67e22' }} /> {item.storageLocation || 'Unassigned'}</div>
-                                            <span className={`status-badge ${item.inventoryStatus === 'Available' ? 'success' : item.inventoryStatus === 'In Use' ? 'warning' : 'danger'}`}>{item.inventoryStatus}</span>
-                                        </div>
+                                        <div className="fw-bold text-primary">{item.purchasedBy?.name || 'Unknown'}</div>
+                                        <div className="text-small text-muted">{item.purchasedBy?.employeeId || '-'}</div>
                                     </td>
                                     
-                                    {/* --- UPDATED DOCUMENTS SECTION --- */}
+                                    <td data-label="Item & Date">
+                                        <div className="fw-600">{item.itemName} <span className="text-small text-muted">(x{item.quantity})</span></div>
+                                        <div className="text-small text-muted">{new Date(item.purchaseDate).toLocaleDateString()}</div>
+                                    </td>
+                                    
+                                    <td data-label="Project">
+                                        <div className="fw-500 text-small">{item.projectName || '-'}</div>
+                                    </td>
+                                    
+                                    <td data-label="Amount">
+                                        <div className="fw-bold text-dark-blue fs-15">₹ {item.amount.toLocaleString('en-IN')}</div>
+                                    </td>
+                                    
+                                    <td data-label="Location / Status">
+                                        <div className="text-small text-muted mb-5">
+                                            <FontAwesomeIcon icon={faMapMarkerAlt} className="text-orange btn-icon" /> 
+                                            {item.storageLocation || 'Unassigned'}
+                                        </div>
+                                        <span className={`status-badge ${item.inventoryStatus === 'Available' ? 'success' : item.inventoryStatus === 'In Use' ? 'warning' : 'danger'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                            {item.inventoryStatus}
+                                        </span>
+                                    </td>
+                                    
                                     <td data-label="Documents">
-                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        <div className="flex-row gap-5 flex-wrap">
                                             {item.invoiceUrl ? (
                                                 <button 
                                                     onClick={() => viewFile(item.invoiceUrl, 'Invoice Document')} 
-                                                    className="gts-btn" 
-                                                    style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: '#f1f5f9', color: '#215D7B', border: '1px solid #cbd5e1' }}
+                                                    className="gts-btn doc-btn doc-invoice" 
                                                 >
-                                                    <FontAwesomeIcon icon={faFileInvoice} style={{ marginRight: '4px' }}/> Invoice
+                                                    <FontAwesomeIcon icon={faFileInvoice} className="btn-icon"/> Invoice
                                                 </button>
-                                            ) : <span style={{ color: '#ccc', fontSize: '12px' }}>No Invoice</span>}
+                                            ) : <span className="text-muted text-small">-</span>}
 
                                             {item.paymentScreenshotUrl ? (
                                                 <button 
                                                     onClick={() => viewFile(item.paymentScreenshotUrl, 'Payment Screenshot')} 
-                                                    className="gts-btn"
-                                                    style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: '#fdf4ff', color: '#8e44ad', border: '1px solid #f0abfc' }}
+                                                    className="gts-btn doc-btn doc-proof"
                                                 >
-                                                    <FontAwesomeIcon icon={faImage} style={{ marginRight: '4px' }}/> Proof
+                                                    <FontAwesomeIcon icon={faImage} className="btn-icon"/> Proof
                                                 </button>
                                             ) : null}
 
                                             {item.productMediaUrl ? (
                                                 <button 
                                                     onClick={() => viewFile(item.productMediaUrl, 'Product Media')} 
-                                                    className="gts-btn"
-                                                    style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: '#ecfdf5', color: '#059669', border: '1px solid #6ee7b7' }}
+                                                    className="gts-btn doc-btn doc-media"
                                                 >
-                                                    <FontAwesomeIcon icon={faBoxOpen} style={{ marginRight: '4px' }}/> Media
+                                                    <FontAwesomeIcon icon={faBoxOpen} className="btn-icon"/> Media
                                                 </button>
                                             ) : null}
                                         </div>
                                     </td>
                                     
                                     <td data-label="Action">
-                                        <button className="gts-btn primary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleEditInventory(item)}>
-                                            <FontAwesomeIcon icon={faEdit} style={{ marginRight: '5px' }} /> Edit
+                                        <button className="gts-btn primary btn-small" onClick={() => handleEditInventory(item)}>
+                                            <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
                                         </button>
                                     </td>
                                 </tr>

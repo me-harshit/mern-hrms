@@ -13,7 +13,7 @@ const CalendarPage = () => {
     const [viewMode, setViewMode] = useState('slider'); // 'slider' | 'full'
     const [currentMonthIndex, setCurrentMonthIndex] = useState(new Date().getMonth());
     
-    // New: Track direction for animation ('right' or 'left')
+    // Track direction for animation ('right' or 'left')
     const [slideDirection, setSlideDirection] = useState('right'); 
 
     const months = [
@@ -124,7 +124,6 @@ const CalendarPage = () => {
             const eventLabel = events[dateStr] ? events[dateStr].label : null;
 
             days.push(
-                // UPDATED: Removed text content inside div, only title remains
                 <div key={day} className={`calendar-day ${statusClass}`} title={eventLabel || ''}>
                     {day}
                 </div>
@@ -134,28 +133,26 @@ const CalendarPage = () => {
     };
 
     const MonthCard = ({ monthName, index, isSlider }) => (
-        <div 
-            className={`month-card ${isSlider ? 'slider-mode' : ''}`} 
-        >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+        <div className={`month-card ${isSlider ? 'slider-mode' : ''}`}>
+            <div className="month-card-header">
                 {isSlider && (
-                    <button className="icon-btn" onClick={handlePrevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#215D7B', padding: '10px' }}>
-                        <FontAwesomeIcon icon={faChevronLeft} size="2x" />
+                    <button className="month-nav-btn" onClick={handlePrevMonth}>
+                        <FontAwesomeIcon icon={faChevronLeft} size="lg" />
                     </button>
                 )}
                 
-                <h3 className="month-title" style={{ margin: 0, fontSize: isSlider ? '1.8rem' : '1.1rem', color: '#215D7B' }}>
+                <h3 className={`month-title ${isSlider ? 'slider-title' : 'grid-title'}`}>
                     {monthName} {isSlider && year}
                 </h3>
                 
                 {isSlider && (
-                    <button className="icon-btn" onClick={handleNextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#215D7B', padding: '10px' }}>
-                        <FontAwesomeIcon icon={faChevronRight} size="2x" />
+                    <button className="month-nav-btn" onClick={handleNextMonth}>
+                        <FontAwesomeIcon icon={faChevronRight} size="lg" />
                     </button>
                 )}
             </div>
             
-            <div className="week-header" style={{marginBottom: '10px'}}>
+            <div className="week-header">
                 <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
             </div>
             <div className="days-grid">
@@ -167,37 +164,24 @@ const CalendarPage = () => {
     if (loading) return <div className="main-content">Loading Calendar...</div>;
 
     return (
-        <div className="calendar-page-container">
-            <div className="calendar-header" style={{flexDirection: 'column', alignItems: 'flex-start', gap: '15px'}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center'}}>
-                    <h1 className="page-title" style={{margin: 0}}>Calendar {year}</h1>
+        <div className="calendar-page-container fade-in">
+            <div className="calendar-top-section">
+                <div className="calendar-header-row">
+                    <h1 className="page-title header-no-margin">Calendar {year}</h1>
                     
-                    <div className="view-switcher" style={{background: '#f1f5f9', padding: '5px', borderRadius: '8px', display: 'flex', gap: '5px'}}>
+                    {/* MINIMALIST VIEW TOGGLE */}
+                    <div className="view-toggle-container">
                         <button 
                             onClick={() => setViewMode('slider')}
-                            className={`gts-btn ${viewMode === 'slider' ? 'primary' : ''}`}
-                            style={{ 
-                                padding: '8px 15px', 
-                                background: viewMode === 'slider' ? '#215D7B' : 'transparent',
-                                color: viewMode === 'slider' ? '#fff' : '#64748b',
-                                boxShadow: 'none',
-                                borderRadius: '6px'
-                            }}
+                            className={`view-toggle-btn ${viewMode === 'slider' ? 'active' : ''}`}
                         >
-                            <FontAwesomeIcon icon={faCalendarDay} style={{marginRight: '6px'}} /> Month View
+                            <FontAwesomeIcon icon={faCalendarDay} className="toggle-icon" /> Month
                         </button>
                         <button 
                             onClick={() => setViewMode('full')}
-                            className={`gts-btn ${viewMode === 'full' ? 'primary' : ''}`}
-                            style={{ 
-                                padding: '8px 15px', 
-                                background: viewMode === 'full' ? '#215D7B' : 'transparent',
-                                color: viewMode === 'full' ? '#fff' : '#64748b',
-                                boxShadow: 'none',
-                                borderRadius: '6px'
-                            }}
+                            className={`view-toggle-btn ${viewMode === 'full' ? 'active' : ''}`}
                         >
-                            <FontAwesomeIcon icon={faTh} style={{marginRight: '6px'}} /> Year View
+                            <FontAwesomeIcon icon={faTh} className="toggle-icon" /> Year
                         </button>
                     </div>
                 </div>
@@ -211,16 +195,12 @@ const CalendarPage = () => {
                 </div>
             </div>
 
-            <div className="calendar-content" style={{ marginTop: '20px' }}>
+            <div className="calendar-content">
                 {viewMode === 'slider' ? (
-                    <div 
-                        className="slider-view" 
-                        style={{ display: 'flex', justifyContent: 'center', padding: '20px 0', overflow: 'hidden' }}
-                    >
+                    <div className="slider-view-wrapper">
                         <div 
                             key={currentMonthIndex} 
-                            className={slideDirection === 'right' ? 'slide-in-right' : 'slide-in-left'}
-                            style={{ width: '100%', display: 'flex', justifyContent: 'center' }}
+                            className={`slider-anim-container ${slideDirection === 'right' ? 'slide-in-right' : 'slide-in-left'}`}
                         >
                             <MonthCard 
                                 monthName={months[currentMonthIndex]} 
