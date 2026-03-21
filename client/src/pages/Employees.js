@@ -34,32 +34,32 @@ const Employees = () => {
             html: `
                 <div style="text-align: left; padding: 0 10px; max-height: 60vh; overflow-y: auto;">
                     <label class="swal-custom-label">Full Name</label>
-                    <input id="add-name" class="swal2-input" placeholder="Harshit">
+                    <input id="add-name" class="swal2-input custom-input" placeholder="Harshit" style="margin-top:0;">
                     
                     <label class="swal-custom-label">Work Email</label>
-                    <input id="add-email" class="swal2-input" placeholder="harshit@gts.ai">
+                    <input id="add-email" class="swal2-input custom-input" placeholder="harshit@gts.ai" style="margin-top:0;">
 
                     <label class="swal-custom-label">Employee / Biometric ID</label>
-                    <input id="add-emp-id" class="swal2-input" placeholder="e.g. GTS003">
+                    <input id="add-emp-id" class="swal2-input custom-input" placeholder="e.g. GTS003" style="margin-top:0;">
                     
                     <label class="swal-custom-label">Temporary Password</label>
-                    <input id="add-password" type="password" class="swal2-input" placeholder="••••••••">
+                    <input id="add-password" type="password" class="swal2-input custom-input" placeholder="••••••••" style="margin-top:0;">
 
                     <div style="display: flex; gap: 15px;">
                         <div style="flex: 1;">
                             <label class="swal-custom-label">Joining Date</label>
-                            <input id="add-date" type="date" class="swal2-input" style="width: 100%; margin-top: 10px;" value="${new Date().toISOString().split('T')[0]}">
+                            <input id="add-date" type="date" class="swal2-input custom-input" style="width: 100%; margin-top: 0;" value="${new Date().toISOString().split('T')[0]}">
                         </div>
                         <div style="flex: 1;">
                             <label class="swal-custom-label">Date of Birth</label>
-                            <input id="add-dob" type="date" class="swal2-input" style="width: 100%; margin-top: 10px;">
+                            <input id="add-dob" type="date" class="swal2-input custom-input" style="width: 100%; margin-top: 0;">
                         </div>
                     </div>
                     
                     <div style="display: flex; gap: 15px; margin-top: 15px;">
                         <div style="flex: 1;">
                             <label class="swal-custom-label">System Role</label>
-                            <select id="add-role" class="swal2-select" style="width: 100%; margin-top: 10px;">
+                            <select id="add-role" class="swal2-select custom-input" style="width: 100%; margin-top: 0;">
                                 <option value="EMPLOYEE">Employee</option>
                                 <option value="HR">HR Manager</option>
                                 <option value="ADMIN">Administrator</option>
@@ -67,7 +67,7 @@ const Employees = () => {
                         </div>
                         <div style="flex: 1;">
                             <label class="swal-custom-label">Shift Timing</label>
-                            <select id="add-shift" class="swal2-select" style="width: 100%; margin-top: 10px;">
+                            <select id="add-shift" class="swal2-select custom-input" style="width: 100%; margin-top: 0;">
                                 <option value="DAY">Day Shift</option>
                                 <option value="NIGHT">Night Shift</option>
                             </select>
@@ -127,7 +127,7 @@ const Employees = () => {
 
     return (
         <div className="employee-page fade-in">
-            {/* HEADER (Using Isolated Classes) */}
+            {/* HEADER (Using Isolated Classes from App.css) */}
             <div className="employee-page-header">
                 <h1 className="page-title header-no-margin">Employee Directory</h1>
                 
@@ -143,8 +143,8 @@ const Employees = () => {
                         />
                     </div>
 
-                    {/* Button restored to standard size for desktop */}
-                    <button className="gts-btn primary" onClick={handleAddEmployee}>
+                    {/* Button restored to standard class: 'gts-btn primary' */}
+                    <button className="gts-btn primary text-nowrap" onClick={handleAddEmployee}>
                         <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Add Employee
                     </button>
                 </div>
@@ -204,9 +204,9 @@ const Employees = () => {
                                                 </span>
                                                 <span className="shift-badge">
                                                     {emp.shiftType === 'NIGHT' ? (
-                                                        <><FontAwesomeIcon icon={faMoon} className="text-moon" /> Night Shift</>
+                                                        <><FontAwesomeIcon icon={faMoon} className="text-moon mr-5" /> Night Shift</>
                                                     ) : (
-                                                        <><FontAwesomeIcon icon={faSun} className="text-sun" /> Day Shift</>
+                                                        <><FontAwesomeIcon icon={faSun} className="text-sun mr-5" /> Day Shift</>
                                                     )}
                                                 </span>
                                             </div>
