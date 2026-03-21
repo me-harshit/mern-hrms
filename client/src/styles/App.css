@@ -1356,6 +1356,59 @@ html {
   /* =========================================
      RESPONSIVE TABLE FIXES 
      ========================================= */
+  .employee-table-container {
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .employee-table thead {
+    display: none;
+    /* Hide the table headers on mobile */
+  }
+
+  .employee-table tbody,
+  .employee-table tr,
+  .employee-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .employee-table tr {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+  }
+
+  .employee-table td {
+    padding: 10px 0;
+    border: none;
+    border-bottom: 1px solid #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    text-align: right;
+  }
+
+  .employee-table td:last-child {
+    border-bottom: none;
+  }
+
+  .employee-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #64748b;
+    font-size: 11px;
+    text-transform: uppercase;
+    text-align: left;
+    flex-shrink: 0;
+    margin-right: 15px;
+  }
+
   .empty-table-message {
     display: block !important;
     text-align: center !important;
@@ -1363,6 +1416,7 @@ html {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
+    padding: 20px !important;
   }
 
   .empty-table-message::before {
