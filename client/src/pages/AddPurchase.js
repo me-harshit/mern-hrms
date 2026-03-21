@@ -16,9 +16,9 @@ const AddPurchase = () => {
         vendorName: '', storageLocation: '', notes: ''
     });
 
-    // File State
+    // File State (productMedia is now an array)
     const [files, setFiles] = useState({
-        invoice: null, paymentScreenshot: null, productMedia: null
+        invoice: null, paymentScreenshot: null, productMedia: []
     });
 
     // --- HELPER: NATIVE IMAGE COMPRESSOR ---
@@ -53,17 +53,26 @@ const AddPurchase = () => {
     };
 
     const handleFileChange = (e, fieldName) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Video Size Check (Max 15MB)
-        if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
-            Swal.fire('Too Large', 'Video must be smaller than 15MB to save server space.', 'warning');
-            e.target.value = null; // Clear input
-            return;
+        // If it's the multi-file upload for product media
+        if (fieldName === 'productMedia') {
+            const selectedFiles = Array.from(e.target.files);
+            const validFiles = [];
+            
+            for (let file of selectedFiles) {
+                // Video Size Check (Max 15MB)
+                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+                    Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB and was skipped.`, 'warning');
+                } else {
+                    validFiles.push(file);
+                }
+            }
+            setFiles(prev => ({ ...prev, [fieldName]: validFiles }));
+        } else {
+            // For invoice and payment screenshot (Single files)
+            const file = e.target.files[0];
+            if (!file) return;
+            setFiles(prev => ({ ...prev, [fieldName]: file }));
         }
-
-        setFiles(prev => ({ ...prev, [fieldName]: file }));
     };
 
     const handleSubmit = async (e) => {
@@ -81,12 +90,16 @@ const AddPurchase = () => {
             if (files.invoice) data.append('invoice', files.invoice);
             if (files.paymentScreenshot) data.append('paymentScreenshot', files.paymentScreenshot);
 
-            if (files.productMedia) {
-                if (files.productMedia.type.startsWith('image/')) {
-                    const compressedImg = await compressImage(files.productMedia);
-                    data.append('productMedia', compressedImg);
-                } else {
-                    data.append('productMedia', files.productMedia); 
+            // Handle Multiple Product Media Files
+            if (files.productMedia && files.productMedia.length > 0) {
+                for (let i = 0; i < files.productMedia.length; i++) {
+                    const file = files.productMedia[i];
+                    if (file.type.startsWith('image/')) {
+                        const compressedImg = await compressImage(file);
+                        data.append('productMedia', compressedImg);
+                    } else {
+                        data.append('productMedia', file); // Append uncompressed video
+                    }
                 }
             }
 
@@ -175,9 +188,15 @@ const AddPurchase = () => {
                             <input className="custom-file-input" type="file" accept="image/*" onChange={e => handleFileChange(e, 'paymentScreenshot')} />
                         </div>
 
-                        <div className="form-group">
-                            <label className="input-label">Product Photo / Video (Auto-Compressed)</label>
-                            <input className="custom-file-input" type="file" accept="image/*,video/*" onChange={e => handleFileChange(e, 'productMedia')} />
+                        <div className="form-group full-width">
+                            <label className="input-label">Product Photo(s) / Video(s) (Auto-Compressed)</label>
+                            {/* ADDED 'multiple' attribute here */}
+                            <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'productMedia')} />
+                            {files.productMedia.length > 0 && (
+                                <p style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px' }}>
+                                    {files.productMedia.length} file(s) selected
+                                </p>
+                            )}
                         </div>
                     </div>
 

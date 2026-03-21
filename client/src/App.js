@@ -21,6 +21,7 @@ import Purchases from './pages/Purchases';
 import AdminPurchases from './pages/AdminPurchases';
 import RawPunches from './pages/RawPunches';
 import AddPurchase from './pages/AddPurchase';
+import EditPurchase from './pages/EditPurchase';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -76,11 +77,12 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/attendance" element={<Attendance />} />
+            <Route path="/absent-employees" element={<AbsentEmployees />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
             <Route path="/purchases" element={<Purchases />} />
             <Route path="/add-purchase" element={<AddPurchase />} />
-            <Route path="/absent-employees" element={<AbsentEmployees />} />
+            <Route path="/edit-purchase/:id" element={<EditPurchase />} />
 
             <Route
               path="/employees"

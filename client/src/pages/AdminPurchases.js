@@ -94,26 +94,53 @@ const AdminPurchases = () => {
         setFilteredPurchases(result);
     }, [purchases, filterType, searchTerm, customDates]);
 
-    const viewFile = (url, title) => {
-        const fullUrl = `${SERVER_URL}${url}`;
-        const isPdf = url.toLowerCase().endsWith('.pdf');
-        if (isPdf) {
+    // --- ENHANCED VIEW FILE FUNCTON (Supports Arrays/Galleries) ---
+    const viewFile = (fileData, title) => {
+        if (Array.isArray(fileData)) {
+            let htmlContent = '<div style="display:flex; flex-direction:column; gap:20px; max-height: 60vh; overflow-y:auto; padding-right:10px;">';
+            fileData.forEach((url, index) => {
+                const fullUrl = `${SERVER_URL}${url}`;
+                const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+                
+                htmlContent += `
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div style="text-align: left; font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: 600;">File ${index + 1}</div>
+                        ${isVideo 
+                            ? `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>` 
+                            : `<img src="${fullUrl}" style="width:100%; border-radius:6px; max-height:400px; object-fit:contain;" />`
+                        }
+                    </div>`;
+            });
+            htmlContent += '</div>';
+
             Swal.fire({
                 title: title,
-                html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`,
+                html: htmlContent,
                 width: '800px',
                 showCloseButton: true,
                 showConfirmButton: false
             });
         } else {
-            Swal.fire({
-                title: title,
-                imageUrl: fullUrl,
-                imageAlt: title,
-                width: '800px',
-                showCloseButton: true,
-                showConfirmButton: false
-            });
+            const fullUrl = `${SERVER_URL}${fileData}`;
+            const isPdf = fileData.toLowerCase().endsWith('.pdf');
+            if (isPdf) {
+                Swal.fire({
+                    title: title,
+                    html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`,
+                    width: '800px',
+                    showCloseButton: true,
+                    showConfirmButton: false
+                });
+            } else {
+                Swal.fire({
+                    title: title,
+                    imageUrl: fullUrl,
+                    imageAlt: title,
+                    width: '800px',
+                    showCloseButton: true,
+                    showConfirmButton: false
+                });
+            }
         }
     };
 
@@ -167,8 +194,6 @@ const AdminPurchases = () => {
 
             {/* EXACT MATCH FILTER BAR */}
             <div className="filter-bar-card fade-in">
-
-                {/* 1. Filter Buttons */}
                 <div className="filter-buttons">
                     {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
@@ -182,7 +207,6 @@ const AdminPurchases = () => {
                     ))}
                 </div>
 
-                {/* 2. Custom Date Inputs */}
                 {filterType === 'Custom' && (
                     <div className="custom-date-filters fade-in">
                         <div className="date-input-group">
@@ -206,7 +230,6 @@ const AdminPurchases = () => {
                     </div>
                 )}
 
-                {/* 3. Search Bar */}
                 <div className="search-wrapper">
                     <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input 
@@ -292,9 +315,10 @@ const AdminPurchases = () => {
                                                 </button>
                                             ) : null}
 
-                                            {item.productMediaUrl ? (
+                                            {/* CHECKING FOR ARRAY LENGTH INSTEAD OF STRING */}
+                                            {item.productMediaUrls && item.productMediaUrls.length > 0 ? (
                                                 <button 
-                                                    onClick={() => viewFile(item.productMediaUrl, 'Product Media')} 
+                                                    onClick={() => viewFile(item.productMediaUrls, `Product Media (${item.productMediaUrls.length})`)} 
                                                     className="gts-btn doc-btn doc-media"
                                                 >
                                                     <FontAwesomeIcon icon={faBoxOpen} className="btn-icon"/> Media
