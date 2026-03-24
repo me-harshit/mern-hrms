@@ -15,7 +15,7 @@ const Purchases = () => {
     const [purchases, setPurchases] = useState([]);
     const [filteredPurchases, setFilteredPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
-    
+
     // 👇 NEW: Wallet State
     const [walletBalance, setWalletBalance] = useState(0);
 
@@ -75,11 +75,16 @@ const Purchases = () => {
         setFilteredPurchases(result);
     }, [purchases, filterType, searchTerm, customDates]);
 
+    const getFileUrl = (url) => {
+        if (!url) return '';
+        return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
+    };
+
     const viewFile = (fileData, title) => {
         if (Array.isArray(fileData)) {
             let htmlContent = '<div style="display:flex; flex-direction:column; gap:20px; max-height: 60vh; overflow-y:auto; padding-right:10px;">';
             fileData.forEach((url, index) => {
-                const fullUrl = `${SERVER_URL}${url}`;
+                const fullUrl = getFileUrl(url); // 👇 FIXED 👇
                 const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
                 htmlContent += `
                     <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
@@ -90,9 +95,9 @@ const Purchases = () => {
             htmlContent += '</div>';
             Swal.fire({ title: title, html: htmlContent, width: '800px', showCloseButton: true, showConfirmButton: false });
         } else {
-            const fullUrl = `${SERVER_URL}${fileData}`;
+            const fullUrl = getFileUrl(fileData); // 👇 FIXED 👇
             const isPdf = fileData.toLowerCase().endsWith('.pdf');
-            if (isPdf) { Swal.fire({ title: title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false }); } 
+            if (isPdf) { Swal.fire({ title: title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false }); }
             else { Swal.fire({ title: title, imageUrl: fullUrl, imageAlt: title, width: '800px', showCloseButton: true, showConfirmButton: false }); }
         }
     };
@@ -187,12 +192,12 @@ const Purchases = () => {
                                             <div className="fw-600 text-primary">{item.category}</div>
                                             <div className="text-small text-muted">{item.expenseType}</div>
                                         </td>
-                                        
+
                                         <td data-label="Project / Tags">
                                             <div className="fw-500 text-small">{item.projectName || 'Regular Office'}</div>
                                             <div className="expense-tag-pill">{item.descriptionTags}</div>
                                         </td>
-                                        
+
                                         <td data-label="Amount & Date">
                                             <div className="expense-amount-large">₹ {item.amount.toLocaleString('en-IN')}</div>
                                             <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.purchaseDate).toLocaleDateString()}</div>
@@ -201,7 +206,7 @@ const Purchases = () => {
                                         <td data-label="Payment Source">
                                             <div className="text-small">{item.paymentSourceId?.name || 'Myself'}</div>
                                         </td>
-                                        
+
                                         <td data-label="Status">
                                             <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>
                                                 {getStatusIcon(item.status)} {item.status || 'Pending'}
@@ -213,7 +218,7 @@ const Purchases = () => {
                                                 </div>
                                             )}
                                         </td>
-                                        
+
                                         <td data-label="Proof">
                                             <div className="flex-row gap-5 flex-wrap">
                                                 {item.paymentScreenshotUrl ? (
@@ -229,7 +234,7 @@ const Purchases = () => {
                                                 ) : null}
                                             </div>
                                         </td>
-                                        
+
                                         <td data-label="Actions">
                                             {item.status !== 'Approved' ? (
                                                 <button className="gts-btn primary btn-small" onClick={() => navigate(`/edit-purchase/${item._id}`)}>

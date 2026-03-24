@@ -11,9 +11,12 @@ const EditPurchase = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
+    
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [usersList, setUsersList] = useState([]);
+    const [projectsList, setProjectsList] = useState([]);
 
     // --- MAIN FORM STATE ---
     const [formData, setFormData] = useState({
@@ -38,9 +41,7 @@ const EditPurchase = () => {
 
     // --- EXISTING & NEW FILES STATE ---
     const [existingFiles, setExistingFiles] = useState({});
-    const [newFiles, setNewFiles] = useState({
-        paymentScreenshot: null, expenseMedia: []
-    });
+    const [newFiles, setNewFiles] = useState({ paymentScreenshot: null, expenseMedia: [] });
 
     useEffect(() => {
         fetchInitialData();
@@ -49,11 +50,11 @@ const EditPurchase = () => {
 
     const fetchInitialData = async () => {
         try {
-            // Fetch users for the dropdown
-            const usersRes = await api.get('/employees');
+            const usersRes = await api.get('/employees/payment-sources');
             setUsersList(usersRes.data);
 
-            // Fetch the specific expense record
+            const projRes = await api.get('/projects');
+            setProjectsList(projRes.data);
             const res = await api.get(`/purchases/${id}`);
             const data = res.data;
             
@@ -62,13 +63,11 @@ const EditPurchase = () => {
                 category: data.category || 'Product / Item Purchase',
                 purchaseDate: data.purchaseDate ? new Date(data.purchaseDate).toISOString().split('T')[0] : '',
                 amount: data.amount || '',
-                // Handle populated user object or raw ID string
                 paymentSourceId: data.paymentSourceId?._id || data.paymentSourceId || currentUser.id,
                 projectName: data.projectName || '',
                 descriptionTags: data.descriptionTags || ''
             });
 
-            // Load the dynamic details if they exist
             if (data.expenseDetails) {
                 setExpenseDetails(prev => ({ ...prev, ...data.expenseDetails }));
             }
@@ -108,61 +107,73 @@ const EditPurchase = () => {
     const handleMainChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    const compressImage = (file, maxWidth = 1024, quality = 0.7) => {
-        return new Promise((resolve) => {
-            const reader = new FileReader(); reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image(); img.src = event.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas'); let width = img.width; let height = img.height;
-                    if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
-                    canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob((blob) => { resolve(new File([blob], file.name, { type: 'image/jpeg' })); }, 'image/jpeg', quality);
-                };
-            };
-        });
-    };
-
     const handleFileChange = (e, fieldName) => {
         if (fieldName === 'expenseMedia') {
-            const selectedFiles = Array.from(e.target.files); const validFiles = [];
+            const selectedFiles = Array.from(e.target.files); 
+            const validFiles = [];
             for (let file of selectedFiles) {
-                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
-                else validFiles.push(file);
+                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+                    Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
+                } else {
+                    validFiles.push(file);
+                }
             }
             setNewFiles(prev => ({ ...prev, [fieldName]: validFiles }));
         } else {
-            const file = e.target.files[0]; if (!file) return;
+            const file = e.target.files[0]; 
+            if (!file) return;
             setNewFiles(prev => ({ ...prev, [fieldName]: file }));
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.amount || !formData.descriptionTags) return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
+        if (!formData.amount || !formData.descriptionTags) {
+            return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
+        }
         
         setSaving(true);
+        setUploadProgress(0);
+
         try {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             data.append('expenseDetails', JSON.stringify(expenseDetails));
 
-            // Only append files if the user is explicitly uploading new ones to replace the old ones
-            if (newFiles.paymentScreenshot) data.append('paymentScreenshot', newFiles.paymentScreenshot);
+            // Only append files if the user is explicitly uploading new ones
+            if (newFiles.paymentScreenshot) {
+                data.append('paymentScreenshot', newFiles.paymentScreenshot);
+            }
+            
+            // Send raw files to backend for S3 Processing
             if (newFiles.expenseMedia && newFiles.expenseMedia.length > 0) {
                 for (let i = 0; i < newFiles.expenseMedia.length; i++) {
-                    const file = newFiles.expenseMedia[i];
-                    if (file.type.startsWith('image/')) {
-                        const compressedImg = await compressImage(file); data.append('expenseMedia', compressedImg);
-                    } else data.append('expenseMedia', file); 
+                    data.append('expenseMedia', newFiles.expenseMedia[i]); 
                 }
             }
 
-            await api.put(`/purchases/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await api.put(`/purchases/${id}`, data, { 
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    setUploadProgress(percentCompleted);
+                }
+            });
+
             Swal.fire({ icon: 'success', title: 'Update Saved', timer: 1500, showConfirmButton: false });
             navigate('/purchases');
-        } catch (err) { Swal.fire('Error', 'Failed to update expense', 'error'); } 
-        finally { setSaving(false); }
+        } catch (err) { 
+            Swal.fire('Error', 'Failed to update expense', 'error'); 
+        } finally { 
+            setSaving(false); 
+            setUploadProgress(0);
+        }
+    };
+
+    // Helper to safely render old local URLs or new S3 URLs
+    const getFileUrl = (url) => {
+        if (!url) return '';
+        return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
     };
 
     const getMediaLabel = () => {
@@ -182,7 +193,7 @@ const EditPurchase = () => {
             case 'Product / Item Purchase':
                 return (
                     <>
-                        <div className="form-group full-width"><label className="input-label">Product Name *</label><input className="custom-input" name="productName" value={expenseDetails.productName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Product Name *</label><input className="custom-input" name="productName" value={expenseDetails.productName} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" name="quantity" value={expenseDetails.quantity} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" name="unitPrice" value={expenseDetails.unitPrice} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. Office Room A" required /></div>
@@ -192,14 +203,14 @@ const EditPurchase = () => {
             case 'Fuel Expense (Car / Bike)':
                 return (
                     <>
-                        <div className="form-group"><label className="input-label">Vehicle Type *</label><select className="swal2-select custom-input" name="vehicleType" value={expenseDetails.vehicleType} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="Car">Car</option><option value="Bike">Bike</option><option value="Auto">Auto</option></select></div>
+                        <div className="form-group"><label className="input-label">Vehicle Type *</label><select className="swal2-select custom-select" name="vehicleType" value={expenseDetails.vehicleType} onChange={handleDetailChange}><option value="Car">Car</option><option value="Bike">Bike</option><option value="Auto">Auto</option></select></div>
                         <div className="form-group"><label className="input-label">Vehicle Number *</label><input className="custom-input" name="vehicleNumber" value={expenseDetails.vehicleNumber} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Travel From *</label><input className="custom-input" name="travelFrom" value={expenseDetails.travelFrom} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Travel To *</label><input className="custom-input" name="travelTo" value={expenseDetails.travelTo} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Odometer (Before) *</label><input className="custom-input" type="number" name="odometerBefore" value={expenseDetails.odometerBefore} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Odometer (After) *</label><input className="custom-input" type="number" name="odometerAfter" value={expenseDetails.odometerAfter} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">KM Traveled (Auto)</label><input className="custom-input" type="number" name="kmTraveled" value={expenseDetails.kmTraveled} readOnly style={{ background: '#f1f5f9' }} /></div>
-                        <div className="form-group full-width"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">KM Traveled (Auto)</label><input className="custom-input readonly-input" type="number" name="kmTraveled" value={expenseDetails.kmTraveled} readOnly /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
                     </>
                 );
             case 'Food Expense':
@@ -207,55 +218,55 @@ const EditPurchase = () => {
                     <>
                         <div className="form-group"><label className="input-label">Restaurant / Platform Name *</label><input className="custom-input" name="restaurantName" placeholder="e.g. Zomato, Swiggy" value={expenseDetails.restaurantName} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Number of People</label><input className="custom-input" type="number" name="numberOfPeople" value={expenseDetails.numberOfPeople} onChange={handleDetailChange} /></div>
-                        <div className="form-group full-width"><label className="input-label">Food Items Ordered *</label><textarea className="custom-input" rows="2" name="foodItemsOrdered" value={expenseDetails.foodItemsOrdered} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Food Items Ordered *</label><textarea className="custom-input" rows="2" name="foodItemsOrdered" value={expenseDetails.foodItemsOrdered} onChange={handleDetailChange} required /></div>
                     </>
                 );
             case 'Travel Expense':
                 return (
                     <>
-                        <div className="form-group"><label className="input-label">Travel Mode *</label><select className="swal2-select custom-input" name="travelMode" value={expenseDetails.travelMode} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="Flight">Flight</option><option value="Train">Train</option><option value="Taxi / Cab">Taxi / Cab</option><option value="Bus">Bus</option></select></div>
+                        <div className="form-group"><label className="input-label">Travel Mode *</label><select className="swal2-select custom-select" name="travelMode" value={expenseDetails.travelMode} onChange={handleDetailChange}><option value="Flight">Flight</option><option value="Train">Train</option><option value="Taxi / Cab">Taxi / Cab</option><option value="Bus">Bus</option></select></div>
+                        <div className="form-group"><label className="input-label">Distance (KM) - If Road Travel</label><input className="custom-input" type="number" name="distanceKm" value={expenseDetails.distanceKm} onChange={handleDetailChange} /></div>
                         <div className="form-group"><label className="input-label">Travel From *</label><input className="custom-input" name="travelFrom" value={expenseDetails.travelFrom} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Travel To *</label><input className="custom-input" name="travelTo" value={expenseDetails.travelTo} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Distance (KM) - If Road Travel</label><input className="custom-input" type="number" name="distanceKm" value={expenseDetails.distanceKm} onChange={handleDetailChange} /></div>
-                        <div className="form-group full-width"><label className="input-label">Booking Reference / PNR</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
-                        <div className="form-group full-width"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Booking Reference / PNR</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
                     </>
                 );
             case 'Accommodation':
                 return (
                     <>
-                        <div className="form-group full-width"><label className="input-label">Hotel / Property Name *</label><input className="custom-input" name="hotelName" value={expenseDetails.hotelName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Hotel / Property Name *</label><input className="custom-input" name="hotelName" value={expenseDetails.hotelName} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">City *</label><input className="custom-input" name="city" value={expenseDetails.city} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Booking Reference</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
                         <div className="form-group"><label className="input-label">Check-In Date *</label><input className="custom-input" type="date" name="checkInDate" value={expenseDetails.checkInDate} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Check-Out Date *</label><input className="custom-input" type="date" name="checkOutDate" value={expenseDetails.checkOutDate} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Number of Nights (Auto)</label><input className="custom-input" type="number" name="numberOfNights" value={expenseDetails.numberOfNights} readOnly style={{ background: '#f1f5f9' }} /></div>
+                        <div className="form-group"><label className="input-label">Number of Nights (Auto)</label><input className="custom-input readonly-input" type="number" name="numberOfNights" value={expenseDetails.numberOfNights} readOnly /></div>
                     </>
                 );
             case 'Regular Office Expense':
                 return (
                     <>
                         <div className="form-group"><label className="input-label">Vendor Name *</label><input className="custom-input" name="vendorName" value={expenseDetails.vendorName} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Billing Cycle *</label><select className="swal2-select custom-input" name="billingCycle" value={expenseDetails.billingCycle} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="One-Time">One-Time</option><option value="Monthly">Monthly</option><option value="Annual">Annual</option></select></div>
-                        <div className="form-group full-width"><label className="input-label">Expense Description *</label><textarea className="custom-input" rows="2" name="expenseDescription" value={expenseDetails.expenseDescription} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Billing Cycle *</label><select className="swal2-select custom-select" name="billingCycle" value={expenseDetails.billingCycle} onChange={handleDetailChange}><option value="One-Time">One-Time</option><option value="Monthly">Monthly</option><option value="Annual">Annual</option></select></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Expense Description *</label><textarea className="custom-input" rows="2" name="expenseDescription" value={expenseDetails.expenseDescription} onChange={handleDetailChange} required /></div>
                     </>
                 );
             default: return null;
         }
     };
 
-    if (loading) return <div className="main-content">Loading...</div>;
+    if (loading) return <div className="main-content">Loading Data...</div>;
 
     return (
         <div className="profile-container fade-in">
             <div className="page-header-left">
-                <button className="cancel-btn m-0" onClick={() => navigate(-1)}>
+                <button className="gts-btn warning btn-small m-0" onClick={() => navigate(-1)}>
                     <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back
                 </button>
                 <h1 className="page-title header-no-margin">Edit Expense Details</h1>
             </div>
             
-            <div className="profile-card">
+            <div className="purchase-form-card">
                 <form onSubmit={handleSubmit} className="profile-form">
                     
                     {/* --- SECTION 1: CORE DETAILS --- */}
@@ -264,8 +275,8 @@ const EditPurchase = () => {
                             <FontAwesomeIcon icon={faInfoCircle} /> General Information
                         </div>
                         
-                        <div className="form-grid">
-                            <div className="form-group full-width">
+                        <div className="purchase-grid">
+                            <div className="form-group grid-span-2">
                                 <label className="input-label">Expense Type</label>
                                 <div className="expense-type-toggle">
                                     <label className={formData.expenseType === 'Project Expense' ? 'active' : ''}>
@@ -277,16 +288,22 @@ const EditPurchase = () => {
                                 </div>
                             </div>
 
+                            {/* 👇 FIXED: REPLACED INPUT WITH PROJECTS DROPDOWN 👇 */}
                             {formData.expenseType === 'Project Expense' && (
-                                <div className="form-group full-width">
+                                <div className="form-group grid-span-2">
                                     <label className="input-label">Project Name *</label>
-                                    <input className="custom-input" type="text" name="projectName" required placeholder="e.g. HRMS Dashboard" value={formData.projectName} onChange={handleMainChange} />
+                                    <select className="swal2-select custom-select" name="projectName" required value={formData.projectName} onChange={handleMainChange}>
+                                        <option value="">-- Select Project --</option>
+                                        {projectsList.map(proj => (
+                                            <option key={proj._id} value={proj.name}>{proj.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             )}
 
                             <div className="form-group">
                                 <label className="input-label">Expense Category *</label>
-                                <select className="swal2-select custom-input" name="category" value={formData.category} onChange={handleMainChange} style={{ margin: 0, padding: '0 10px', height: '42px', borderColor: '#215D7B' }}>
+                                <select className="swal2-select custom-select" name="category" value={formData.category} onChange={handleMainChange} style={{ borderColor: '#215D7B' }}>
                                     <option value="Product / Item Purchase">Product / Item Purchase</option>
                                     <option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option>
                                     <option value="Food Expense">Food Expense</option>
@@ -308,15 +325,15 @@ const EditPurchase = () => {
 
                             <div className="form-group">
                                 <label className="input-label"><FontAwesomeIcon icon={faCreditCard}/> Payment Source (Who paid?) *</label>
-                                <select className="swal2-select custom-input" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}>
-                                    <option value={currentUser.id || currentUser._id}>Myself (Reimburse Me)</option>
+                                <select className="swal2-select custom-select" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange}>
+                                    <option value={currentUser?.id || currentUser?._id || ''}>Myself (Reimburse Me)</option>
                                     {usersList.map(u => (
                                         <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
                                     ))}
                                 </select>
                             </div>
 
-                            <div className="form-group full-width">
+                            <div className="form-group grid-span-2">
                                 <label className="input-label"><FontAwesomeIcon icon={faTags}/> Description / Tags *</label>
                                 <input className="custom-input" type="text" name="descriptionTags" required placeholder="e.g. N95 Mask, Train Ticket, Client Dinner" value={formData.descriptionTags} onChange={handleMainChange} />
                             </div>
@@ -328,23 +345,23 @@ const EditPurchase = () => {
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faListAlt} /> {formData.category} Details
                         </div>
-                        <div className="form-grid">
+                        <div className="purchase-grid">
                             {renderCategoryFields()}
                         </div>
                     </div>
 
                     {/* --- SECTION 3: ATTACHMENTS --- */}
-                    <div className="expense-form-section" style={{ marginBottom: 0 }}>
+                    <div className="expense-form-section mb-0">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faPaperclip} /> Update Attachments
                         </div>
-                        <p style={{ fontSize: '12px', color: '#7A7A7A', marginBottom: '20px' }}>Uploading new files will overwrite the existing ones.</p>
+                        <p className="text-small text-muted mb-20">Uploading new files will overwrite the existing ones.</p>
 
-                        <div className="form-grid">
+                        <div className="purchase-grid">
                             <div className="form-group expense-file-area">
                                 <label className="input-label">Payment Screenshot / Bank Proof</label>
                                 {existingFiles.paymentScreenshotUrl && (
-                                    <a href={`${SERVER_URL}${existingFiles.paymentScreenshotUrl}`} target="_blank" rel="noreferrer" style={{ fontSize: '12px', display: 'block', marginBottom: '8px', color: '#215D7B', fontWeight: '600' }}>
+                                    <a href={getFileUrl(existingFiles.paymentScreenshotUrl)} target="_blank" rel="noreferrer" className="text-primary fw-600 fs-12 mb-5 d-block">
                                         <FontAwesomeIcon icon={faExternalLinkAlt} /> View Current Proof
                                     </a>
                                 )}
@@ -354,13 +371,13 @@ const EditPurchase = () => {
                             <div className="form-group expense-file-area">
                                 <label className="input-label">{getMediaLabel()}</label>
                                 {existingFiles.expenseMediaUrls?.length > 0 && (
-                                    <div style={{ fontSize: '12px', marginBottom: '8px', color: '#16a34a', fontWeight: 'bold' }}>
+                                    <div className="fw-bold fs-12 mb-5 text-green">
                                         {existingFiles.expenseMediaUrls.length} Media File(s) Currently Uploaded
                                     </div>
                                 )}
                                 <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
                                 {newFiles.expenseMedia.length > 0 && (
-                                    <p style={{ fontSize: '12px', color: '#215D7B', marginTop: '5px', fontWeight: '600' }}>
+                                    <p className="file-success-text">
                                         {newFiles.expenseMedia.length} new file(s) selected
                                     </p>
                                 )}
@@ -368,10 +385,20 @@ const EditPurchase = () => {
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="profile-actions mt-30">
-                        <button type="submit" className="save-btn" disabled={saving} style={{ width: '100%', padding: '16px', fontSize: '16px', borderRadius: '12px' }}>
-                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> {saving ? 'Saving...' : 'Save Updates'}
+                    {/* Actions & Progress Bar */}
+                    <div className="profile-actions mt-30 flex-col gap-15">
+                        
+                        {/* UPLOAD PROGRESS BAR */}
+                        {saving && uploadProgress > 0 && (
+                            <div className="upload-progress-container">
+                                <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}></div>
+                                <span className="upload-progress-text">Uploading updates... {uploadProgress}%</span>
+                            </div>
+                        )}
+
+                        <button type="submit" className="save-btn purchase-submit-btn" disabled={saving}>
+                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
+                            {saving ? 'Processing & Saving...' : 'Save Updates'}
                         </button>
                     </div>
 

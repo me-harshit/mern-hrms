@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUserCircle, faCog, faSignOutAlt, faBars } from '@fortawesome/free-solid-svg-icons';
+import { faUserCircle, faSignOutAlt, faBars } from '@fortawesome/free-solid-svg-icons';
 import Swal from 'sweetalert2';
 
 const Topbar = ({ onToggleSidebar }) => {
@@ -63,10 +63,6 @@ const Topbar = ({ onToggleSidebar }) => {
                     
                     <Link to="/profile" className="dropdown-link">
                         <FontAwesomeIcon icon={faUserCircle} className="dropdown-icon" /> My Profile
-                    </Link>
-                    
-                    <Link to="/settings" className="dropdown-link">
-                        <FontAwesomeIcon icon={faCog} className="dropdown-icon" /> Settings
                     </Link>
                     
                     <div className="dropdown-divider"></div>

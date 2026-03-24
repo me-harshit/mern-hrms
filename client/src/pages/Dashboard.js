@@ -4,17 +4,23 @@ import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faUsers, faUserCheck, faClipboardList, faPlaneDeparture, 
-    faSpinner, faBriefcase, faCalendarCheck, faClock, faUserTimes 
+    faSpinner, faBriefcase, faCalendarCheck, faClock, faUserTimes,
+    faWallet, faFileInvoiceDollar, faPlus
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 
 const Dashboard = () => {
     const user = JSON.parse(localStorage.getItem('user'));
-    const isEmployee = user.role === 'EMPLOYEE';
+    const isEmployee = user?.role === 'EMPLOYEE';
+    const isPurchaser = user?.isPurchaser;
     const navigate = useNavigate();
 
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    
+    // Extra states for purchaser employees
+    const [walletBalance, setWalletBalance] = useState(0);
+    const [purchaseStats, setPurchaseStats] = useState({ pending: 0, totalAmount: 0 });
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -38,6 +44,26 @@ const Dashboard = () => {
                 }
 
                 setStats(dashboardData);
+
+                // 👇 Fetch Wallet & Expense Stats if they are a Purchaser 👇
+                if (isPurchaser || !isEmployee) {
+                    try {
+                        const [walletRes, purchaseRes] = await Promise.all([
+                            api.get('/wallets/my-balance').catch(() => ({ data: { balance: 0 } })),
+                            api.get('/purchases').catch(() => ({ data: [] }))
+                        ]);
+                        
+                        setWalletBalance(walletRes.data.balance);
+                        
+                        const pendingCount = purchaseRes.data.filter(p => p.status === 'Pending').length;
+                        const totalAmt = purchaseRes.data.reduce((sum, p) => sum + p.amount, 0);
+                        
+                        setPurchaseStats({ pending: pendingCount, totalAmount: totalAmt });
+                    } catch (err) {
+                        console.error("Could not fetch purchaser stats", err);
+                    }
+                }
+
             } catch (err) {
                 console.error("Error loading dashboard data");
             } finally {
@@ -46,7 +72,7 @@ const Dashboard = () => {
         };
 
         fetchStats();
-    }, [isEmployee]);
+    }, [isEmployee, isPurchaser]);
 
     if (loading || !stats) return <div className="main-content"><FontAwesomeIcon icon={faSpinner} spin /> Loading...</div>;
 
@@ -141,27 +167,52 @@ const Dashboard = () => {
             {/* --- EMPLOYEE VIEW --- */}
             {isEmployee && (
                 <div className="stats-grid">
-                    <div className="stat-card theme-green">
+                    <div className="stat-card theme-green clickable-card" onClick={() => navigate('/attendance')}>
                         <div className="stat-icon"><FontAwesomeIcon icon={faCalendarCheck} /></div>
                         <div className="stat-info">
                             <p>Attendance (Month)</p>
-                            <h3>{stats.presentDays} Days</h3>
+                            <h3>{stats.presentDays || 0} Days</h3>
                         </div>
                     </div>
-                    <div className="stat-card theme-blue">
+                    
+                    <div className="stat-card theme-blue clickable-card" onClick={() => navigate('/leaves')}>
                         <div className="stat-icon"><FontAwesomeIcon icon={faBriefcase} /></div>
                         <div className="stat-info">
                             <p>Leave Balance</p>
-                            <h3>{stats.leaveBalance} / {stats.totalLeaves}</h3>
+                            <h3>{stats.leaveBalance || 0} / {stats.totalLeaves || 0}</h3>
                         </div>
                     </div>
-                    <div className="stat-card theme-yellow">
+                    
+                    <div className="stat-card theme-yellow clickable-card" onClick={() => navigate('/leaves')}>
                         <div className="stat-icon"><FontAwesomeIcon icon={faClock} /></div>
                         <div className="stat-info">
-                            <p>Pending Requests</p>
-                            <h3>{stats.myPending}</h3>
+                            <p>Pending Leave Requests</p>
+                            <h3>{stats.myPending || 0}</h3>
                         </div>
                     </div>
+
+                    {/* 👇 PURCHASER EXTRA CARDS 👇 */}
+                    {isPurchaser && (
+                        <>
+                            <div className="stat-card theme-purple clickable-card" onClick={() => navigate('/purchases')}>
+                                <div className="stat-icon"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
+                                <div className="stat-info">
+                                    <p>Pending Expenses</p>
+                                    <h3>{purchaseStats.pending} Requests</h3>
+                                </div>
+                            </div>
+
+                            <div className={`stat-card ${walletBalance < 0 ? 'theme-red' : 'theme-green'} clickable-card`} onClick={() => navigate('/purchases')}>
+                                <div className="stat-icon"><FontAwesomeIcon icon={faWallet} /></div>
+                                <div className="stat-info">
+                                    <p>My Wallet Balance</p>
+                                    <h3 className={walletBalance < 0 ? 'text-danger' : ''}>
+                                        {walletBalance < 0 ? '-' : ''}₹ {Math.abs(walletBalance).toLocaleString('en-IN')}
+                                    </h3>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 
@@ -169,15 +220,26 @@ const Dashboard = () => {
             <div className="quick-actions-section">
                 <h3>Quick Actions</h3>
                 <div className="quick-actions-grid">
+                    
+                    {/* Renamed Button */}
                     <button className="gts-btn primary" onClick={() => navigate('/attendance')}>
-                        Mark Attendance
+                        <FontAwesomeIcon icon={faCalendarCheck} className="btn-icon" /> View Attendance Logs
                     </button>
+                    
                     <button className="gts-btn warning" onClick={() => navigate('/leaves')}>
-                        Apply for Leave
+                        <FontAwesomeIcon icon={faPlaneDeparture} className="btn-icon" /> Apply for Leave
                     </button>
+                    
+                    {/* New Purchaser Quick Action */}
+                    {isPurchaser && (
+                        <button className="gts-btn" style={{ background: '#215D7B', color: 'white' }} onClick={() => navigate('/add-purchase')}>
+                            <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Log New Expense
+                        </button>
+                    )}
+
                     {!isEmployee && (
                         <button className="gts-btn danger" onClick={() => navigate('/leave-requests')}>
-                            Review Requests
+                            <FontAwesomeIcon icon={faClipboardList} className="btn-icon" /> Review Requests
                         </button>
                     )}
                 </div>

@@ -37,18 +37,21 @@ const upload = multer({ storage });
 router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+            return res.status(400).json({ message: 'No image provided' });
         }
 
-        const filePath = `/uploads/${req.file.filename}`;
-        
-        // Update User Profile
-        await User.findByIdAndUpdate(req.user.id, { profilePic: filePath });
-        
-        res.json({ filePath });
+        // Send to the 'ProfilePic' subfolder!
+        const fileUrl = await uploadToS3(req.file, 'ProfilePic');
+
+        // Update the user's record in the DB
+        const user = await User.findById(req.user.id);
+        user.profilePic = fileUrl; // This is now an AWS URL!
+        await user.save();
+
+        res.json({ filePath: fileUrl });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error("Avatar Upload Error:", err.message);
+        res.status(500).json({ message: 'Server error during upload' });
     }
 });
 

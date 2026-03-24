@@ -10,7 +10,10 @@ import '../styles/purchase.css';
 const AddPurchase = () => {
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
+    
     const [loading, setLoading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0); // <-- NEW: Progress state
+
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
 
@@ -70,58 +73,66 @@ const AddPurchase = () => {
     const handleMainChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    const compressImage = (file, maxWidth = 1024, quality = 0.7) => { 
-        return new Promise((resolve) => {
-            const reader = new FileReader(); reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image(); img.src = event.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas'); let width = img.width; let height = img.height;
-                    if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
-                    canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob((blob) => { resolve(new File([blob], file.name, { type: 'image/jpeg' })); }, 'image/jpeg', quality);
-                };
-            };
-        });
-    };
-
     const handleFileChange = (e, fieldName) => { 
         if (fieldName === 'expenseMedia') {
-            const selectedFiles = Array.from(e.target.files); const validFiles = [];
+            const selectedFiles = Array.from(e.target.files); 
+            const validFiles = [];
             for (let file of selectedFiles) {
-                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
-                else validFiles.push(file);
+                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+                    Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
+                } else {
+                    validFiles.push(file);
+                }
             }
             setFiles(prev => ({ ...prev, [fieldName]: validFiles }));
         } else {
-            const file = e.target.files[0]; if (!file) return;
+            const file = e.target.files[0]; 
+            if (!file) return;
             setFiles(prev => ({ ...prev, [fieldName]: file }));
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.amount || !formData.descriptionTags || !files.paymentScreenshot) return Swal.fire('Required Fields', 'Amount, Description, and Payment Screenshot are required.', 'warning');
+        if (!formData.amount || !formData.descriptionTags || !files.paymentScreenshot) {
+            return Swal.fire('Required Fields', 'Amount, Description, and Payment Screenshot are required.', 'warning');
+        }
+
         setLoading(true);
+        setUploadProgress(0); // Reset progress bar before starting
+
         try {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             data.append('expenseDetails', JSON.stringify(expenseDetails));
 
-            if (files.paymentScreenshot) data.append('paymentScreenshot', files.paymentScreenshot);
+            if (files.paymentScreenshot) {
+                data.append('paymentScreenshot', files.paymentScreenshot);
+            }
+            
+            // Just pass raw files to backend. Backend handles Sharp compression & S3 upload now!
             if (files.expenseMedia && files.expenseMedia.length > 0) {
                 for (let i = 0; i < files.expenseMedia.length; i++) {
-                    const file = files.expenseMedia[i];
-                    if (file.type.startsWith('image/')) {
-                        const compressedImg = await compressImage(file); data.append('expenseMedia', compressedImg);
-                    } else data.append('expenseMedia', file); 
+                    data.append('expenseMedia', files.expenseMedia[i]);
                 }
             }
-            await api.post('/purchases', data, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+            await api.post('/purchases', data, { 
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    setUploadProgress(percentCompleted);
+                }
+            });
+
             Swal.fire({ icon: 'success', title: 'Expense Logged for Approval', timer: 1500, showConfirmButton: false });
             navigate('/purchases');
-        } catch (err) { Swal.fire('Error', 'Failed to save expense', 'error'); } 
-        finally { setLoading(false); }
+        } catch (err) { 
+            Swal.fire('Error', 'Failed to save expense', 'error'); 
+        } finally { 
+            setLoading(false); 
+            setUploadProgress(0);
+        }
     };
 
     const getMediaLabel = () => {
@@ -319,10 +330,20 @@ const AddPurchase = () => {
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="profile-actions mt-30">
+                    {/* Actions & Progress Bar */}
+                    <div className="profile-actions mt-30" style={{ flexDirection: 'column', gap: '15px' }}>
+                        
+                        {/* THE NEW UPLOAD PROGRESS BAR */}
+                        {loading && uploadProgress > 0 && (
+                            <div className="upload-progress-container">
+                                <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}></div>
+                                <span className="upload-progress-text">Uploading to server... {uploadProgress}%</span>
+                            </div>
+                        )}
+
                         <button type="submit" className="save-btn purchase-submit-btn" disabled={loading}>
-                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> {loading ? 'Submitting for Approval...' : 'Submit Expense for Approval'}
+                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
+                            {loading ? 'Processing & Uploading...' : 'Submit Expense for Approval'}
                         </button>
                     </div>
 

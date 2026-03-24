@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api'; 
+import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-    faUser, faEnvelope, faPhone, faMapMarkerAlt, 
+import {
+    faUser, faEnvelope, faPhone, faMapMarkerAlt,
     faEdit, faSave, faTimes, faCamera,
-    faIdCard, faFirstAid, faUserTie 
+    faIdCard, faFirstAid, faUserTie
 } from '@fortawesome/free-solid-svg-icons';
 
 const Profile = () => {
     const [user, setUser] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
-    
+
     const [formData, setFormData] = useState({
         name: '', email: '', phoneNumber: '', address: ''
     });
 
-    const SERVER_URL = process.env.NODE_ENV === 'production' 
-        ? '' 
+    const SERVER_URL = process.env.NODE_ENV === 'production'
+        ? ''
         : 'http://localhost:5000';
 
     useEffect(() => {
@@ -28,7 +28,7 @@ const Profile = () => {
         try {
             const res = await api.get('/auth/me');
             setUser(res.data);
-            
+
             setFormData({
                 name: res.data.name,
                 email: res.data.email,
@@ -46,16 +46,31 @@ const Profile = () => {
 
         const uploadData = new FormData();
         uploadData.append('avatar', file);
+        Swal.fire({
+            title: 'Uploading Profile Picture...',
+            html: 'Please wait while we upload your image securely.',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
 
         try {
             const res = await api.post('/auth/upload-avatar', uploadData, {
-                headers: { 
+                headers: {
                     'Content-Type': 'multipart/form-data'
+                },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    const content = Swal.getHtmlContainer();
+                    if (content) {
+                        content.textContent = `Uploading: ${percentCompleted}%`;
+                    }
                 }
             });
-            
+
             setUser({ ...user, profilePic: res.data.filePath });
-            
+
             const storedUser = JSON.parse(localStorage.getItem('user'));
             localStorage.setItem('user', JSON.stringify({ ...storedUser, profilePic: res.data.filePath }));
 
@@ -72,7 +87,7 @@ const Profile = () => {
             const res = await api.put('/auth/update-profile', formData);
             setUser(res.data);
             setIsEditing(false);
-            
+
             const storedUser = JSON.parse(localStorage.getItem('user'));
             localStorage.setItem('user', JSON.stringify({ ...storedUser, name: res.data.name }));
 
@@ -89,15 +104,15 @@ const Profile = () => {
     return (
         <div className="profile-container fade-in">
             <h1 className="page-title">My Profile</h1>
-            
+
             <div className="profile-card">
                 <div className="profile-header">
                     <div className="profile-avatar-container">
                         {user.profilePic ? (
-                            <img 
-                                src={`${SERVER_URL}${user.profilePic}`} 
-                                alt="Profile" 
-                                className="profile-img-large" 
+                            <img
+                                src={user.profilePic?.startsWith('http') ? user.profilePic : `${SERVER_URL}${user.profilePic}`}
+                                alt="Profile"
+                                className="profile-img-large"
                                 onError={(e) => { e.target.onerror = null; e.target.src = '' }}
                             />
                         ) : (
@@ -105,12 +120,12 @@ const Profile = () => {
                         )}
                         <label htmlFor="avatar-upload" className="avatar-edit-icon">
                             <FontAwesomeIcon icon={faCamera} />
-                            <input 
-                                type="file" 
-                                id="avatar-upload" 
-                                hidden 
-                                onChange={handleFileChange} 
-                                accept="image/*" 
+                            <input
+                                type="file"
+                                id="avatar-upload"
+                                hidden
+                                onChange={handleFileChange}
+                                accept="image/*"
                             />
                         </label>
                     </div>
@@ -134,19 +149,19 @@ const Profile = () => {
                         <div className="form-grid">
                             <div className="form-group">
                                 <label className="input-label">Full Name</label>
-                                <input className="custom-input" type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
+                                <input className="custom-input" type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
                             </div>
                             <div className="form-group">
                                 <label className="input-label">Work Email</label>
-                                <input className="custom-input" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
+                                <input className="custom-input" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
                             </div>
                             <div className="form-group">
                                 <label className="input-label">Phone Number</label>
-                                <input className="custom-input" type="text" value={formData.phoneNumber} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} placeholder="+91 ..." />
+                                <input className="custom-input" type="text" value={formData.phoneNumber} onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="+91 ..." />
                             </div>
                             <div className="form-group">
                                 <label className="input-label">Address</label>
-                                <input className="custom-input" type="text" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="City, Country" />
+                                <input className="custom-input" type="text" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="City, Country" />
                             </div>
                         </div>
                         <div className="profile-actions">
@@ -164,7 +179,7 @@ const Profile = () => {
                             <FontAwesomeIcon icon={faPhone} className="detail-icon" />
                             <div><label>Phone Number</label><p>{user.phoneNumber || 'Not provided'}</p></div>
                         </div>
-                        
+
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faIdCard} className="detail-icon" />
                             <div>

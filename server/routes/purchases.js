@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware');
+const upload = require('../middleware/uploadMiddleware'); // This is now your memoryStorage middleware
+const { uploadToS3 } = require('../utils/s3Service'); // Import the new S3 Service
+
 const Purchase = require('../models/Purchase');
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
@@ -10,7 +12,7 @@ const Wallet = require('../models/Wallet');
 // @desc    Add a new dynamic expense entry
 router.post('/', auth, upload.fields([
     { name: 'paymentScreenshot', maxCount: 1 },
-    { name: 'expenseMedia', maxCount: 10 } // <-- Updated Name
+    { name: 'expenseMedia', maxCount: 10 } 
 ]), async (req, res) => {
     try {
         const {
@@ -25,15 +27,19 @@ router.post('/', auth, upload.fields([
             catch (e) { console.error("Error parsing expenseDetails", e); }
         }
 
-        // Extract file paths
+        // --- NEW S3 UPLOAD LOGIC ---
         let paymentScreenshotUrl = '';
         let expenseMediaUrls = [];
 
+        // 1. Upload Screenshot to S3
         if (req.files && req.files['paymentScreenshot']) {
-            paymentScreenshotUrl = `/uploads/purchases/${req.files['paymentScreenshot'][0].filename}`;
+            paymentScreenshotUrl = await uploadToS3(req.files['paymentScreenshot'][0]);
         }
+
+        // 2. Upload Multiple Media Files to S3 (Running in parallel for speed)
         if (req.files && req.files['expenseMedia']) {
-            expenseMediaUrls = req.files['expenseMedia'].map(file => `/uploads/purchases/${file.filename}`);
+            const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
+            expenseMediaUrls = await Promise.all(uploadPromises);
         }
 
         const newPurchase = new Purchase({
@@ -46,17 +52,17 @@ router.post('/', auth, upload.fields([
             descriptionTags,
             expenseDetails: parsedExpenseDetails,
             purchasedBy: req.user.id,
-            paymentScreenshotUrl,
-            expenseMediaUrls,
-            status: 'Pending' // Always starts as pending
+            paymentScreenshotUrl, // Now stores the AWS S3 URL
+            expenseMediaUrls,     // Now stores an array of AWS S3 URLs
+            status: 'Pending'
         });
 
         await newPurchase.save();
         res.status(201).json(newPurchase);
 
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error("Purchase Creation Error:", err.message);
+        res.status(500).json({ message: 'Server Error during upload' });
     }
 });
 
@@ -144,7 +150,6 @@ router.put('/:id', auth, upload.fields([
 
         if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized' });
 
-        // Do not allow edits if already approved (Safety check)
         if (purchase.status === 'Approved') {
             return res.status(400).json({ message: 'Cannot edit an approved expense.' });
         }
@@ -170,21 +175,23 @@ router.put('/:id', auth, upload.fields([
             catch (e) { console.error("Error parsing expenseDetails"); }
         }
 
+        // --- NEW S3 UPLOAD LOGIC FOR EDITS ---
         if (req.files && req.files['paymentScreenshot']) {
-            purchase.paymentScreenshotUrl = `/uploads/purchases/${req.files['paymentScreenshot'][0].filename}`;
+            purchase.paymentScreenshotUrl = await uploadToS3(req.files['paymentScreenshot'][0]);
         }
         if (req.files && req.files['expenseMedia']) {
-            purchase.expenseMediaUrls = req.files['expenseMedia'].map(file => `/uploads/purchases/${file.filename}`);
+            const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
+            purchase.expenseMediaUrls = await Promise.all(uploadPromises);
         }
 
-        // Reset to pending if edited (optional, but good practice)
+        // Reset to pending if edited
         purchase.status = 'Pending';
 
         await purchase.save();
         res.json(purchase);
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error("Update Error:", err.message);
+        res.status(500).json({ message: 'Server Error during update' });
     }
 });
 
@@ -195,6 +202,7 @@ router.delete('/:id', auth, async (req, res) => {
         const purchase = await Purchase.findById(req.params.id);
         if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
 
+        // Note: You might want to add S3 DeleteObjectCommand logic here later to clear up bucket space!
         await purchase.deleteOne();
         res.json({ message: 'Purchase record removed' });
     } catch (err) {
@@ -208,13 +216,12 @@ router.delete('/:id', auth, async (req, res) => {
 // @desc    Approve or Reject an expense & Deduct Wallet (Manager/Admin only)
 router.put('/:id/status', auth, async (req, res) => {
     try {
-        const { status } = req.body; // Expects 'Approved' or 'Rejected'
+        const { status } = req.body; 
         const purchase = await Purchase.findById(req.params.id).populate('purchasedBy');
 
         if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
         if (purchase.status !== 'Pending') return res.status(400).json({ message: 'Expense is already processed' });
 
-        // 1. Authorization Check (Is this user allowed to approve this?)
         let isAuthorized = false;
         if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
             isAuthorized = true;
@@ -227,24 +234,17 @@ router.put('/:id/status', auth, async (req, res) => {
 
         if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized to approve this expense' });
 
-        // 2. Financial Deduction Logic
         if (status === 'Approved') {
-            // Find the wallet of the person who paid (paymentSourceId)
             let wallet = await Wallet.findOne({ userId: purchase.paymentSourceId });
-            
-            // If they don't have a wallet yet, create one starting at 0
             if (!wallet) {
                 wallet = new Wallet({ userId: purchase.paymentSourceId, balance: 0 });
             }
-            
-            // Deduct the expense amount from their wallet
             wallet.balance -= purchase.amount;
             await wallet.save();
         }
 
-        // 3. Stamp the Approval
         purchase.status = status;
-        purchase.approvedBy = req.user.id; // Record the Manager/Admin who clicked the button
+        purchase.approvedBy = req.user.id; 
         await purchase.save();
 
         res.json(purchase);

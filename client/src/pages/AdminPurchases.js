@@ -171,11 +171,17 @@ const AdminPurchases = () => {
     };
 
     // --- UI HELPERS ---
+    // Helper to safely render old local URLs or new S3 URLs
+    const getFileUrl = (url) => {
+        if (!url) return '';
+        return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
+    };
+
     const viewFile = (fileData, title) => {
         if (Array.isArray(fileData)) {
             let htmlContent = '<div style="display:flex; flex-direction:column; gap:20px; max-height: 60vh; overflow-y:auto; padding-right:10px;">';
             fileData.forEach((url, index) => {
-                const fullUrl = `${SERVER_URL}${url}`;
+                const fullUrl = getFileUrl(url); // 👇 FIXED 👇
                 const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
                 htmlContent += `
                     <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
@@ -186,7 +192,7 @@ const AdminPurchases = () => {
             htmlContent += '</div>';
             Swal.fire({ title: title, html: htmlContent, width: '800px', showCloseButton: true, showConfirmButton: false });
         } else {
-            const fullUrl = `${SERVER_URL}${fileData}`;
+            const fullUrl = getFileUrl(fileData); // 👇 FIXED 👇
             const isPdf = fileData.toLowerCase().endsWith('.pdf');
             if (isPdf) { Swal.fire({ title: title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false }); } 
             else { Swal.fire({ title: title, imageUrl: fullUrl, imageAlt: title, width: '800px', showCloseButton: true, showConfirmButton: false }); }
