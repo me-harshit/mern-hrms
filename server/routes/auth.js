@@ -4,34 +4,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { uploadToS3 } = require('../utils/s3Service');
 
-// 1. Define Upload Directory
-const uploadDir = path.join(__dirname, '../uploads');
-
-// 2. Ensure directory exists
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// 3. Configure Multer Storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        if (!req.user || !req.user.id) {
-            return cb(new Error('User not authenticated'));
-        }
-        const uniqueSuffix = Date.now();
-        const ext = path.extname(file.originalname);
-        cb(null, `${req.user.id}-${uniqueSuffix}${ext}`);
-    }
-});
-
-const upload = multer({ storage });
+const upload = require('../middleware/uploadMiddleware'); 
 
 // @route   POST /api/auth/upload-avatar
 router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) => {
@@ -40,7 +15,7 @@ router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) =>
             return res.status(400).json({ message: 'No image provided' });
         }
 
-        // Send to the 'ProfilePic' subfolder!
+        // Send to the 'ProfilePic' subfolder! (S3 service handles the sharp compression)
         const fileUrl = await uploadToS3(req.file, 'ProfilePic');
 
         // Update the user's record in the DB
@@ -74,7 +49,7 @@ router.post('/login', async (req, res) => {
             user: {
                 id: user.id,
                 role: user.role,
-                isPurchaser: user.isPurchaser // Added here
+                isPurchaser: user.isPurchaser
             }
         };
 
@@ -90,7 +65,8 @@ router.post('/login', async (req, res) => {
                         id: user.id, 
                         name: user.name, 
                         role: user.role,
-                        isPurchaser: user.isPurchaser // Added here! This goes to Local Storage
+                        isPurchaser: user.isPurchaser,
+                        profilePic: user.profilePic // Good practice to send this on login too
                     } 
                 });
             }
