@@ -4,7 +4,7 @@ import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture, faEdit
+    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture, faEdit, faWallet
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 
@@ -17,6 +17,8 @@ const EmployeeProfile = () => {
     const [user, setUser] = useState({});
     const [leaveStats, setLeaveStats] = useState({ history: [] });
     const [attendanceLogs, setAttendanceLogs] = useState([]);
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+    const [walletBalance, setWalletBalance] = useState(0);
 
     useEffect(() => {
         fetchEmployeeData();
@@ -25,15 +27,18 @@ const EmployeeProfile = () => {
 
     const fetchEmployeeData = async () => {
         try {
-            const [userRes, leaveRes, attendanceRes] = await Promise.all([
+            // 👇 FIX: Added walletRes to the array below! 👇
+            const [userRes, leaveRes, attendanceRes, walletRes] = await Promise.all([
                 api.get(`/employees/${id}`),
                 api.get(`/leaves/admin/user-leaves/${id}`),
-                api.get(`/attendance/admin/user-logs/${id}`)
+                api.get(`/attendance/admin/user-logs/${id}`),
+                api.get(`/wallets/user/${id}`).catch(() => ({ data: { balance: 0 } }))
             ]);
 
             setUser(userRes.data);
             setLeaveStats(leaveRes.data);
             setAttendanceLogs(attendanceRes.data);
+            setWalletBalance(walletRes.data.balance);
             setLoading(false);
         } catch (err) {
             console.error(err);
@@ -82,6 +87,57 @@ const EmployeeProfile = () => {
         const minutes = totalMinutes % 60;
 
         return `${hours}h ${minutes}m`;
+    };
+
+    const handleManageWallet = async () => {
+        const { value: formValues } = await Swal.fire({
+            title: 'Manage Wallet Balance',
+            html: `
+                <div style="text-align: left; padding: 0 10px;">
+                    <div style="background: #f1f5f9; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; color: #334155; text-align: center;">
+                        Current Balance: <strong style="color: ${walletBalance < 0 ? '#dc2626' : '#16a34a'}">₹${walletBalance}</strong>
+                    </div>
+                    
+                    <label class="swal-custom-label">Action</label>
+                    <select id="wallet-action" class="swal2-select">
+                        <option value="add">Add Funds (+)</option>
+                        <option value="deduct">Deduct Funds (-)</option>
+                        <option value="set">Set Exact Balance (=)</option>
+                    </select>
+
+                    <label class="swal-custom-label" style="margin-top: 15px;">Amount (₹)</label>
+                    <input id="wallet-amount" type="number" class="swal2-input" placeholder="e.g. 5000">
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonColor: '#215D7B',
+            confirmButtonText: 'Update Balance',
+            preConfirm: () => {
+                const action = document.getElementById('wallet-action').value;
+                const amount = Number(document.getElementById('wallet-amount').value);
+
+                if (!amount && amount !== 0) {
+                    Swal.showValidationMessage('Please enter a valid amount');
+                    return false;
+                }
+                return { action, amount };
+            }
+        });
+
+        if (formValues) {
+            let newBalance = walletBalance;
+            if (formValues.action === 'add') newBalance += formValues.amount;
+            if (formValues.action === 'deduct') newBalance -= formValues.amount;
+            if (formValues.action === 'set') newBalance = formValues.amount;
+
+            try {
+                await api.put('/wallets/update', { targetUserId: id, newBalance });
+                Swal.fire('Success', `Wallet updated to ₹${newBalance}`, 'success');
+                setWalletBalance(newBalance); // Update UI instantly
+            } catch (err) {
+                Swal.fire('Error', 'Failed to update wallet', 'error');
+            }
+        }
     };
 
     // --- HANDLER: EDIT LOG ---
@@ -228,21 +284,21 @@ const EmployeeProfile = () => {
                         {/* ROW 2: Dates */}
                         <div className="form-group">
                             <label className="input-label">Date of Birth</label>
-                            <input 
-                                type="date" 
-                                className="custom-input" 
-                                value={user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : ''} 
-                                onChange={e => setUser({ ...user, dateOfBirth: e.target.value })} 
+                            <input
+                                type="date"
+                                className="custom-input"
+                                value={user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : ''}
+                                onChange={e => setUser({ ...user, dateOfBirth: e.target.value })}
                             />
                         </div>
 
                         <div className="form-group">
                             <label className="input-label">Joining Date</label>
-                            <input 
-                                type="date" 
-                                className="custom-input" 
-                                value={user.joiningDate ? new Date(user.joiningDate).toISOString().split('T')[0] : ''} 
-                                onChange={e => setUser({ ...user, joiningDate: e.target.value })} 
+                            <input
+                                type="date"
+                                className="custom-input"
+                                value={user.joiningDate ? new Date(user.joiningDate).toISOString().split('T')[0] : ''}
+                                onChange={e => setUser({ ...user, joiningDate: e.target.value })}
                             />
                         </div>
 
@@ -270,8 +326,15 @@ const EmployeeProfile = () => {
                         {/* ROW 4: System Config */}
                         <div className="form-group">
                             <label className="input-label">System Role</label>
-                            <select className="swal2-select custom-input" value={user.role || 'EMPLOYEE'} onChange={e => setUser({ ...user, role: e.target.value })}>
+                            <select
+                                className="swal2-select custom-input"
+                                value={user.role || 'EMPLOYEE'}
+                                onChange={e => setUser({ ...user, role: e.target.value })}
+                                disabled={currentUser?.role !== 'ADMIN'}
+                                style={{ opacity: currentUser?.role !== 'ADMIN' ? 0.6 : 1 }}
+                            >
                                 <option value="EMPLOYEE">Employee</option>
+                                <option value="MANAGER">Manager</option>
                                 <option value="HR">HR</option>
                                 <option value="ADMIN">Admin</option>
                             </select>
@@ -304,23 +367,47 @@ const EmployeeProfile = () => {
                             <input type="email" className="custom-input" placeholder="manager@gts.ai" value={user.reportingManagerEmail || ''} onChange={e => setUser({ ...user, reportingManagerEmail: e.target.value })} />
                         </div>
 
+                        {/* ROW 6: Salary & Wallet */}
                         <div className="form-group">
                             <label className="input-label">Salary (Monthly) (₹)</label>
                             <input type="number" className="custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} />
                         </div>
 
+                        <div className="form-group">
+                            <label className="input-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>
+                                    <FontAwesomeIcon icon={faWallet} style={{ color: '#215D7B', marginRight: '6px' }} />
+                                    Employee Wallet
+                                </span>
+                                <span style={{ color: walletBalance < 0 ? '#dc2626' : '#16a34a' }}>₹{walletBalance}</span>
+                            </label>
+
+                            {(currentUser?.role === 'ADMIN' || currentUser?.role === 'HR' || currentUser?.role === 'MANAGER') ? (
+                                <button
+                                    type="button"
+                                    className="gts-btn"
+                                    style={{ background: '#f0f9ff', color: '#0284c7', border: '1px solid #0284c7', width: '100%', height: '43px', justifyContent: 'center', marginTop: '5px' }}
+                                    onClick={handleManageWallet}
+                                >
+                                    <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Manage Funds
+                                </button>
+                            ) : (
+                                <input className="custom-input" disabled value="Restricted Access" style={{ background: '#f1f5f9', color: '#94a3b8', marginTop: '5px' }} />
+                            )}
+                        </div>
+
                         {/* Checkbox & Save */}
                         <div className="form-group full-width checkbox-container mt-10">
                             <label className="checkbox-label">
-                                <input 
-                                    type="checkbox" 
+                                <input
+                                    type="checkbox"
                                     className="custom-checkbox"
-                                    checked={user.isPurchaser || false} 
-                                    onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} 
+                                    checked={user.isPurchaser || false}
+                                    onChange={e => setUser({ ...user, isPurchaser: e.target.checked })}
                                 />
                                 Grant Purchaser Access
                             </label>
-                            
+
                             <button type="submit" className="gts-btn primary btn-large">
                                 <FontAwesomeIcon icon={faSave} className="btn-icon" /> Save Profile Changes
                             </button>
@@ -372,8 +459,8 @@ const EmployeeProfile = () => {
                                         <tr key={l._id}>
                                             <td data-label="Type"><span className="role-tag employee text-small">{l.leaveType}</span></td>
                                             <td data-label="Dates" className="text-dark-gray text-small">
-                                                {new Date(l.fromDate).toLocaleDateString()} 
-                                                <span className="text-muted mx-1">➜</span> 
+                                                {new Date(l.fromDate).toLocaleDateString()}
+                                                <span className="text-muted mx-1">➜</span>
                                                 {new Date(l.toDate).toLocaleDateString()}
                                             </td>
                                             <td data-label="Days" className="fw-600">{l.days}</td>

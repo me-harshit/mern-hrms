@@ -6,7 +6,7 @@ const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
 
 // @route   GET /api/dashboard/admin-stats
-// @desc    Global Stats for Admin/HR
+// @desc    Global Stats for Admin/HR or Team Stats for Manager
 router.get('/admin-stats', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
@@ -14,19 +14,33 @@ router.get('/admin-stats', auth, async (req, res) => {
         const now = new Date();
         const todayStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
 
-        // 1. Fetch all ACTIVE, NON-ADMIN user IDs to filter all stats accurately
-        const nonAdminIds = await User.find({ status: 'ACTIVE', role: { $ne: 'ADMIN' } }).distinct('_id');
+        let targetUserIds = [];
 
-        // 2. Count metrics strictly for those non-admin IDs
+        // 🚀 MANAGER LOGIC: Fetch only their direct reports
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            targetUserIds = await User.find({ 
+                status: 'ACTIVE', 
+                reportingManagerEmail: manager.email.toLowerCase() 
+            }).distinct('_id');
+        } else {
+            // HR and ADMIN: Fetch all active, non-admin employees
+            targetUserIds = await User.find({ 
+                status: 'ACTIVE', 
+                role: { $ne: 'ADMIN' } 
+            }).distinct('_id');
+        }
+
+        // 2. Count metrics strictly for the targeted IDs (Company-wide or Team-wide)
         const [presentToday, pendingLeaves, onLeaveToday] = await Promise.all([
-            Attendance.countDocuments({ date: todayStr, userId: { $in: nonAdminIds } }),
-            Leave.countDocuments({ status: 'Pending', userId: { $in: nonAdminIds } }),
-            Leave.countDocuments({ status: 'Approved', fromDate: { $lte: now }, toDate: { $gte: now }, userId: { $in: nonAdminIds } })
+            Attendance.countDocuments({ date: todayStr, userId: { $in: targetUserIds } }),
+            Leave.countDocuments({ status: 'Pending', userId: { $in: targetUserIds } }),
+            Leave.countDocuments({ status: 'Approved', fromDate: { $lte: now }, toDate: { $gte: now }, userId: { $in: targetUserIds } })
         ]);
 
-        // totalEmployees is simply the length of the nonAdminIds array
+        // totalEmployees is simply the length of the targetUserIds array
         res.json({ 
-            totalEmployees: nonAdminIds.length, 
+            totalEmployees: targetUserIds.length, 
             presentToday, 
             pendingLeaves, 
             onLeaveToday 

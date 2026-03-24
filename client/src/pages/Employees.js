@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../utils/api'; 
+import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faUserTie, faEdit, faCalendarAlt, faSearch, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
@@ -19,7 +19,7 @@ const Employees = () => {
     const fetchEmployees = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/employees'); 
+            const res = await api.get('/employees');
             setEmployees(res.data);
         } catch (err) {
             console.error(err);
@@ -28,46 +28,49 @@ const Employees = () => {
         }
     };
 
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+    const userRole = currentUser?.role || 'EMPLOYEE';
+
     const handleAddEmployee = async () => {
         const { value: formValues } = await Swal.fire({
             title: 'Register New Employee',
             html: `
                 <div style="text-align: left; padding: 0 10px; max-height: 60vh; overflow-y: auto;">
                     <label class="swal-custom-label">Full Name</label>
-                    <input id="add-name" class="swal2-input custom-input" placeholder="Harshit" style="margin-top:0;">
+                    <input id="add-name" class="swal2-input" placeholder="Harshit">
                     
                     <label class="swal-custom-label">Work Email</label>
-                    <input id="add-email" class="swal2-input custom-input" placeholder="harshit@gts.ai" style="margin-top:0;">
+                    <input id="add-email" class="swal2-input" placeholder="harshit@gts.ai">
 
                     <label class="swal-custom-label">Employee / Biometric ID</label>
-                    <input id="add-emp-id" class="swal2-input custom-input" placeholder="e.g. GTS003" style="margin-top:0;">
+                    <input id="add-emp-id" class="swal2-input" placeholder="e.g. GTS003">
                     
                     <label class="swal-custom-label">Temporary Password</label>
-                    <input id="add-password" type="password" class="swal2-input custom-input" placeholder="••••••••" style="margin-top:0;">
+                    <input id="add-password" type="password" class="swal2-input" placeholder="••••••••">
 
                     <div style="display: flex; gap: 15px;">
                         <div style="flex: 1;">
                             <label class="swal-custom-label">Joining Date</label>
-                            <input id="add-date" type="date" class="swal2-input custom-input" style="width: 100%; margin-top: 0;" value="${new Date().toISOString().split('T')[0]}">
+                            <input id="add-date" type="date" class="swal2-input" style="width: 100%; margin-top: 10px;" value="${new Date().toISOString().split('T')[0]}">
                         </div>
                         <div style="flex: 1;">
                             <label class="swal-custom-label">Date of Birth</label>
-                            <input id="add-dob" type="date" class="swal2-input custom-input" style="width: 100%; margin-top: 0;">
+                            <input id="add-dob" type="date" class="swal2-input" style="width: 100%; margin-top: 10px;">
                         </div>
                     </div>
                     
                     <div style="display: flex; gap: 15px; margin-top: 15px;">
                         <div style="flex: 1;">
                             <label class="swal-custom-label">System Role</label>
-                            <select id="add-role" class="swal2-select custom-input" style="width: 100%; margin-top: 0;">
+                            <select id="add-role" class="swal2-select" style="width: 100%; margin-top: 10px;">
                                 <option value="EMPLOYEE">Employee</option>
-                                <option value="HR">HR Manager</option>
+                                <option value="MANAGER">Manager</option> <option value="HR">HR Manager</option>
                                 <option value="ADMIN">Administrator</option>
                             </select>
                         </div>
                         <div style="flex: 1;">
                             <label class="swal-custom-label">Shift Timing</label>
-                            <select id="add-shift" class="swal2-select custom-input" style="width: 100%; margin-top: 0;">
+                            <select id="add-shift" class="swal2-select" style="width: 100%; margin-top: 10px;">
                                 <option value="DAY">Day Shift</option>
                                 <option value="NIGHT">Night Shift</option>
                             </select>
@@ -78,7 +81,7 @@ const Employees = () => {
             showCancelButton: true,
             confirmButtonText: 'Create Account',
             confirmButtonColor: '#215D7B',
-            width: '600px', 
+            width: '600px',
             preConfirm: () => {
                 return {
                     name: document.getElementById('add-name').value,
@@ -128,25 +131,23 @@ const Employees = () => {
     return (
         <div className="employee-page fade-in">
             {/* HEADER (Using Isolated Classes from App.css) */}
-            <div className="employee-page-header">
-                <h1 className="page-title header-no-margin">Employee Directory</h1>
-                
-                <div className="employee-header-actions">
-                    <div className="search-wrapper">
-                        <FontAwesomeIcon icon={faSearch} className="search-icon" />
-                        <input
-                            type="text"
-                            placeholder="Search by name, email, or ID..."
-                            className="swal2-input search-input"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
+                <h1 className="page-title" style={{ margin: 0 }}>
+                    {userRole === 'MANAGER' ? 'My Team Directory' : 'Employee Directory'}
+                </h1>
+
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ position: 'relative', minWidth: '250px' }}>
+                        <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
+                        <input type="text" placeholder="Search..." className="swal2-input" style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
 
-                    {/* Button restored to standard class: 'gts-btn primary' */}
-                    <button className="gts-btn primary text-nowrap" onClick={handleAddEmployee}>
-                        <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Add Employee
-                    </button>
+                    {/* RESTRICTED: Only ADMIN can see the Add button */}
+                    {userRole === 'ADMIN' && (
+                        <button className="action-btn-primary" onClick={handleAddEmployee} style={{ whiteSpace: 'nowrap' }}>
+                            <FontAwesomeIcon icon={faPlus} style={{ marginRight: '5px' }} /> Add Employee
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -189,14 +190,14 @@ const Employees = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        
+
                                         <td data-label="Joining Date">
                                             <div className="fs-14 text-dark-gray">
                                                 <FontAwesomeIcon icon={faCalendarAlt} className="text-muted mr-5" />
                                                 {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-GB') : 'N/A'}
                                             </div>
                                         </td>
-                                        
+
                                         <td data-label="Role / Shift">
                                             <div className="flex-col align-start gap-5">
                                                 <span className={`role-tag ${emp.role.toLowerCase()}`}>
@@ -211,13 +212,13 @@ const Employees = () => {
                                                 </span>
                                             </div>
                                         </td>
-                                        
+
                                         <td data-label="Status">
                                             <span className={emp.status === 'ACTIVE' ? 'status-active' : 'status-inactive'}>
                                                 {emp.status}
                                             </span>
                                         </td>
-                                        
+
                                         <td data-label="Actions">
                                             <button className="edit-btn" onClick={() => handleEditEmployee(emp)}>
                                                 <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit

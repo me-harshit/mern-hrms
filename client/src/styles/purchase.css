@@ -1,0 +1,111 @@
+/* ==========================================================================
+   EXPENSE & PURCHASE SPECIFIC STYLES
+   ========================================================================== */
+
+/* --- Modern Segmented Toggle for Expense Type --- */
+.expense-type-toggle {
+    display: flex;
+    background-color: #f1f5f9;
+    padding: 5px;
+    border-radius: 10px;
+    gap: 5px;
+    width: 100%;
+    margin-top: 5px;
+}
+
+.expense-type-toggle label {
+    flex: 1;
+    text-align: center;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748b;
+    transition: all 0.3s ease;
+    margin: 0;
+}
+
+.expense-type-toggle input[type="radio"] {
+    display: none; /* Hide default radio circles */
+}
+
+.expense-type-toggle label.active {
+    background-color: white;
+    color: var(--primary);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* --- Form Section Cards --- */
+.expense-form-section {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 25px;
+    transition: box-shadow 0.3s ease;
+}
+
+.expense-form-section:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.expense-section-title {
+    font-size: 16px;
+    color: #1e293b;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 12px;
+}
+
+/* --- File Upload Drag & Drop Look --- */
+.expense-file-area {
+    background: white;
+    border: 2px dashed #cbd5e1;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.expense-file-area:hover {
+    border-color: var(--primary);
+    background: #f0f7f9;
+}
+
+/* --- Table Enhancements --- */
+.expense-amount-large {
+    color: var(--primary);
+    font-size: 16px;
+    font-weight: 700;
+    background: #f0f7f9;
+    padding: 4px 10px;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+.expense-tag-pill {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+    margin-top: 4px;
+}
+
+/* --- Mobile Responsiveness --- */
+@media screen and (max-width: 768px) {
+    .expense-type-toggle {
+        flex-direction: column; /* Stack toggles on tiny screens */
+    }
+    
+    .expense-form-section {
+        padding: 15px;
+    }
+}

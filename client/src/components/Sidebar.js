@@ -10,7 +10,9 @@ import {
     faUsers,
     faShieldAlt,
     faBoxOpen,
-    faTimes
+    faTimes,
+    faUserTimes,
+    faFolderOpen // <-- ADDED ICON
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -59,18 +61,23 @@ const Sidebar = ({ isOpen, onClose }) => {
                     <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
                 </Link>
 
-                {(user?.isPurchaser || userRole === 'HR' || userRole === 'ADMIN') && (
+                {/* Visible to Purchasers, Admins, HRs, AND Managers */}
+                {(user?.isPurchaser || userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') && (
                     <Link to="/purchases" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/purchases' ? 'active' : ''}`}>
                         <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>My Purchases</span>
                     </Link>
                 )}
 
-                {(userRole === 'HR' || userRole === 'ADMIN') && (
+                {/* Visible to Admins, HRs, AND Managers */}
+                {(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') && (
                     <>
-                        <div className="sidebar-section-label">HR Management</div>
+                        <div className="sidebar-section-label">
+                            {userRole === 'MANAGER' ? 'Team Management' : 'HR Management'}
+                        </div>
 
                         <Link to="/employees" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/employees' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faUsers} className="nav-icon" /> <span>Employees</span>
+                            <FontAwesomeIcon icon={faUsers} className="nav-icon" /> 
+                            <span>{userRole === 'MANAGER' ? 'My Team' : 'Employees'}</span>
                         </Link>
 
                         <Link to="/attendance-logs" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/attendance-logs' ? 'active' : ''}`}>
@@ -81,16 +88,29 @@ const Sidebar = ({ isOpen, onClose }) => {
                             <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Requests</span>
                         </Link>
                         
+                        {/* 👇 NEW PROJECT ROUTE 👇 */}
+                        <Link to="/projects" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/projects' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faFolderOpen} className="nav-icon" /> <span>Projects</span>
+                        </Link>
+
                         <Link to="/admin-purchases" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-purchases' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>All Purchases</span>
+                            <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> 
+                            <span>{userRole === 'MANAGER' ? 'Team Purchases' : 'All Purchases'}</span>
+                        </Link>
+
+                        <Link to="/absent-employees" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/absent-employees' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faUserTimes} className="nav-icon" /> <span>Live Absence</span>
                         </Link>
                     </>
                 )}
 
                 {userRole === 'ADMIN' && (
-                    <Link to="/admin-settings" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-settings' ? 'active' : ''}`}>
-                        <FontAwesomeIcon icon={faShieldAlt} className="nav-icon" /> <span>Admin Control</span>
-                    </Link>
+                    <>
+                        <div className="sidebar-section-label">System</div>
+                        <Link to="/admin-settings" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-settings' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faShieldAlt} className="nav-icon" /> <span>Admin Control</span>
+                        </Link>
+                    </>
                 )}
             </nav>
         </div>

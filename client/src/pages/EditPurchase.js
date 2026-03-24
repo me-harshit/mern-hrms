@@ -3,143 +3,244 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api, { SERVER_URL } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
+import '../styles/purchase.css'; 
 
 const EditPurchase = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const currentUser = JSON.parse(localStorage.getItem('user'));
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [usersList, setUsersList] = useState([]);
 
+    // --- MAIN FORM STATE ---
     const [formData, setFormData] = useState({
-        itemName: '', amount: '', quantity: 1, projectName: '',
-        vendorName: '', storageLocation: '', notes: '', inventoryStatus: ''
+        expenseType: 'Project Expense', 
+        category: 'Product / Item Purchase',
+        purchaseDate: '',
+        amount: '',
+        paymentSourceId: '', 
+        projectName: '',
+        descriptionTags: ''
     });
 
-    // To display existing files
+    // --- DYNAMIC CATEGORY DETAILS STATE ---
+    const [expenseDetails, setExpenseDetails] = useState({
+        productName: '', quantity: 1, unitPrice: '', expiryDate: '', storageLocation: '',
+        vehicleType: 'Car', vehicleNumber: '', odometerBefore: '', odometerAfter: '', kmTraveled: '', travelFrom: '', travelTo: '', purpose: '',
+        restaurantName: '', foodItemsOrdered: '', numberOfPeople: '',
+        travelMode: 'Flight', distanceKm: '', bookingReference: '',
+        hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
+        vendorName: '', billingCycle: 'Monthly', expenseDescription: ''
+    });
+
+    // --- EXISTING & NEW FILES STATE ---
     const [existingFiles, setExistingFiles] = useState({});
-    
-    // To hold newly uploaded files (which will replace existing ones)
     const [newFiles, setNewFiles] = useState({
-        invoice: null, paymentScreenshot: null, productMedia: []
+        paymentScreenshot: null, expenseMedia: []
     });
 
     useEffect(() => {
-        fetchPurchaseData();
+        fetchInitialData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    const fetchPurchaseData = async () => {
+    const fetchInitialData = async () => {
         try {
+            // Fetch users for the dropdown
+            const usersRes = await api.get('/employees');
+            setUsersList(usersRes.data);
+
+            // Fetch the specific expense record
             const res = await api.get(`/purchases/${id}`);
             const data = res.data;
             
             setFormData({
-                itemName: data.itemName || '',
+                expenseType: data.expenseType || 'Project Expense',
+                category: data.category || 'Product / Item Purchase',
+                purchaseDate: data.purchaseDate ? new Date(data.purchaseDate).toISOString().split('T')[0] : '',
                 amount: data.amount || '',
-                quantity: data.quantity || 1,
+                // Handle populated user object or raw ID string
+                paymentSourceId: data.paymentSourceId?._id || data.paymentSourceId || currentUser.id,
                 projectName: data.projectName || '',
-                vendorName: data.vendorName || '',
-                storageLocation: data.storageLocation || '',
-                notes: data.notes || '',
-                inventoryStatus: data.inventoryStatus || 'Available'
+                descriptionTags: data.descriptionTags || ''
             });
 
+            // Load the dynamic details if they exist
+            if (data.expenseDetails) {
+                setExpenseDetails(prev => ({ ...prev, ...data.expenseDetails }));
+            }
+
             setExistingFiles({
-                invoiceUrl: data.invoiceUrl,
                 paymentScreenshotUrl: data.paymentScreenshotUrl,
-                productMediaUrls: data.productMediaUrls || []
+                expenseMediaUrls: data.expenseMediaUrls || []
             });
 
         } catch (err) {
-            Swal.fire('Error', 'Could not load purchase details', 'error');
+            Swal.fire('Error', 'Could not load expense details', 'error');
             navigate('/purchases');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleFileChange = (e, fieldName) => {
-        if (fieldName === 'productMedia') {
-            const selectedFiles = Array.from(e.target.files);
-            const validFiles = [];
-            for (let file of selectedFiles) {
-                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
-                    Swal.fire('Too Large', `Video "${file.name}" is over 15MB.`, 'warning');
-                } else {
-                    validFiles.push(file);
-                }
-            }
-            setNewFiles(prev => ({ ...prev, [fieldName]: validFiles }));
-        } else {
-            const file = e.target.files[0];
-            if (!file) return;
-            setNewFiles(prev => ({ ...prev, [fieldName]: file }));
+    // --- AUTO-CALCULATORS ---
+    useEffect(() => {
+        if (formData.category === 'Fuel Expense (Car / Bike)') {
+            const before = parseFloat(expenseDetails.odometerBefore) || 0;
+            const after = parseFloat(expenseDetails.odometerAfter) || 0;
+            if (after > before) setExpenseDetails(prev => ({ ...prev, kmTraveled: after - before }));
         }
-    };
+        if (formData.category === 'Accommodation') {
+            if (expenseDetails.checkInDate && expenseDetails.checkOutDate) {
+                const checkIn = new Date(expenseDetails.checkInDate);
+                const checkOut = new Date(expenseDetails.checkOutDate);
+                const diffTime = Math.abs(checkOut - checkIn);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                setExpenseDetails(prev => ({ ...prev, numberOfNights: diffDays }));
+            }
+        }
+    }, [expenseDetails.odometerBefore, expenseDetails.odometerAfter, expenseDetails.checkInDate, expenseDetails.checkOutDate, formData.category]);
+
+    // --- HANDLERS ---
+    const handleMainChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
     const compressImage = (file, maxWidth = 1024, quality = 0.7) => {
         return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
+            const reader = new FileReader(); reader.readAsDataURL(file);
             reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target.result;
+                const img = new Image(); img.src = event.target.result;
                 img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    if (width > maxWidth) {
-                        height = Math.round((height * maxWidth) / width);
-                        width = maxWidth;
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob((blob) => {
-                        resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                    }, 'image/jpeg', quality);
+                    const canvas = document.createElement('canvas'); let width = img.width; let height = img.height;
+                    if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
+                    canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => { resolve(new File([blob], file.name, { type: 'image/jpeg' })); }, 'image/jpeg', quality);
                 };
             };
         });
     };
 
+    const handleFileChange = (e, fieldName) => {
+        if (fieldName === 'expenseMedia') {
+            const selectedFiles = Array.from(e.target.files); const validFiles = [];
+            for (let file of selectedFiles) {
+                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
+                else validFiles.push(file);
+            }
+            setNewFiles(prev => ({ ...prev, [fieldName]: validFiles }));
+        } else {
+            const file = e.target.files[0]; if (!file) return;
+            setNewFiles(prev => ({ ...prev, [fieldName]: file }));
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!formData.amount || !formData.descriptionTags) return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
+        
         setSaving(true);
-
         try {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
+            data.append('expenseDetails', JSON.stringify(expenseDetails));
 
-            if (newFiles.invoice) data.append('invoice', newFiles.invoice);
+            // Only append files if the user is explicitly uploading new ones to replace the old ones
             if (newFiles.paymentScreenshot) data.append('paymentScreenshot', newFiles.paymentScreenshot);
-
-            if (newFiles.productMedia && newFiles.productMedia.length > 0) {
-                for (let i = 0; i < newFiles.productMedia.length; i++) {
-                    const file = newFiles.productMedia[i];
+            if (newFiles.expenseMedia && newFiles.expenseMedia.length > 0) {
+                for (let i = 0; i < newFiles.expenseMedia.length; i++) {
+                    const file = newFiles.expenseMedia[i];
                     if (file.type.startsWith('image/')) {
-                        const compressedImg = await compressImage(file);
-                        data.append('productMedia', compressedImg);
-                    } else {
-                        data.append('productMedia', file); 
-                    }
+                        const compressedImg = await compressImage(file); data.append('expenseMedia', compressedImg);
+                    } else data.append('expenseMedia', file); 
                 }
             }
 
-            await api.put(`/purchases/${id}`, data, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-
-            Swal.fire({ icon: 'success', title: 'Updated Successfully', timer: 1500, showConfirmButton: false });
+            await api.put(`/purchases/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+            Swal.fire({ icon: 'success', title: 'Update Saved', timer: 1500, showConfirmButton: false });
             navigate('/purchases');
+        } catch (err) { Swal.fire('Error', 'Failed to update expense', 'error'); } 
+        finally { setSaving(false); }
+    };
 
-        } catch (err) {
-            Swal.fire('Error', 'Failed to update purchase', 'error');
-        } finally {
-            setSaving(false);
+    const getMediaLabel = () => {
+        switch (formData.category) {
+            case 'Fuel Expense (Car / Bike)': return 'Odometer Image(s) / Fuel Station Receipt';
+            case 'Food Expense': return 'Order Screenshot / Restaurant Bill';
+            case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
+            case 'Accommodation': return 'Hotel Receipt / Invoice';
+            case 'Product / Item Purchase': return 'Product Photo(s) / Video(s)';
+            case 'Regular Office Expense': return 'Supporting Document / Bill';
+            default: return 'Expense Media (Photos/Videos)';
+        }
+    };
+
+    const renderCategoryFields = () => {
+        switch (formData.category) {
+            case 'Product / Item Purchase':
+                return (
+                    <>
+                        <div className="form-group full-width"><label className="input-label">Product Name *</label><input className="custom-input" name="productName" value={expenseDetails.productName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" name="quantity" value={expenseDetails.quantity} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" name="unitPrice" value={expenseDetails.unitPrice} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. Office Room A" required /></div>
+                        <div className="form-group"><label className="input-label">Expiry Date (If applicable)</label><input className="custom-input" type="date" name="expiryDate" value={expenseDetails.expiryDate} onChange={handleDetailChange} /></div>
+                    </>
+                );
+            case 'Fuel Expense (Car / Bike)':
+                return (
+                    <>
+                        <div className="form-group"><label className="input-label">Vehicle Type *</label><select className="swal2-select custom-input" name="vehicleType" value={expenseDetails.vehicleType} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="Car">Car</option><option value="Bike">Bike</option><option value="Auto">Auto</option></select></div>
+                        <div className="form-group"><label className="input-label">Vehicle Number *</label><input className="custom-input" name="vehicleNumber" value={expenseDetails.vehicleNumber} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Travel From *</label><input className="custom-input" name="travelFrom" value={expenseDetails.travelFrom} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Travel To *</label><input className="custom-input" name="travelTo" value={expenseDetails.travelTo} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Odometer (Before) *</label><input className="custom-input" type="number" name="odometerBefore" value={expenseDetails.odometerBefore} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Odometer (After) *</label><input className="custom-input" type="number" name="odometerAfter" value={expenseDetails.odometerAfter} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">KM Traveled (Auto)</label><input className="custom-input" type="number" name="kmTraveled" value={expenseDetails.kmTraveled} readOnly style={{ background: '#f1f5f9' }} /></div>
+                        <div className="form-group full-width"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
+                    </>
+                );
+            case 'Food Expense':
+                return (
+                    <>
+                        <div className="form-group"><label className="input-label">Restaurant / Platform Name *</label><input className="custom-input" name="restaurantName" placeholder="e.g. Zomato, Swiggy" value={expenseDetails.restaurantName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Number of People</label><input className="custom-input" type="number" name="numberOfPeople" value={expenseDetails.numberOfPeople} onChange={handleDetailChange} /></div>
+                        <div className="form-group full-width"><label className="input-label">Food Items Ordered *</label><textarea className="custom-input" rows="2" name="foodItemsOrdered" value={expenseDetails.foodItemsOrdered} onChange={handleDetailChange} required /></div>
+                    </>
+                );
+            case 'Travel Expense':
+                return (
+                    <>
+                        <div className="form-group"><label className="input-label">Travel Mode *</label><select className="swal2-select custom-input" name="travelMode" value={expenseDetails.travelMode} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="Flight">Flight</option><option value="Train">Train</option><option value="Taxi / Cab">Taxi / Cab</option><option value="Bus">Bus</option></select></div>
+                        <div className="form-group"><label className="input-label">Travel From *</label><input className="custom-input" name="travelFrom" value={expenseDetails.travelFrom} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Travel To *</label><input className="custom-input" name="travelTo" value={expenseDetails.travelTo} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Distance (KM) - If Road Travel</label><input className="custom-input" type="number" name="distanceKm" value={expenseDetails.distanceKm} onChange={handleDetailChange} /></div>
+                        <div className="form-group full-width"><label className="input-label">Booking Reference / PNR</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
+                        <div className="form-group full-width"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
+                    </>
+                );
+            case 'Accommodation':
+                return (
+                    <>
+                        <div className="form-group full-width"><label className="input-label">Hotel / Property Name *</label><input className="custom-input" name="hotelName" value={expenseDetails.hotelName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">City *</label><input className="custom-input" name="city" value={expenseDetails.city} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Booking Reference</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
+                        <div className="form-group"><label className="input-label">Check-In Date *</label><input className="custom-input" type="date" name="checkInDate" value={expenseDetails.checkInDate} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Check-Out Date *</label><input className="custom-input" type="date" name="checkOutDate" value={expenseDetails.checkOutDate} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Number of Nights (Auto)</label><input className="custom-input" type="number" name="numberOfNights" value={expenseDetails.numberOfNights} readOnly style={{ background: '#f1f5f9' }} /></div>
+                    </>
+                );
+            case 'Regular Office Expense':
+                return (
+                    <>
+                        <div className="form-group"><label className="input-label">Vendor Name *</label><input className="custom-input" name="vendorName" value={expenseDetails.vendorName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Billing Cycle *</label><select className="swal2-select custom-input" name="billingCycle" value={expenseDetails.billingCycle} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="One-Time">One-Time</option><option value="Monthly">Monthly</option><option value="Annual">Annual</option></select></div>
+                        <div className="form-group full-width"><label className="input-label">Expense Description *</label><textarea className="custom-input" rows="2" name="expenseDescription" value={expenseDetails.expenseDescription} onChange={handleDetailChange} required /></div>
+                    </>
+                );
+            default: return null;
         }
     };
 
@@ -151,107 +252,126 @@ const EditPurchase = () => {
                 <button className="cancel-btn m-0" onClick={() => navigate(-1)}>
                     <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back
                 </button>
-                <h1 className="page-title header-no-margin">Edit Purchase Details</h1>
+                <h1 className="page-title header-no-margin">Edit Expense Details</h1>
             </div>
             
             <div className="profile-card">
                 <form onSubmit={handleSubmit} className="profile-form">
                     
-                    <div className="form-grid">
-                        <div className="form-group full-width">
-                            <label className="input-label">Item Name / Description <span className="text-danger">*</span></label>
-                            <input className="custom-input" type="text" required 
-                                value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} />
+                    {/* --- SECTION 1: CORE DETAILS --- */}
+                    <div className="expense-form-section">
+                        <div className="expense-section-title">
+                            <FontAwesomeIcon icon={faInfoCircle} /> General Information
                         </div>
+                        
+                        <div className="form-grid">
+                            <div className="form-group full-width">
+                                <label className="input-label">Expense Type</label>
+                                <div className="expense-type-toggle">
+                                    <label className={formData.expenseType === 'Project Expense' ? 'active' : ''}>
+                                        <input type="radio" name="expenseType" value="Project Expense" onChange={handleMainChange} /> Project Expense
+                                    </label>
+                                    <label className={formData.expenseType === 'Regular Office Expense' ? 'active' : ''}>
+                                        <input type="radio" name="expenseType" value="Regular Office Expense" onChange={handleMainChange} /> Regular Office
+                                    </label>
+                                </div>
+                            </div>
 
-                        <div className="form-group">
-                            <label className="input-label">Amount (₹) <span className="text-danger">*</span></label>
-                            <input className="custom-input" type="number" required 
-                                value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="input-label">Quantity</label>
-                            <input className="custom-input" type="number" min="1"
-                                value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="input-label">Project Name</label>
-                            <input className="custom-input" type="text" 
-                                value={formData.projectName} onChange={e => setFormData({...formData, projectName: e.target.value})} />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="input-label">Vendor / Store Name</label>
-                            <input className="custom-input" type="text" 
-                                value={formData.vendorName} onChange={e => setFormData({...formData, vendorName: e.target.value})} />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="input-label">Storage Location</label>
-                            <input className="custom-input" type="text" 
-                                value={formData.storageLocation} onChange={e => setFormData({...formData, storageLocation: e.target.value})} />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="input-label">Inventory Status</label>
-                            <select className="swal2-select custom-input" style={{ margin: 0, height: '42px', padding: '0 10px' }}
-                                value={formData.inventoryStatus} onChange={e => setFormData({...formData, inventoryStatus: e.target.value})}>
-                                <option value="Available">Available</option>
-                                <option value="In Use">In Use</option>
-                                <option value="Consumed">Consumed</option>
-                                <option value="Lost/Damaged">Lost/Damaged</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="form-group full-width mt-15">
-                        <label className="input-label">Notes</label>
-                        <textarea className="custom-input" rows="3" style={{ resize: 'vertical' }}
-                            value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
-                    </div>
-
-                    <hr className="profile-divider my-30" />
-
-                    <h3 className="section-title"><FontAwesomeIcon icon={faPaperclip} /> Update Attachments</h3>
-                    <p style={{ fontSize: '12px', color: '#7A7A7A', marginBottom: '20px' }}>Uploading a new file will replace the existing one.</p>
-                    
-                    <div className="form-grid">
-                        <div className="form-group">
-                            <label className="input-label">Invoice (PDF/Image)</label>
-                            {existingFiles.invoiceUrl && (
-                                <a href={`${SERVER_URL}${existingFiles.invoiceUrl}`} target="_blank" rel="noreferrer" style={{ fontSize: '12px', display: 'block', marginBottom: '5px', color: '#215D7B' }}>
-                                    <FontAwesomeIcon icon={faExternalLinkAlt} /> View Current Invoice
-                                </a>
-                            )}
-                            <input className="custom-file-input" type="file" onChange={e => handleFileChange(e, 'invoice')} />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="input-label">Payment Screenshot</label>
-                            {existingFiles.paymentScreenshotUrl && (
-                                <a href={`${SERVER_URL}${existingFiles.paymentScreenshotUrl}`} target="_blank" rel="noreferrer" style={{ fontSize: '12px', display: 'block', marginBottom: '5px', color: '#215D7B' }}>
-                                    <FontAwesomeIcon icon={faExternalLinkAlt} /> View Current Screenshot
-                                </a>
-                            )}
-                            <input className="custom-file-input" type="file" accept="image/*" onChange={e => handleFileChange(e, 'paymentScreenshot')} />
-                        </div>
-
-                        <div className="form-group full-width">
-                            <label className="input-label">Product Photo(s) / Video(s)</label>
-                            {existingFiles.productMediaUrls?.length > 0 && (
-                                <div style={{ fontSize: '12px', marginBottom: '5px', color: '#16a34a', fontWeight: 'bold' }}>
-                                    {existingFiles.productMediaUrls.length} Media File(s) Currently Uploaded
+                            {formData.expenseType === 'Project Expense' && (
+                                <div className="form-group full-width">
+                                    <label className="input-label">Project Name *</label>
+                                    <input className="custom-input" type="text" name="projectName" required placeholder="e.g. HRMS Dashboard" value={formData.projectName} onChange={handleMainChange} />
                                 </div>
                             )}
-                            <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'productMedia')} />
+
+                            <div className="form-group">
+                                <label className="input-label">Expense Category *</label>
+                                <select className="swal2-select custom-input" name="category" value={formData.category} onChange={handleMainChange} style={{ margin: 0, padding: '0 10px', height: '42px', borderColor: '#215D7B' }}>
+                                    <option value="Product / Item Purchase">Product / Item Purchase</option>
+                                    <option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option>
+                                    <option value="Food Expense">Food Expense</option>
+                                    <option value="Travel Expense">Travel Expense</option>
+                                    <option value="Accommodation">Accommodation</option>
+                                    <option value="Regular Office Expense">Regular Office Expense</option>
+                                </select>
+                            </div>
+
+                            <div className="form-group">
+                                <label className="input-label">Date of Transaction *</label>
+                                <input className="custom-input" type="date" name="purchaseDate" required value={formData.purchaseDate} onChange={handleMainChange} />
+                            </div>
+
+                            <div className="form-group">
+                                <label className="input-label"><FontAwesomeIcon icon={faRupeeSign}/> Amount (₹) *</label>
+                                <input className="custom-input" type="number" name="amount" required placeholder="5000" value={formData.amount} onChange={handleMainChange} />
+                            </div>
+
+                            <div className="form-group">
+                                <label className="input-label"><FontAwesomeIcon icon={faCreditCard}/> Payment Source (Who paid?) *</label>
+                                <select className="swal2-select custom-input" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}>
+                                    <option value={currentUser.id || currentUser._id}>Myself (Reimburse Me)</option>
+                                    {usersList.map(u => (
+                                        <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group full-width">
+                                <label className="input-label"><FontAwesomeIcon icon={faTags}/> Description / Tags *</label>
+                                <input className="custom-input" type="text" name="descriptionTags" required placeholder="e.g. N95 Mask, Train Ticket, Client Dinner" value={formData.descriptionTags} onChange={handleMainChange} />
+                            </div>
                         </div>
                     </div>
 
+                    {/* --- SECTION 2: DYNAMIC FIELDS --- */}
+                    <div className="expense-form-section">
+                        <div className="expense-section-title">
+                            <FontAwesomeIcon icon={faListAlt} /> {formData.category} Details
+                        </div>
+                        <div className="form-grid">
+                            {renderCategoryFields()}
+                        </div>
+                    </div>
+
+                    {/* --- SECTION 3: ATTACHMENTS --- */}
+                    <div className="expense-form-section" style={{ marginBottom: 0 }}>
+                        <div className="expense-section-title">
+                            <FontAwesomeIcon icon={faPaperclip} /> Update Attachments
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#7A7A7A', marginBottom: '20px' }}>Uploading new files will overwrite the existing ones.</p>
+
+                        <div className="form-grid">
+                            <div className="form-group expense-file-area">
+                                <label className="input-label">Payment Screenshot / Bank Proof</label>
+                                {existingFiles.paymentScreenshotUrl && (
+                                    <a href={`${SERVER_URL}${existingFiles.paymentScreenshotUrl}`} target="_blank" rel="noreferrer" style={{ fontSize: '12px', display: 'block', marginBottom: '8px', color: '#215D7B', fontWeight: '600' }}>
+                                        <FontAwesomeIcon icon={faExternalLinkAlt} /> View Current Proof
+                                    </a>
+                                )}
+                                <input className="custom-file-input" type="file" accept="image/*,application/pdf" onChange={e => handleFileChange(e, 'paymentScreenshot')} />
+                            </div>
+
+                            <div className="form-group expense-file-area">
+                                <label className="input-label">{getMediaLabel()}</label>
+                                {existingFiles.expenseMediaUrls?.length > 0 && (
+                                    <div style={{ fontSize: '12px', marginBottom: '8px', color: '#16a34a', fontWeight: 'bold' }}>
+                                        {existingFiles.expenseMediaUrls.length} Media File(s) Currently Uploaded
+                                    </div>
+                                )}
+                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
+                                {newFiles.expenseMedia.length > 0 && (
+                                    <p style={{ fontSize: '12px', color: '#215D7B', marginTop: '5px', fontWeight: '600' }}>
+                                        {newFiles.expenseMedia.length} new file(s) selected
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Actions */}
                     <div className="profile-actions mt-30">
-                        <button type="submit" className="save-btn" disabled={saving}>
-                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> {saving ? 'Saving...' : 'Save Changes'}
+                        <button type="submit" className="save-btn" disabled={saving} style={{ width: '100%', padding: '16px', fontSize: '16px', borderRadius: '12px' }}>
+                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> {saving ? 'Saving...' : 'Save Updates'}
                         </button>
                     </div>
 

@@ -22,6 +22,8 @@ import AdminPurchases from './pages/AdminPurchases';
 import RawPunches from './pages/RawPunches';
 import AddPurchase from './pages/AddPurchase';
 import EditPurchase from './pages/EditPurchase';
+import AdminChat from './pages/AdminChat'
+import Projects from './pages/Projects';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -38,13 +40,13 @@ const DashboardLayout = () => {
   return (
     <div className="app-container">
       {/* Background overlay for mobile drawer */}
-      <div 
-        className={`sidebar-overlay ${isSidebarOpen ? 'visible' : ''}`} 
+      <div
+        className={`sidebar-overlay ${isSidebarOpen ? 'visible' : ''}`}
         onClick={closeSidebar}
       />
-      
+
       <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
-      
+
       <div className="content-wrapper">
         <Topbar onToggleSidebar={toggleSidebar} />
         <div className="main-content">
@@ -73,6 +75,8 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route element={<ProtectedRoute isAllowed={isAuthenticated} />}>
+          
+          {/* ALL PAGES INSIDE HERE GET THE TOPBAR & SIDEBAR */}
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
@@ -84,34 +88,48 @@ function App() {
             <Route path="/add-purchase" element={<AddPurchase />} />
             <Route path="/edit-purchase/:id" element={<EditPurchase />} />
 
+            {/* ADDED MANAGER TO THE ALLOWED ROLES BELOW */}
             <Route
               path="/employees"
-              element={(userRole === 'HR' || userRole === 'ADMIN') ? <Employees /> : <Navigate to="/dashboard" />}
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <Employees /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/employee/:id"
-              element={(userRole === 'HR' || userRole === 'ADMIN') ? <EmployeeProfile /> : <Navigate to="/dashboard" />}
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <EmployeeProfile /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/attendance-logs"
-              element={(userRole === 'HR' || userRole === 'ADMIN') ? <AttendanceLogs /> : <Navigate to="/dashboard" />}
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AttendanceLogs /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/raw-punches"
-              element={(userRole === 'HR' || userRole === 'ADMIN') ? <RawPunches /> : <Navigate to="/dashboard" />}
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <RawPunches /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/leave-requests"
-              element={(userRole === 'HR' || userRole === 'ADMIN') ? <LeaveRequests /> : <Navigate to="/dashboard" />}
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <LeaveRequests /> : <Navigate to="/dashboard" />}
             />
+            <Route
+              path="/projects"
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <Projects /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/admin-purchases"
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AdminPurchases /> : <Navigate to="/dashboard" />}
+            />
+            
+            {/* LOCKED TO ADMIN ONLY */}
             <Route
               path="/admin-settings"
               element={userRole === 'ADMIN' ? <AdminSettings /> : <Navigate to="/dashboard" />}
             />
+            
+            {/* LOCKED TO HR & ADMIN */}
             <Route
-              path="/admin-purchases"
-              element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminPurchases /> : <Navigate to="/dashboard" />}
+              path="/admin-chat"
+              element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminChat /> : <Navigate to="/dashboard" />}
             />
+            
           </Route>
         </Route>
 

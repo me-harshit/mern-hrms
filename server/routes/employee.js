@@ -8,8 +8,46 @@ const bcrypt = require('bcryptjs');
 router.get('/', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access denied' });
-        const employees = await User.find().select('-password');
+        
+        let query = {};
+        
+        // 🚀 MANAGER LOGIC: Only fetch their direct reports
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            query = { reportingManagerEmail: manager.email.toLowerCase() };
+        }
+
+        const employees = await User.find(query).select('-password');
         res.json(employees);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET /api/employees/payment-sources
+// @desc    Get allowed payment sources for an employee (Themselves, Manager, HR)
+router.get('/payment-sources', auth, async (req, res) => {
+    try {
+        const currentUser = await User.findById(req.user.id);
+        
+        let allowedUsers = [];
+
+        // 1. Add their specific manager
+        if (currentUser.reportingManagerEmail) {
+            const manager = await User.findOne({ email: currentUser.reportingManagerEmail.toLowerCase() }).select('name role');
+            if (manager) allowedUsers.push(manager);
+        }
+
+        // 2. Add all HRs and Admins
+        const hrAdmins = await User.find({ role: { $in: ['HR'] } }).select('name role');
+        
+        // Combine and filter out duplicates (in case Manager is also an Admin)
+        const combined = [...allowedUsers, ...hrAdmins];
+        const uniqueUsers = Array.from(new Set(combined.map(u => u._id.toString())))
+            .map(id => combined.find(u => u._id.toString() === id));
+
+        res.json(uniqueUsers);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
@@ -34,8 +72,8 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/add', auth, async (req, res) => {
     try {
         const {
-            name, email, password, role, shiftType,  // <-- Added shiftType
-            joiningDate, dateOfBirth, aadhaar, emergencyContact, // <-- Added dateOfBirth
+            name, email, password, role, shiftType,  
+            joiningDate, dateOfBirth, aadhaar, emergencyContact, 
             reportingManagerName, reportingManagerEmail,
             employeeId, isPurchaser
         } = req.body;
@@ -48,7 +86,7 @@ router.post('/add', auth, async (req, res) => {
             email,
             password,
             role,
-            shiftType: shiftType || 'DAY', // Default to DAY if missing
+            shiftType: shiftType || 'DAY', 
             joiningDate,
             dateOfBirth,
             aadhaar,
@@ -76,7 +114,7 @@ router.put('/:id', auth, async (req, res) => {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Denied' });
 
         const { 
-            name, email, role, shiftType, status, joiningDate, dateOfBirth, password, // <-- Added shiftType & dateOfBirth
+            name, email, role, shiftType, status, joiningDate, dateOfBirth, password,
             aadhaar, emergencyContact, phoneNumber, address,
             salary, casualLeaveBalance, earnedLeaveBalance,
             reportingManagerName, reportingManagerEmail,
@@ -87,10 +125,10 @@ router.put('/:id', auth, async (req, res) => {
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (role) updateData.role = role;
-        if (shiftType) updateData.shiftType = shiftType; // <-- Added
+        if (shiftType) updateData.shiftType = shiftType; 
         if (status) updateData.status = status;
         if (joiningDate) updateData.joiningDate = joiningDate;
-        if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth; // <-- Added (Using undefined check to allow clearing it if needed)
+        if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth; 
         
         if (aadhaar !== undefined) updateData.aadhaar = aadhaar;
         if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;

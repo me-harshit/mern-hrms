@@ -28,8 +28,6 @@ const formatLateTime = (mins) => {
 const getShiftDate = (punchTime, shiftType) => {
     const d = new Date(punchTime);
     if (shiftType === 'NIGHT') {
-        // Night shift spans from evening to morning. 
-        // Any punch before 2:00 PM (14:00) belongs to YESTERDAY'S shift.
         if (d.getHours() < 14) { 
             d.setDate(d.getDate() - 1);
         }
@@ -61,7 +59,6 @@ router.post('/upload', upload.any(), async (req, res) => {
             return res.status(200).send("User not mapped");
         }
 
-        // FIX: Explicitly default to DAY if it's missing in DB
         const userId = user._id;
         const userShift = user.shiftType || 'DAY'; 
         const isNight = userShift === 'NIGHT';
@@ -89,7 +86,6 @@ router.post('/upload', upload.any(), async (req, res) => {
         const shiftStartObj = new Date(y, m - 1, d, startHour, startMin, 0, 0);
         const shiftEndObj = new Date(y, m - 1, d, endHour, endMin, 0, 0);
         
-        // FIX: If shift ends the next day (e.g. 19:30 to 04:00 -> 4 < 19), push end object to tomorrow
         if (endHour < startHour) {
             shiftEndObj.setDate(shiftEndObj.getDate() + 1);
         }
@@ -101,14 +97,12 @@ router.post('/upload', upload.any(), async (req, res) => {
         let lastOut = null;
         let currentInTime = null;
 
-        // --- ENHANCED BREAK CALCULATION ---
         shiftLogs.forEach(log => {
             if (log.direction === 'IN') {
                 if (!firstIn) firstIn = log.timestamp; 
                 if (!currentInTime) {
                     currentInTime = log.timestamp;
                     if (lastOut) {
-                        // Calculate break time strictly within the user's assigned shift bounds
                         const breakStart = Math.max(lastOut.getTime(), shiftStartObj.getTime());
                         const breakEnd = Math.min(log.timestamp.getTime(), shiftEndObj.getTime());
                         if (breakEnd > breakStart) breakMs += (breakEnd - breakStart);
@@ -123,7 +117,6 @@ router.post('/upload', upload.any(), async (req, res) => {
             }
         });
 
-        // Gross hours is the total elapsed time between first punch IN and last punch OUT
         let calculatedGrossHours = 0;
         if (firstIn && lastOut && lastOut > firstIn) {
             const grossMs = lastOut.getTime() - firstIn.getTime();
@@ -176,14 +169,19 @@ router.get('/absent', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        // 1. ONE QUERY: Get all active employees
-        const employees = await User.find({ role: 'EMPLOYEE', status: 'ACTIVE' }).select('name email employeeId shiftType');
+        // 🚀 MANAGER LOGIC
+        let userQuery = { role: 'EMPLOYEE', status: 'ACTIVE' };
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            userQuery.reportingManagerEmail = manager.email.toLowerCase();
+        }
+
+        const employees = await User.find(userQuery).select('name email employeeId shiftType');
         if (!employees.length) return res.json([]);
 
         const now = new Date();
         const employeeIds = employees.map(emp => emp._id);
         
-        // Pre-calculate target dates so we know exactly what dates to ask the database for
         const neededDates = new Set();
         const empTargetDates = new Map();
 
@@ -194,16 +192,13 @@ router.get('/absent', auth, async (req, res) => {
             empTargetDates.set(emp._id.toString(), targetDateStr);
         }
 
-        // 2. ONE QUERY: Fetch all relevant attendances for ALL employees at once using $in
         const attendances = await Attendance.find({
             userId: { $in: employeeIds },
             date: { $in: Array.from(neededDates) }
         });
 
-        // 3. ONE QUERY: Fetch all overlapping approved leaves for ALL employees at once
         let leaves = [];
         if (Leave) {
-            // Check a wide enough net (last 2 days to tomorrow) to catch spanning leaves
             const startCheck = new Date(now);
             startCheck.setDate(startCheck.getDate() - 2); 
             startCheck.setHours(0,0,0,0);
@@ -216,7 +211,6 @@ router.get('/absent', auth, async (req, res) => {
             });
         }
 
-        // Helper to check if a string date falls inside an approved leave date range
         const isDateInLeave = (dateStr, leave) => {
             const [d, m, y] = dateStr.split('/').map(Number);
             const checkDate = new Date(y, m - 1, d);
@@ -227,15 +221,13 @@ router.get('/absent', auth, async (req, res) => {
 
         const missingEmployees = [];
 
-        // 4. IN-MEMORY LOOP: Extremely fast, no `await` database calls here!
         for (const emp of employees) {
             const targetDateStr = empTargetDates.get(emp._id.toString());
             
-            // Check memory array instead of querying DB
             const record = attendances.find(a => 
                 a.userId.toString() === emp._id.toString() && 
                 a.date === targetDateStr &&
-                a.status !== 'Absent' // Ensure we don't count an 'Absent' record as a punch-in
+                a.status !== 'Absent' 
             );
 
             if (!record) {
@@ -282,11 +274,14 @@ router.post('/absent-report', auth, async (req, res) => {
             shiftQueryConditions.push({ shiftType: { $exists: false } });
         }
 
-        const employees = await User.find({ 
-            role: 'EMPLOYEE', 
-            status: 'ACTIVE', 
-            $or: shiftQueryConditions
-        }).select('name email employeeId shiftType joiningDate');
+        // 🚀 MANAGER LOGIC
+        let userQuery = { role: 'EMPLOYEE', status: 'ACTIVE', $or: shiftQueryConditions };
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            userQuery.reportingManagerEmail = manager.email.toLowerCase();
+        }
+
+        const employees = await User.find(userQuery).select('name email employeeId shiftType joiningDate');
 
         let start = new Date(startDate);
         start.setHours(0,0,0,0);
@@ -427,7 +422,16 @@ router.get('/my-logs', auth, async (req, res) => {
 router.get('/all-logs', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-        const logs = await Attendance.find().populate('userId', 'name email shiftType').sort({ createdAt: -1 });
+        
+        let query = {};
+        // 🚀 MANAGER LOGIC
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            query = { userId: { $in: teamIds } };
+        }
+
+        const logs = await Attendance.find(query).populate('userId', 'name email shiftType').sort({ createdAt: -1 });
         res.json(logs);
     } catch (err) {
         res.status(500).send('Server Error');
@@ -437,7 +441,16 @@ router.get('/all-logs', auth, async (req, res) => {
 router.get('/raw-logs', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-        const logs = await AttendanceLog.find().populate('userId', 'name email shiftType').sort({ timestamp: -1 }); 
+        
+        let query = {};
+        // 🚀 MANAGER LOGIC
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            query = { userId: { $in: teamIds } };
+        }
+
+        const logs = await AttendanceLog.find(query).populate('userId', 'name email shiftType').sort({ timestamp: -1 }); 
         res.json(logs);
     } catch (err) {
         res.status(500).send('Server Error');
@@ -462,11 +475,19 @@ router.put('/update/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        const { checkIn, checkOut, status, note } = req.body;
-        let newStatus = status;
-
         const currentRecord = await Attendance.findById(req.params.id).populate('userId');
         if (!currentRecord) return res.status(404).json({ message: 'Log not found' });
+
+        // 🚀 MANAGER LOGIC: Check authorization
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            if (currentRecord.userId.reportingManagerEmail?.toLowerCase() !== manager.email.toLowerCase()) {
+                return res.status(403).json({ message: 'Unauthorized: Not your team member' });
+            }
+        }
+
+        const { checkIn, checkOut, status, note } = req.body;
+        let newStatus = status;
 
         if (status === 'Auto') {
             const settings = await Settings.findOne() || { dayShiftStartTime: "09:30", nightShiftStartTime: "19:30", gracePeriod: 15, halfDayThreshold: 30 };
