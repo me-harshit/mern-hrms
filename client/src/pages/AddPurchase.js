@@ -19,7 +19,7 @@ const AddPurchase = () => {
         category: 'Product / Item Purchase',
         purchaseDate: new Date().toISOString().split('T')[0],
         amount: '',
-        paymentSourceId: currentUser.id || currentUser._id, 
+        paymentSourceId: currentUser?.id || currentUser?._id || '', 
         projectName: '',
         descriptionTags: ''
     });
@@ -41,7 +41,7 @@ const AddPurchase = () => {
                 const userRes = await api.get('/employees/payment-sources'); 
                 setUsersList(userRes.data);
 
-                const projRes = await api.get('/projects'); // Fetch active projects
+                const projRes = await api.get('/projects'); 
                 setProjectsList(projRes.data);
             } catch (err) {
                 console.error("Could not fetch dropdown data", err);
@@ -141,7 +141,7 @@ const AddPurchase = () => {
             case 'Product / Item Purchase':
                 return (
                     <>
-                        <div className="form-group full-width"><label className="input-label">Product Name *</label><input className="custom-input" name="productName" value={expenseDetails.productName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Product Name *</label><input className="custom-input" name="productName" value={expenseDetails.productName} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" name="quantity" value={expenseDetails.quantity} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" name="unitPrice" value={expenseDetails.unitPrice} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. Office Room A" required /></div>
@@ -151,14 +151,14 @@ const AddPurchase = () => {
             case 'Fuel Expense (Car / Bike)':
                 return (
                     <>
-                        <div className="form-group"><label className="input-label">Vehicle Type *</label><select className="swal2-select custom-input" name="vehicleType" value={expenseDetails.vehicleType} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="Car">Car</option><option value="Bike">Bike</option><option value="Auto">Auto</option></select></div>
+                        <div className="form-group"><label className="input-label">Vehicle Type *</label><select className="swal2-select custom-select" name="vehicleType" value={expenseDetails.vehicleType} onChange={handleDetailChange}><option value="Car">Car</option><option value="Bike">Bike</option><option value="Auto">Auto</option></select></div>
                         <div className="form-group"><label className="input-label">Vehicle Number *</label><input className="custom-input" name="vehicleNumber" value={expenseDetails.vehicleNumber} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Travel From *</label><input className="custom-input" name="travelFrom" value={expenseDetails.travelFrom} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Travel To *</label><input className="custom-input" name="travelTo" value={expenseDetails.travelTo} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Odometer (Before) *</label><input className="custom-input" type="number" name="odometerBefore" value={expenseDetails.odometerBefore} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Odometer (After) *</label><input className="custom-input" type="number" name="odometerAfter" value={expenseDetails.odometerAfter} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">KM Traveled (Auto)</label><input className="custom-input" type="number" name="kmTraveled" value={expenseDetails.kmTraveled} readOnly style={{ background: '#f1f5f9' }} /></div>
-                        <div className="form-group full-width"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">KM Traveled (Auto)</label><input className="custom-input readonly-input" type="number" name="kmTraveled" value={expenseDetails.kmTraveled} readOnly /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
                     </>
                 );
             case 'Food Expense':
@@ -166,37 +166,37 @@ const AddPurchase = () => {
                     <>
                         <div className="form-group"><label className="input-label">Restaurant / Platform Name *</label><input className="custom-input" name="restaurantName" placeholder="e.g. Zomato, Swiggy" value={expenseDetails.restaurantName} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Number of People</label><input className="custom-input" type="number" name="numberOfPeople" value={expenseDetails.numberOfPeople} onChange={handleDetailChange} /></div>
-                        <div className="form-group full-width"><label className="input-label">Food Items Ordered *</label><textarea className="custom-input" rows="2" name="foodItemsOrdered" value={expenseDetails.foodItemsOrdered} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Food Items Ordered *</label><textarea className="custom-input" rows="2" name="foodItemsOrdered" value={expenseDetails.foodItemsOrdered} onChange={handleDetailChange} required /></div>
                     </>
                 );
             case 'Travel Expense':
                 return (
                     <>
-                        <div className="form-group"><label className="input-label">Travel Mode *</label><select className="swal2-select custom-input" name="travelMode" value={expenseDetails.travelMode} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="Flight">Flight</option><option value="Train">Train</option><option value="Taxi / Cab">Taxi / Cab</option><option value="Bus">Bus</option></select></div>
+                        <div className="form-group"><label className="input-label">Travel Mode *</label><select className="swal2-select custom-select" name="travelMode" value={expenseDetails.travelMode} onChange={handleDetailChange}><option value="Flight">Flight</option><option value="Train">Train</option><option value="Taxi / Cab">Taxi / Cab</option><option value="Bus">Bus</option></select></div>
+                        <div className="form-group"><label className="input-label">Distance (KM) - If Road Travel</label><input className="custom-input" type="number" name="distanceKm" value={expenseDetails.distanceKm} onChange={handleDetailChange} /></div>
                         <div className="form-group"><label className="input-label">Travel From *</label><input className="custom-input" name="travelFrom" value={expenseDetails.travelFrom} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Travel To *</label><input className="custom-input" name="travelTo" value={expenseDetails.travelTo} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Distance (KM) - If Road Travel</label><input className="custom-input" type="number" name="distanceKm" value={expenseDetails.distanceKm} onChange={handleDetailChange} /></div>
-                        <div className="form-group full-width"><label className="input-label">Booking Reference / PNR</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
-                        <div className="form-group full-width"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Booking Reference / PNR</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Purpose of Travel *</label><input className="custom-input" name="purpose" value={expenseDetails.purpose} onChange={handleDetailChange} required /></div>
                     </>
                 );
             case 'Accommodation':
                 return (
                     <>
-                        <div className="form-group full-width"><label className="input-label">Hotel / Property Name *</label><input className="custom-input" name="hotelName" value={expenseDetails.hotelName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Hotel / Property Name *</label><input className="custom-input" name="hotelName" value={expenseDetails.hotelName} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">City *</label><input className="custom-input" name="city" value={expenseDetails.city} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Booking Reference</label><input className="custom-input" name="bookingReference" value={expenseDetails.bookingReference} onChange={handleDetailChange} /></div>
                         <div className="form-group"><label className="input-label">Check-In Date *</label><input className="custom-input" type="date" name="checkInDate" value={expenseDetails.checkInDate} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Check-Out Date *</label><input className="custom-input" type="date" name="checkOutDate" value={expenseDetails.checkOutDate} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Number of Nights (Auto)</label><input className="custom-input" type="number" name="numberOfNights" value={expenseDetails.numberOfNights} readOnly style={{ background: '#f1f5f9' }} /></div>
+                        <div className="form-group"><label className="input-label">Number of Nights (Auto)</label><input className="custom-input readonly-input" type="number" name="numberOfNights" value={expenseDetails.numberOfNights} readOnly /></div>
                     </>
                 );
             case 'Regular Office Expense':
                 return (
                     <>
                         <div className="form-group"><label className="input-label">Vendor Name *</label><input className="custom-input" name="vendorName" value={expenseDetails.vendorName} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Billing Cycle *</label><select className="swal2-select custom-input" name="billingCycle" value={expenseDetails.billingCycle} onChange={handleDetailChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}><option value="One-Time">One-Time</option><option value="Monthly">Monthly</option><option value="Annual">Annual</option></select></div>
-                        <div className="form-group full-width"><label className="input-label">Expense Description *</label><textarea className="custom-input" rows="2" name="expenseDescription" value={expenseDetails.expenseDescription} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Billing Cycle *</label><select className="swal2-select custom-select" name="billingCycle" value={expenseDetails.billingCycle} onChange={handleDetailChange}><option value="One-Time">One-Time</option><option value="Monthly">Monthly</option><option value="Annual">Annual</option></select></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Expense Description *</label><textarea className="custom-input" rows="2" name="expenseDescription" value={expenseDetails.expenseDescription} onChange={handleDetailChange} required /></div>
                     </>
                 );
             default: return null;
@@ -206,13 +206,13 @@ const AddPurchase = () => {
     return (
         <div className="profile-container fade-in">
             <div className="page-header-left">
-                <button className="cancel-btn m-0" onClick={() => navigate('/purchases')}>
+                <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/purchases')}>
                     <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back
                 </button>
                 <h1 className="page-title header-no-margin">Log New Expense</h1>
             </div>
             
-            <div className="profile-card">
+            <div className="purchase-form-card">
                 <form onSubmit={handleSubmit} className="profile-form">
                     
                     {/* --- SECTION 1: CORE DETAILS --- */}
@@ -221,8 +221,8 @@ const AddPurchase = () => {
                             <FontAwesomeIcon icon={faInfoCircle} /> General Information
                         </div>
                         
-                        <div className="form-grid">
-                            <div className="form-group full-width">
+                        <div className="purchase-grid">
+                            <div className="form-group grid-span-2">
                                 <label className="input-label">Expense Type</label>
                                 <div className="expense-type-toggle">
                                     <label className={formData.expenseType === 'Project Expense' ? 'active' : ''}>
@@ -234,11 +234,10 @@ const AddPurchase = () => {
                                 </div>
                             </div>
 
-                            {/* 👇 DYNAMIC PROJECT DROPDOWN 👇 */}
                             {formData.expenseType === 'Project Expense' && (
-                                <div className="form-group full-width">
+                                <div className="form-group grid-span-2">
                                     <label className="input-label">Project Name *</label>
-                                    <select className="swal2-select custom-input" name="projectName" required value={formData.projectName} onChange={handleMainChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}>
+                                    <select className="swal2-select custom-select" name="projectName" required value={formData.projectName} onChange={handleMainChange}>
                                         <option value="">-- Select Project --</option>
                                         {projectsList.map(proj => (
                                             <option key={proj._id} value={proj.name}>{proj.name}</option>
@@ -249,7 +248,7 @@ const AddPurchase = () => {
 
                             <div className="form-group">
                                 <label className="input-label">Expense Category *</label>
-                                <select className="swal2-select custom-input" name="category" value={formData.category} onChange={handleMainChange} style={{ margin: 0, padding: '0 10px', height: '42px', borderColor: '#215D7B' }}>
+                                <select className="swal2-select custom-select" name="category" value={formData.category} onChange={handleMainChange} style={{ borderColor: '#215D7B' }}>
                                     <option value="Product / Item Purchase">Product / Item Purchase</option>
                                     <option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option>
                                     <option value="Food Expense">Food Expense</option>
@@ -271,15 +270,15 @@ const AddPurchase = () => {
 
                             <div className="form-group">
                                 <label className="input-label"><FontAwesomeIcon icon={faCreditCard}/> Payment Source (Who paid?) *</label>
-                                <select className="swal2-select custom-input" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange} style={{ margin: 0, padding: '0 10px', height: '42px' }}>
-                                    <option value={currentUser.id || currentUser._id}>Myself</option>
+                                <select className="swal2-select custom-select" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange}>
+                                    <option value={currentUser?.id || currentUser?._id || ''}>Myself</option>
                                     {usersList.map(u => (
                                         <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
                                     ))}
                                 </select>
                             </div>
 
-                            <div className="form-group full-width">
+                            <div className="form-group grid-span-2">
                                 <label className="input-label"><FontAwesomeIcon icon={faTags}/> Description / Tags *</label>
                                 <input className="custom-input" type="text" name="descriptionTags" required placeholder="e.g. N95 Mask, Train Ticket, Client Dinner" value={formData.descriptionTags} onChange={handleMainChange} />
                             </div>
@@ -291,18 +290,18 @@ const AddPurchase = () => {
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faListAlt} /> {formData.category} Details
                         </div>
-                        <div className="form-grid">
+                        <div className="purchase-grid">
                             {renderCategoryFields()}
                         </div>
                     </div>
 
                     {/* --- SECTION 3: ATTACHMENTS --- */}
-                    <div className="expense-form-section" style={{ marginBottom: 0 }}>
+                    <div className="expense-form-section mb-0">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faPaperclip} /> Attachments & Proof
                         </div>
                         
-                        <div className="form-grid">
+                        <div className="purchase-grid">
                             <div className="form-group expense-file-area">
                                 <label className="input-label">Payment Screenshot / Bank Proof *</label>
                                 <input className="custom-file-input" type="file" accept="image/*,application/pdf" required onChange={e => handleFileChange(e, 'paymentScreenshot')} />
@@ -312,7 +311,7 @@ const AddPurchase = () => {
                                 <label className="input-label">{getMediaLabel()}</label>
                                 <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
                                 {files.expenseMedia.length > 0 && (
-                                    <p style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
+                                    <p className="file-success-text">
                                         {files.expenseMedia.length} file(s) ready
                                     </p>
                                 )}
@@ -322,7 +321,7 @@ const AddPurchase = () => {
 
                     {/* Actions */}
                     <div className="profile-actions mt-30">
-                        <button type="submit" className="save-btn" disabled={loading} style={{ width: '100%', padding: '16px', fontSize: '16px', borderRadius: '12px' }}>
+                        <button type="submit" className="save-btn purchase-submit-btn" disabled={loading}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" /> {loading ? 'Submitting for Approval...' : 'Submit Expense for Approval'}
                         </button>
                     </div>

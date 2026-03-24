@@ -2,38 +2,24 @@
    EXPENSE & PURCHASE SPECIFIC STYLES
    ========================================================================== */
 
-/* --- Modern Segmented Toggle for Expense Type --- */
-.expense-type-toggle {
-    display: flex;
-    background-color: #f1f5f9;
-    padding: 5px;
-    border-radius: 10px;
-    gap: 5px;
-    width: 100%;
-    margin-top: 5px;
+/* --- Layout & Container --- */
+.purchase-form-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px; /* Reduced from 30px */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    max-width: 1000px;
 }
 
-.expense-type-toggle label {
-    flex: 1;
-    text-align: center;
-    padding: 10px 15px;
-    cursor: pointer;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #64748b;
-    transition: all 0.3s ease;
-    margin: 0;
+.purchase-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Forces 2 items per row */
+    gap: 20px;
+    align-items: start; /* Prevents stretching if one field has an error label */
 }
 
-.expense-type-toggle input[type="radio"] {
-    display: none; /* Hide default radio circles */
-}
-
-.expense-type-toggle label.active {
-    background-color: white;
-    color: var(--primary);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+.grid-span-2 {
+    grid-column: span 2; /* Forces full width for specific fields */
 }
 
 /* --- Form Section Cards --- */
@@ -41,7 +27,7 @@
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    padding: 25px;
+    padding: 20px; /* Tighter padding */
     margin-bottom: 25px;
     transition: box-shadow 0.3s ease;
 }
@@ -62,6 +48,67 @@
     padding-bottom: 12px;
 }
 
+.mb-0 {
+    margin-bottom: 0 !important;
+}
+
+/* --- Modern Segmented Toggle for Expense Type --- */
+.expense-type-toggle {
+    display: flex;
+    background-color: #e2e8f0; /* Darker grey to make it pop */
+    padding: 4px;
+    border-radius: 8px;
+    gap: 4px;
+    width: 100%;
+    margin-top: 5px;
+}
+
+.expense-type-toggle label {
+    flex: 1;
+    text-align: center;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    transition: all 0.2s ease;
+    margin: 0;
+}
+
+.expense-type-toggle input[type="radio"] {
+    display: none;
+}
+
+.expense-type-toggle label.active {
+    background-color: white;
+    color: var(--primary);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* --- Input Helpers --- */
+.custom-select {
+    margin: 0 !important;
+    padding: 0 10px !important;
+    height: 42px !important;
+    width: 100% !important;
+}
+
+.readonly-input {
+    background: #f1f5f9 !important;
+    cursor: not-allowed;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.purchase-submit-btn {
+    width: 100%;
+    padding: 14px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+    justify-content: center;
+}
+
 /* --- File Upload Drag & Drop Look --- */
 .expense-file-area {
     background: white;
@@ -77,35 +124,34 @@
     background: #f0f7f9;
 }
 
-/* --- Table Enhancements --- */
-.expense-amount-large {
-    color: var(--primary);
-    font-size: 16px;
-    font-weight: 700;
-    background: #f0f7f9;
-    padding: 4px 10px;
-    border-radius: 6px;
-    display: inline-block;
-}
-
-.expense-tag-pill {
-    background: #f1f5f9;
-    color: #475569;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
+.file-success-text {
+    font-size: 12px;
+    color: #16a34a;
+    margin-top: 5px;
     font-weight: 600;
-    display: inline-block;
-    margin-top: 4px;
 }
 
 /* --- Mobile Responsiveness --- */
 @media screen and (max-width: 768px) {
-    .expense-type-toggle {
-        flex-direction: column; /* Stack toggles on tiny screens */
+    .purchase-form-card {
+        padding: 15px;
     }
-    
+
+    .purchase-grid {
+        grid-template-columns: 1fr; /* Stack everything in 1 column on mobile */
+        gap: 15px;
+    }
+
+    .grid-span-2 {
+        grid-column: span 1; /* Reset spans for mobile */
+    }
+
     .expense-form-section {
         padding: 15px;
+        border-radius: 8px;
+    }
+    
+    .expense-type-toggle {
+        flex-direction: column; /* Stack toggles on tiny screens */
     }
 }
