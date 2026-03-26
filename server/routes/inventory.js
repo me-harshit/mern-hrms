@@ -16,8 +16,7 @@ router.post('/', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async (r
         if (!isAdminOrHR(req.user.role)) return res.status(403).json({ message: 'Access Denied' });
 
         // 👇 Updated to match the new storageLocation field
-        const { itemName, status, storageLocation, assignedTo, notes } = req.body;
-
+        const { itemName, quantity, status, storageLocation, assignedTo, notes } = req.body;
         // Upload media files to S3 in parallel
         let mediaUrls = [];
         if (req.files && req.files['media']) {
@@ -27,6 +26,7 @@ router.post('/', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async (r
 
         const newAsset = new Inventory({
             itemName,
+            quantity: Number(quantity) || 1,
             status,
             // Only save location if it's available in the office
             storageLocation: status === 'Available' ? storageLocation : '',
@@ -81,7 +81,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // @route   PUT /api/inventory/:id
-// @desc    Update an existing asset
+// @desc    Update an asset (Includes Split & Merge Logic for Quantities)
 router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async (req, res) => {
     try {
         if (!isAdminOrHR(req.user.role)) return res.status(403).json({ message: 'Access Denied' });
@@ -89,34 +89,89 @@ router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async 
         let item = await Inventory.findById(req.params.id);
         if (!item) return res.status(404).json({ message: 'Asset not found' });
 
-        const { itemName, status, storageLocation, assignedTo, notes } = req.body;
+        // 'quantityToUpdate' is how many units the admin is moving. Defaults to the whole stack.
+        const { itemName, status, storageLocation, assignedTo, notes, quantityToUpdate } = req.body;
 
-        if (itemName) item.itemName = itemName;
-        if (status) item.status = status;
-        if (notes !== undefined) item.notes = notes;
-
-        // Handle dynamic fields based on status
-        if (status === 'Available') {
-            item.storageLocation = storageLocation || '';
-            item.assignedTo = null;
-        } else if (status === 'Assigned') {
-            item.storageLocation = '';
-            item.assignedTo = assignedTo || null;
-        } else {
-            // Damaged or Lost
-            item.storageLocation = '';
-            item.assignedTo = null;
+        let updateQty = parseInt(quantityToUpdate) || item.quantity;
+        if (updateQty > item.quantity) {
+            return res.status(400).json({ message: "Cannot update more than existing quantity" });
         }
 
-        // Handle new media uploads without deleting the old ones (can add delete logic later if needed)
+        let isSplitting = updateQty < item.quantity;
+        let targetItem = item;
+
+        // --- 1. THE SPLIT LOGIC ---
+        if (isSplitting) {
+            // Deduct from the original stack
+            item.quantity -= updateQty;
+            await item.save();
+
+            // Create a fresh clone for the separated units
+            let cloneData = item.toObject();
+            delete cloneData._id;
+            delete cloneData.createdAt;
+            delete cloneData.updatedAt;
+
+            targetItem = new Inventory(cloneData);
+            targetItem.quantity = updateQty;
+        }
+
+        // Apply the edits to our target (either the whole stack, or the new clone)
+        if (itemName) targetItem.itemName = itemName;
+        if (notes !== undefined) targetItem.notes = notes;
+
+        targetItem.status = status;
+
+        if (status === 'Available') {
+            targetItem.storageLocation = storageLocation || '';
+            targetItem.assignedTo = null;
+        } else if (status === 'Assigned') {
+            targetItem.storageLocation = '';
+            targetItem.assignedTo = assignedTo || null;
+        } else {
+            targetItem.storageLocation = '';
+            targetItem.assignedTo = null;
+        }
+
         if (req.files && req.files['media']) {
             const uploadPromises = req.files['media'].map(file => uploadToS3(file, 'Inventory'));
             const newMediaUrls = await Promise.all(uploadPromises);
-            item.mediaUrls = [...item.mediaUrls, ...newMediaUrls];
+            targetItem.mediaUrls = [...targetItem.mediaUrls, ...newMediaUrls];
         }
 
-        await item.save();
-        res.json(item);
+        // --- 2. THE MERGE LOGIC ---
+        // If we are returning items to the "Available" pool, see if a matching pool already exists!
+        if (status === 'Available') {
+            const existingPool = await Inventory.findOne({
+                _id: { $ne: targetItem._id }, // Don't merge with itself
+                itemName: targetItem.itemName,
+                status: 'Available',
+                storageLocation: targetItem.storageLocation
+            });
+
+            if (existingPool) {
+                // Add the quantity to the existing stack
+                existingPool.quantity += targetItem.quantity;
+
+                // Safely merge media URLs (avoiding duplicates)
+                const combinedMedia = new Set([...existingPool.mediaUrls, ...targetItem.mediaUrls]);
+                existingPool.mediaUrls = Array.from(combinedMedia);
+
+                await existingPool.save();
+
+                // If we didn't split, it means we are converting an entire assigned stack back to available. 
+                // Since it merged, we must delete the old assigned row!
+                if (!isSplitting) {
+                    await Inventory.findByIdAndDelete(targetItem._id);
+                }
+
+                return res.json(existingPool);
+            }
+        }
+
+        // If no merge happened, just save the target item normally
+        await targetItem.save();
+        res.json(targetItem);
 
     } catch (err) {
         console.error("Inventory Update Error:", err.message);

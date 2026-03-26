@@ -6,6 +6,13 @@ const inventorySchema = new mongoose.Schema({
         required: true,
         trim: true 
     },
+    // 👇 NEW: The Magic Quantity Field 👇
+    quantity: {
+        type: Number,
+        required: true,
+        default: 1,
+        min: 1
+    },
     status: { 
         type: String, 
         enum: ['Available', 'Assigned', 'Damaged', 'Lost'], 
@@ -23,7 +30,7 @@ const inventorySchema = new mongoose.Schema({
         type: String 
     },
     mediaUrls: [{ 
-        type: String // Stores the S3 URLs for images/videos
+        type: String 
     }],
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 

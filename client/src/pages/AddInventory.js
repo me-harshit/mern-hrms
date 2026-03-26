@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
@@ -12,14 +12,15 @@ const AddInventory = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
 
     const [employees, setEmployees] = useState([]);
-    
-    // 👇 Array of predefined locations. Admins can add more on the fly! 👇
     const [locations, setLocations] = useState(['IT Closet', 'Server Room A', 'Storage Cabinet 1']);
+
+    const fileInputRef = useRef(null);
 
     const [formData, setFormData] = useState({
         itemName: '',
+        quantity: 1, // 👇 NEW: Quantity field added, defaults to 1
         status: 'Available',
-        storageLocation: 'IT Closet', // Default selection
+        storageLocation: 'IT Closet', 
         assignedTo: '',
         notes: ''
     });
@@ -56,7 +57,7 @@ const AddInventory = () => {
         });
         if (newLocation) {
             setLocations([...locations, newLocation]);
-            setFormData({ ...formData, storageLocation: newLocation }); // Auto-select the new location
+            setFormData({ ...formData, storageLocation: newLocation });
         }
     };
 
@@ -64,6 +65,7 @@ const AddInventory = () => {
         e.preventDefault();
         
         if (!formData.itemName) return Swal.fire('Error', 'Item Name is required', 'warning');
+        if (formData.quantity < 1) return Swal.fire('Error', 'Quantity must be at least 1', 'warning');
         if (formData.status === 'Assigned' && !formData.assignedTo) return Swal.fire('Error', 'Please select an employee', 'warning');
 
         setLoading(true);
@@ -87,8 +89,21 @@ const AddInventory = () => {
                 }
             });
 
-            Swal.fire({ icon: 'success', title: 'Asset Added to Inventory', timer: 1500, showConfirmButton: false });
-            navigate('/inventory');
+            Swal.fire({ 
+                icon: 'success', 
+                title: 'Asset Added!', 
+                text: 'You can now add another item to this location.',
+                timer: 2000, 
+                showConfirmButton: false 
+            });
+
+            // 👇 Clear the Item Name, Quantity, and Files so the admin can quickly log the next item
+            setFormData(prev => ({ ...prev, itemName: '', quantity: 1 }));
+            setFiles({ media: [] });
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""; 
+            }
+
         } catch (err) {
             Swal.fire('Error', 'Failed to save asset', 'error');
         } finally {
@@ -101,7 +116,7 @@ const AddInventory = () => {
         <div className="profile-container fade-in">
             <div className="page-header-left">
                 <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/inventory')}>
-                    <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back
+                    <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back to Dashboard
                 </button>
                 <h1 className="page-title header-no-margin">Add New Asset</h1>
             </div>
@@ -116,9 +131,17 @@ const AddInventory = () => {
                         </div>
                         
                         <div className="purchase-grid">
-                            <div className="form-group grid-span-2">
-                                <label className="input-label">Item / Asset Name *</label>
-                                <input className="custom-input" type="text" name="itemName" required placeholder="e.g. MacBook Pro M3, Office Chair" value={formData.itemName} onChange={handleChange} />
+                            
+                            {/* 👇 NEW: Split Item Name and Quantity side-by-side 👇 */}
+                            <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px' }}>
+                                <div style={{ flex: '3' }}>
+                                    <label className="input-label">Item / Asset Name *</label>
+                                    <input className="custom-input" type="text" name="itemName" required placeholder="e.g. MacBook Pro M3, Office Chair" value={formData.itemName} onChange={handleChange} />
+                                </div>
+                                <div style={{ flex: '1' }}>
+                                    <label className="input-label">Quantity *</label>
+                                    <input className="custom-input" type="number" name="quantity" min="1" required value={formData.quantity} onChange={handleChange} />
+                                </div>
                             </div>
 
                             <div className="form-group grid-span-2">
@@ -131,8 +154,6 @@ const AddInventory = () => {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* --- CONDITIONAL LOGIC BASED ON STATUS --- */}
                             
                             {/* If Available -> Show Unified Storage Location */}
                             {formData.status === 'Available' && (
@@ -176,7 +197,7 @@ const AddInventory = () => {
                         <div className="purchase-grid">
                             <div className="form-group expense-file-area grid-span-2">
                                 <label className="input-label">Upload Images / Videos of Asset</label>
-                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
+                                <input ref={fileInputRef} className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
                                 {files.media.length > 0 && (
                                     <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
                                         {files.media.length} media file(s) selected
@@ -197,7 +218,7 @@ const AddInventory = () => {
 
                         <button type="submit" className="save-btn purchase-submit-btn" disabled={loading}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
-                            {loading ? 'Processing...' : 'Save Asset to Inventory'}
+                            {loading ? 'Processing...' : 'Save Asset & Add Another'}
                         </button>
                     </div>
 
