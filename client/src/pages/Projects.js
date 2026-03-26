@@ -20,8 +20,10 @@ const Projects = () => {
         setLoading(true);
         try {
             // Fetch users for the Project Lead dropdown
-            const userRes = await api.get('/employees');
-            setUsersList(userRes.data);
+            const userRes = await api.get('/employees/project-leads');
+            
+            const managersOnly = userRes.data.filter(user => user.role === 'MANAGER');
+            setUsersList(managersOnly);
 
             const projRes = await api.get('/projects/all');
             setProjects(projRes.data);
@@ -67,7 +69,7 @@ const Projects = () => {
                         <div style="flex:1;">
                             <label class="swal-custom-label">Project Lead</label>
                             <select id="proj-lead" class="swal2-select">
-                                <option value="">-- Select Lead --</option>
+                                <option value="">-- Select Manager --</option>
                                 ${generateUserOptions()}
                             </select>
                         </div>
@@ -150,7 +152,7 @@ const Projects = () => {
                         <div style="flex:1;">
                             <label class="swal-custom-label">Project Lead</label>
                             <select id="edit-lead" class="swal2-select">
-                                <option value="">-- Select Lead --</option>
+                                <option value="">-- Select Manager --</option>
                                 ${generateUserOptions(leadVal)}
                             </select>
                         </div>

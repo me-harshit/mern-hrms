@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const Project = require('../models/Project');
-const Purchase = require('../models/Purchase'); // <-- Need this to calculate spent funds
+const Purchase = require('../models/Purchase');
 
 // @route   GET /api/projects
 // @desc    Get all active projects (For Dropdowns)

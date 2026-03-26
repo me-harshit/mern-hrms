@@ -12,7 +12,7 @@ const AddPurchase = () => {
     const currentUser = JSON.parse(localStorage.getItem('user'));
     
     const [loading, setLoading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0); // <-- NEW: Progress state
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
@@ -36,7 +36,8 @@ const AddPurchase = () => {
         vendorName: '', billingCycle: 'Monthly', expenseDescription: ''
     });
 
-    const [files, setFiles] = useState({ paymentScreenshot: null, expenseMedia: [] });
+    // 👇 FIXED: paymentScreenshots is now an array! 👇
+    const [files, setFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -73,44 +74,43 @@ const AddPurchase = () => {
     const handleMainChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
+    // 👇 FIXED: Unified file handler for multiple files on both inputs 👇
     const handleFileChange = (e, fieldName) => { 
-        if (fieldName === 'expenseMedia') {
-            const selectedFiles = Array.from(e.target.files); 
-            const validFiles = [];
-            for (let file of selectedFiles) {
-                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
-                    Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
-                } else {
-                    validFiles.push(file);
-                }
+        const selectedFiles = Array.from(e.target.files); 
+        const validFiles = [];
+        for (let file of selectedFiles) {
+            if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+                Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
+            } else {
+                validFiles.push(file);
             }
-            setFiles(prev => ({ ...prev, [fieldName]: validFiles }));
-        } else {
-            const file = e.target.files[0]; 
-            if (!file) return;
-            setFiles(prev => ({ ...prev, [fieldName]: file }));
         }
+        setFiles(prev => ({ ...prev, [fieldName]: validFiles }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.amount || !formData.descriptionTags || !files.paymentScreenshot) {
-            return Swal.fire('Required Fields', 'Amount, Description, and Payment Screenshot are required.', 'warning');
+        
+        // 👇 FIXED: Checking length of array instead of null 👇
+        if (!formData.amount || !formData.descriptionTags || files.paymentScreenshots.length === 0) {
+            return Swal.fire('Required Fields', 'Amount, Description, and at least one Payment Screenshot are required.', 'warning');
         }
 
         setLoading(true);
-        setUploadProgress(0); // Reset progress bar before starting
+        setUploadProgress(0);
 
         try {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             data.append('expenseDetails', JSON.stringify(expenseDetails));
 
-            if (files.paymentScreenshot) {
-                data.append('paymentScreenshot', files.paymentScreenshot);
+            // 👇 FIXED: Append multiple Payment Screenshots 👇
+            if (files.paymentScreenshots && files.paymentScreenshots.length > 0) {
+                for (let i = 0; i < files.paymentScreenshots.length; i++) {
+                    data.append('paymentScreenshots', files.paymentScreenshots[i]);
+                }
             }
             
-            // Just pass raw files to backend. Backend handles Sharp compression & S3 upload now!
             if (files.expenseMedia && files.expenseMedia.length > 0) {
                 for (let i = 0; i < files.expenseMedia.length; i++) {
                     data.append('expenseMedia', files.expenseMedia[i]);
@@ -313,17 +313,23 @@ const AddPurchase = () => {
                         </div>
                         
                         <div className="purchase-grid">
+                            {/* 👇 FIXED: Multiple inputs enabled & state updated 👇 */}
                             <div className="form-group expense-file-area">
-                                <label className="input-label">Payment Screenshot / Bank Proof *</label>
-                                <input className="custom-file-input" type="file" accept="image/*,application/pdf" required onChange={e => handleFileChange(e, 'paymentScreenshot')} />
+                                <label className="input-label">Payment Screenshot / Bank Proof(s) *</label>
+                                <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" required onChange={e => handleFileChange(e, 'paymentScreenshots')} />
+                                {files.paymentScreenshots.length > 0 && (
+                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
+                                        {files.paymentScreenshots.length} proof file(s) ready
+                                    </p>
+                                )}
                             </div>
 
                             <div className="form-group expense-file-area">
                                 <label className="input-label">{getMediaLabel()}</label>
                                 <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
                                 {files.expenseMedia.length > 0 && (
-                                    <p className="file-success-text">
-                                        {files.expenseMedia.length} file(s) ready
+                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
+                                        {files.expenseMedia.length} media file(s) ready
                                     </p>
                                 )}
                             </div>
@@ -333,7 +339,6 @@ const AddPurchase = () => {
                     {/* Actions & Progress Bar */}
                     <div className="profile-actions mt-30" style={{ flexDirection: 'column', gap: '15px' }}>
                         
-                        {/* THE NEW UPLOAD PROGRESS BAR */}
                         {loading && uploadProgress > 0 && (
                             <div className="upload-progress-container">
                                 <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}></div>

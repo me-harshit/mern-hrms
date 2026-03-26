@@ -54,6 +54,23 @@ router.get('/payment-sources', auth, async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/project-leads
+// @desc    Get all eligible project leads (Managers)
+router.get('/project-leads', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const leads = await User.find({ role: { $in: ['MANAGER'] } }).select('name role');
+        
+        res.json(leads);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET /api/employees/:id
 router.get('/:id', auth, async (req, res) => {
     try {

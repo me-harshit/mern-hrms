@@ -24,6 +24,9 @@ import AddPurchase from './pages/AddPurchase';
 import EditPurchase from './pages/EditPurchase';
 import AdminChat from './pages/AdminChat'
 import Projects from './pages/Projects';
+import Inventory from './pages/Inventory';
+import AddInventory from './pages/AddInventory';
+import EditInventory from './pages/EditInventory';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -75,7 +78,7 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route element={<ProtectedRoute isAllowed={isAuthenticated} />}>
-          
+
           {/* ALL PAGES INSIDE HERE GET THE TOPBAR & SIDEBAR */}
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -87,6 +90,9 @@ function App() {
             <Route path="/purchases" element={<Purchases />} />
             <Route path="/add-purchase" element={<AddPurchase />} />
             <Route path="/edit-purchase/:id" element={<EditPurchase />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/add-inventory" element={<AddInventory />} />
+            <Route path="/edit-inventory/:id" element={<EditInventory />} />
 
             {/* ADDED MANAGER TO THE ALLOWED ROLES BELOW */}
             <Route
@@ -117,19 +123,19 @@ function App() {
               path="/admin-purchases"
               element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AdminPurchases /> : <Navigate to="/dashboard" />}
             />
-            
+
             {/* LOCKED TO ADMIN ONLY */}
             <Route
               path="/admin-settings"
               element={userRole === 'ADMIN' ? <AdminSettings /> : <Navigate to="/dashboard" />}
             />
-            
+
             {/* LOCKED TO HR & ADMIN */}
             <Route
               path="/admin-chat"
               element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminChat /> : <Navigate to="/dashboard" />}
             />
-            
+
           </Route>
         </Route>
 

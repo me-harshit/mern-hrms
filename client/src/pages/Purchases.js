@@ -16,7 +16,6 @@ const Purchases = () => {
     const [filteredPurchases, setFilteredPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // 👇 NEW: Wallet State
     const [walletBalance, setWalletBalance] = useState(0);
 
     const [filterType, setFilterType] = useState('All');
@@ -30,12 +29,10 @@ const Purchases = () => {
     const fetchPurchases = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Purchases
             const res = await api.get('/purchases');
             setPurchases(res.data);
             setFilteredPurchases(res.data);
 
-            // 2. Fetch Wallet Balance
             try {
                 const walletRes = await api.get('/wallets/my-balance');
                 setWalletBalance(walletRes.data.balance);
@@ -75,6 +72,7 @@ const Purchases = () => {
         setFilteredPurchases(result);
     }, [purchases, filterType, searchTerm, customDates]);
 
+    // Helper to safely render old local URLs or new S3 URLs
     const getFileUrl = (url) => {
         if (!url) return '';
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
@@ -84,18 +82,31 @@ const Purchases = () => {
         if (Array.isArray(fileData)) {
             let htmlContent = '<div style="display:flex; flex-direction:column; gap:20px; max-height: 60vh; overflow-y:auto; padding-right:10px;">';
             fileData.forEach((url, index) => {
-                const fullUrl = getFileUrl(url); // 👇 FIXED 👇
+                const fullUrl = getFileUrl(url);
                 const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+                const isPdf = url.toLowerCase().endsWith('.pdf'); // 👇 NEW CHECK FOR PDF 👇
+
+                let mediaElement = '';
+                if (isVideo) {
+                    mediaElement = `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>`;
+                } else if (isPdf) {
+                    // 👇 RENDERS IFRAME FOR PDFS 👇
+                    mediaElement = `<iframe src="${fullUrl}" width="100%" height="400px" style="border: none; border-radius: 6px;"></iframe>`;
+                } else {
+                    // Default fallback to Image
+                    mediaElement = `<img src="${fullUrl}" style="width:100%; border-radius:6px; max-height:400px; object-fit:contain;" />`;
+                }
+
                 htmlContent += `
                     <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
                         <div style="text-align: left; font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: 600;">File ${index + 1}</div>
-                        ${isVideo ? `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>` : `<img src="${fullUrl}" style="width:100%; border-radius:6px; max-height:400px; object-fit:contain;" />`}
+                        ${mediaElement}
                     </div>`;
             });
             htmlContent += '</div>';
             Swal.fire({ title: title, html: htmlContent, width: '800px', showCloseButton: true, showConfirmButton: false });
         } else {
-            const fullUrl = getFileUrl(fileData); // 👇 FIXED 👇
+            const fullUrl = getFileUrl(fileData);
             const isPdf = fileData.toLowerCase().endsWith('.pdf');
             if (isPdf) { Swal.fire({ title: title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false }); }
             else { Swal.fire({ title: title, imageUrl: fullUrl, imageAlt: title, width: '800px', showCloseButton: true, showConfirmButton: false }); }
@@ -122,7 +133,6 @@ const Purchases = () => {
                 </button>
             </div>
 
-            {/* 👇 NEW WALLET CARD 👇 */}
             <div className="stats-grid" style={{ marginBottom: '20px', justifyContent: 'flex-start' }}>
                 <div className={`stat-card ${walletBalance < 0 ? 'theme-red' : 'theme-green'}`} style={{ maxWidth: '350px' }}>
                     <div className="stat-icon">
@@ -211,7 +221,6 @@ const Purchases = () => {
                                             <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>
                                                 {getStatusIcon(item.status)} {item.status || 'Pending'}
                                             </span>
-                                            {/* 👇 NEW: Shows who approved it 👇 */}
                                             {item.approvedBy && (
                                                 <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', fontStyle: 'italic' }}>
                                                     By: {item.approvedBy.name}
@@ -221,7 +230,14 @@ const Purchases = () => {
 
                                         <td data-label="Proof">
                                             <div className="flex-row gap-5 flex-wrap">
-                                                {item.paymentScreenshotUrl ? (
+
+                                                {/* 👇 FIXED: Looking for the array paymentScreenshotUrls 👇 */}
+                                                {item.paymentScreenshotUrls && item.paymentScreenshotUrls.length > 0 ? (
+                                                    <button onClick={() => viewFile(item.paymentScreenshotUrls, `Payment Proofs (${item.paymentScreenshotUrls.length})`)} className="gts-btn doc-btn doc-proof" title="View Proofs">
+                                                        <FontAwesomeIcon icon={faFileInvoice} />
+                                                    </button>
+                                                    // Fallback for older expenses before the S3 migration
+                                                ) : item.paymentScreenshotUrl ? (
                                                     <button onClick={() => viewFile(item.paymentScreenshotUrl, 'Payment Proof')} className="gts-btn doc-btn doc-proof" title="View Proof">
                                                         <FontAwesomeIcon icon={faFileInvoice} />
                                                     </button>

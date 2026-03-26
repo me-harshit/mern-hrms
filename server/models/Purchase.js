@@ -8,27 +8,27 @@ const purchaseSchema = new mongoose.Schema({
     descriptionTags: { type: String, required: true },
     amount: { type: Number, required: true },
     purchaseDate: { type: Date, required: true, default: Date.now },
-    
+
     // Routing & Tracking
     purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Submitter
     paymentSourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Whose wallet takes the hit
-    
+
     // Approval Flow
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Filled when manager hits approve
-    
+
     // 👇 THE MAGIC FIELD: Stores the dynamic category data (Product, Fuel, Hotel, etc.)
     expenseDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
-    
+
     // File paths
-    paymentScreenshotUrl: { type: String },
+    paymentScreenshotUrls: [{ type: String }],
     expenseMediaUrls: [{ type: String }], // Replaces productMediaUrls
-    
+
     // Legacy / Admin Notes
-    inventoryStatus: { 
-        type: String, 
-        enum: ['Available', 'In Use', 'Consumed', 'Lost/Damaged'], 
-        default: 'Available' 
+    inventoryStatus: {
+        type: String,
+        enum: ['Available', 'In Use', 'Consumed', 'Lost/Damaged'],
+        default: 'Available'
     },
     notes: { type: String }
 }, { timestamps: true });

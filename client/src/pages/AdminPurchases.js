@@ -7,10 +7,12 @@ import {
     faCheckCircle, faClock, faTimesCircle, faChartLine, 
     faRupeeSign, faHourglassHalf 
 } from '@fortawesome/free-solid-svg-icons';
+// import { useNavigate } from 'react-router-dom'; // Ensure navigate is imported if you use it
 import '../styles/App.css';
 import '../styles/purchase.css';
 
 const AdminPurchases = () => {
+    // const navigate = useNavigate();
     const [purchases, setPurchases] = useState([]);
     const [filteredPurchases, setFilteredPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,7 +27,7 @@ const AdminPurchases = () => {
         fromDate: '',
         toDate: '',
         expenseType: '',
-        category: '', // Handled as single string for native select, can be upgraded to array for multi-select
+        category: '', 
         projectName: '', 
         submittedBy: '',
         approvedBy: '',
@@ -50,7 +52,7 @@ const AdminPurchases = () => {
             const userRes = await api.get('/employees');
             setUsersList(userRes.data);
 
-            // 3. Fetch Projects (Ready for your new Project Module!)
+            // 3. Fetch Projects
             try {
                 const projRes = await api.get('/projects');
                 setProjectsList(projRes.data);
@@ -89,7 +91,7 @@ const AdminPurchases = () => {
             result = result.filter(p => p.category === filters.category);
         }
 
-        // 4. Project Filter (Matches string or ID depending on how you build the module)
+        // 4. Project Filter 
         if (filters.projectName) {
             result = result.filter(p => p.projectName === filters.projectName);
         }
@@ -117,7 +119,7 @@ const AdminPurchases = () => {
             result = result.filter(p => p.status === filters.status);
         }
 
-        // 9. Generic Search Term (Matches tags, specific amounts, or names)
+        // 9. Generic Search Term 
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             result = result.filter(p => 
@@ -163,7 +165,7 @@ const AdminPurchases = () => {
             try {
                 await api.put(`/purchases/${id}/status`, { status: newStatus });
                 Swal.fire('Success', `Expense marked as ${newStatus}`, 'success');
-                fetchInitialData(); // Refresh to pull updated Wallet & Approver data
+                fetchInitialData(); 
             } catch (err) {
                 Swal.fire('Error', err.response?.data?.message || 'Failed to update status', 'error');
             }
@@ -171,7 +173,6 @@ const AdminPurchases = () => {
     };
 
     // --- UI HELPERS ---
-    // Helper to safely render old local URLs or new S3 URLs
     const getFileUrl = (url) => {
         if (!url) return '';
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
@@ -181,20 +182,31 @@ const AdminPurchases = () => {
         if (Array.isArray(fileData)) {
             let htmlContent = '<div style="display:flex; flex-direction:column; gap:20px; max-height: 60vh; overflow-y:auto; padding-right:10px;">';
             fileData.forEach((url, index) => {
-                const fullUrl = getFileUrl(url); // 👇 FIXED 👇
+                const fullUrl = getFileUrl(url);
                 const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+                const isPdf = url.toLowerCase().endsWith('.pdf'); 
+    
+                let mediaElement = '';
+                if (isVideo) {
+                    mediaElement = `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>`;
+                } else if (isPdf) {
+                    mediaElement = `<iframe src="${fullUrl}" width="100%" height="400px" style="border: none; border-radius: 6px;"></iframe>`;
+                } else {
+                    mediaElement = `<img src="${fullUrl}" style="width:100%; border-radius:6px; max-height:400px; object-fit:contain;" />`;
+                }
+    
                 htmlContent += `
                     <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
                         <div style="text-align: left; font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: 600;">File ${index + 1}</div>
-                        ${isVideo ? `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>` : `<img src="${fullUrl}" style="width:100%; border-radius:6px; max-height:400px; object-fit:contain;" />`}
+                        ${mediaElement}
                     </div>`;
             });
             htmlContent += '</div>';
             Swal.fire({ title: title, html: htmlContent, width: '800px', showCloseButton: true, showConfirmButton: false });
         } else {
-            const fullUrl = getFileUrl(fileData); // 👇 FIXED 👇
+            const fullUrl = getFileUrl(fileData);
             const isPdf = fileData.toLowerCase().endsWith('.pdf');
-            if (isPdf) { Swal.fire({ title: title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false }); } 
+            if (isPdf) { Swal.fire({ title: title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 8px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false }); }
             else { Swal.fire({ title: title, imageUrl: fullUrl, imageAlt: title, width: '800px', showCloseButton: true, showConfirmButton: false }); }
         }
     };
@@ -382,7 +394,13 @@ const AdminPurchases = () => {
                                     
                                     <td data-label="Documents">
                                         <div className="flex-row gap-5 flex-wrap">
-                                            {item.paymentScreenshotUrl ? (
+                                            
+                                            {/* 👇 FIXED: Safely Handles New Arrays or Old Strings 👇 */}
+                                            {item.paymentScreenshotUrls && item.paymentScreenshotUrls.length > 0 ? (
+                                                <button onClick={() => viewFile(item.paymentScreenshotUrls, `Payment Proofs (${item.paymentScreenshotUrls.length})`)} className="gts-btn doc-btn doc-proof">
+                                                    <FontAwesomeIcon icon={faFileInvoice} /> Proofs
+                                                </button>
+                                            ) : item.paymentScreenshotUrl ? (
                                                 <button onClick={() => viewFile(item.paymentScreenshotUrl, 'Payment Proof')} className="gts-btn doc-btn doc-proof">
                                                     <FontAwesomeIcon icon={faFileInvoice} /> Proof
                                                 </button>

@@ -7,11 +7,12 @@ const { uploadToS3 } = require('../utils/s3Service'); // Import the new S3 Servi
 const Purchase = require('../models/Purchase');
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
+const WalletTransaction = require('../models/WalletTransaction');
 
 // @route   POST /api/purchases
 // @desc    Add a new dynamic expense entry
 router.post('/', auth, upload.fields([
-    { name: 'paymentScreenshot', maxCount: 1 },
+    { name: 'paymentScreenshots', maxCount: 5 }, // <-- FIXED: Added comma and changed to plural
     { name: 'expenseMedia', maxCount: 10 } 
 ]), async (req, res) => {
     try {
@@ -28,15 +29,16 @@ router.post('/', auth, upload.fields([
         }
 
         // --- NEW S3 UPLOAD LOGIC ---
-        let paymentScreenshotUrl = '';
+        let paymentScreenshotUrls = []; // <-- FIXED: Now an array
         let expenseMediaUrls = [];
 
-        // 1. Upload Screenshot to S3
-        if (req.files && req.files['paymentScreenshot']) {
-            paymentScreenshotUrl = await uploadToS3(req.files['paymentScreenshot'][0]);
+        // 1. Upload Multiple Screenshots to S3 (Running in parallel for speed)
+        if (req.files && req.files['paymentScreenshots']) {
+            const proofPromises = req.files['paymentScreenshots'].map(file => uploadToS3(file));
+            paymentScreenshotUrls = await Promise.all(proofPromises);
         }
 
-        // 2. Upload Multiple Media Files to S3 (Running in parallel for speed)
+        // 2. Upload Multiple Media Files to S3
         if (req.files && req.files['expenseMedia']) {
             const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
             expenseMediaUrls = await Promise.all(uploadPromises);
@@ -52,8 +54,8 @@ router.post('/', auth, upload.fields([
             descriptionTags,
             expenseDetails: parsedExpenseDetails,
             purchasedBy: req.user.id,
-            paymentScreenshotUrl, // Now stores the AWS S3 URL
-            expenseMediaUrls,     // Now stores an array of AWS S3 URLs
+            paymentScreenshotUrls, // <-- FIXED: Saves the array of AWS S3 URLs
+            expenseMediaUrls,      // Now stores an array of AWS S3 URLs
             status: 'Pending'
         });
 
@@ -132,7 +134,7 @@ router.get('/:id', auth, async (req, res) => {
 // @route   PUT /api/purchases/:id
 // @desc    Update expense details
 router.put('/:id', auth, upload.fields([
-    { name: 'paymentScreenshot', maxCount: 1 },
+    { name: 'paymentScreenshots', maxCount: 5 }, // <-- FIXED: Match POST route
     { name: 'expenseMedia', maxCount: 10 }
 ]), async (req, res) => {
     try {
@@ -176,8 +178,9 @@ router.put('/:id', auth, upload.fields([
         }
 
         // --- NEW S3 UPLOAD LOGIC FOR EDITS ---
-        if (req.files && req.files['paymentScreenshot']) {
-            purchase.paymentScreenshotUrl = await uploadToS3(req.files['paymentScreenshot'][0]);
+        if (req.files && req.files['paymentScreenshots']) {
+            const proofPromises = req.files['paymentScreenshots'].map(file => uploadToS3(file));
+            purchase.paymentScreenshotUrls = await Promise.all(proofPromises); // <-- FIXED
         }
         if (req.files && req.files['expenseMedia']) {
             const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
@@ -241,6 +244,14 @@ router.put('/:id/status', auth, async (req, res) => {
             }
             wallet.balance -= purchase.amount;
             await wallet.save();
+
+            await WalletTransaction.create({
+                userId: purchase.paymentSourceId,
+                amount: purchase.amount,
+                type: 'Debit',
+                description: `Expense Approved: ${purchase.category} - ${purchase.projectName || 'General'}`,
+                performedBy: req.user.id
+            });
         }
 
         purchase.status = status;

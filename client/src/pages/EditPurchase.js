@@ -39,9 +39,9 @@ const EditPurchase = () => {
         vendorName: '', billingCycle: 'Monthly', expenseDescription: ''
     });
 
-    // --- EXISTING & NEW FILES STATE ---
-    const [existingFiles, setExistingFiles] = useState({});
-    const [newFiles, setNewFiles] = useState({ paymentScreenshot: null, expenseMedia: [] });
+    // 👇 FIXED: Changed to plural arrays to handle multiple files 👇
+    const [existingFiles, setExistingFiles] = useState({ paymentScreenshotUrls: [], expenseMediaUrls: [] });
+    const [newFiles, setNewFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
 
     useEffect(() => {
         fetchInitialData();
@@ -72,8 +72,11 @@ const EditPurchase = () => {
                 setExpenseDetails(prev => ({ ...prev, ...data.expenseDetails }));
             }
 
+            // 👇 FIXED: Extract the array, with a fallback for old single-string entries 👇
             setExistingFiles({
-                paymentScreenshotUrl: data.paymentScreenshotUrl,
+                paymentScreenshotUrls: data.paymentScreenshotUrls?.length > 0 
+                    ? data.paymentScreenshotUrls 
+                    : (data.paymentScreenshotUrl ? [data.paymentScreenshotUrl] : []),
                 expenseMediaUrls: data.expenseMediaUrls || []
             });
 
@@ -107,23 +110,18 @@ const EditPurchase = () => {
     const handleMainChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
+    // 👇 FIXED: Unified handler to accept multiple files for both fields 👇
     const handleFileChange = (e, fieldName) => {
-        if (fieldName === 'expenseMedia') {
-            const selectedFiles = Array.from(e.target.files); 
-            const validFiles = [];
-            for (let file of selectedFiles) {
-                if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
-                    Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
-                } else {
-                    validFiles.push(file);
-                }
+        const selectedFiles = Array.from(e.target.files); 
+        const validFiles = [];
+        for (let file of selectedFiles) {
+            if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+                Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
+            } else {
+                validFiles.push(file);
             }
-            setNewFiles(prev => ({ ...prev, [fieldName]: validFiles }));
-        } else {
-            const file = e.target.files[0]; 
-            if (!file) return;
-            setNewFiles(prev => ({ ...prev, [fieldName]: file }));
         }
+        setNewFiles(prev => ({ ...prev, [fieldName]: validFiles }));
     };
 
     const handleSubmit = async (e) => {
@@ -140,9 +138,11 @@ const EditPurchase = () => {
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             data.append('expenseDetails', JSON.stringify(expenseDetails));
 
-            // Only append files if the user is explicitly uploading new ones
-            if (newFiles.paymentScreenshot) {
-                data.append('paymentScreenshot', newFiles.paymentScreenshot);
+            // 👇 FIXED: Append multiple new screenshots if provided 👇
+            if (newFiles.paymentScreenshots && newFiles.paymentScreenshots.length > 0) {
+                for (let i = 0; i < newFiles.paymentScreenshots.length; i++) {
+                    data.append('paymentScreenshots', newFiles.paymentScreenshots[i]); 
+                }
             }
             
             // Send raw files to backend for S3 Processing
@@ -288,7 +288,6 @@ const EditPurchase = () => {
                                 </div>
                             </div>
 
-                            {/* 👇 FIXED: REPLACED INPUT WITH PROJECTS DROPDOWN 👇 */}
                             {formData.expenseType === 'Project Expense' && (
                                 <div className="form-group grid-span-2">
                                     <label className="input-label">Project Name *</label>
@@ -358,26 +357,45 @@ const EditPurchase = () => {
                         <p className="text-small text-muted mb-20">Uploading new files will overwrite the existing ones.</p>
 
                         <div className="purchase-grid">
+                            
+                            {/* 👇 FIXED: Multiple Proof Uploads & Iterating Existing Proofs 👇 */}
                             <div className="form-group expense-file-area">
-                                <label className="input-label">Payment Screenshot / Bank Proof</label>
-                                {existingFiles.paymentScreenshotUrl && (
-                                    <a href={getFileUrl(existingFiles.paymentScreenshotUrl)} target="_blank" rel="noreferrer" className="text-primary fw-600 fs-12 mb-5 d-block">
-                                        <FontAwesomeIcon icon={faExternalLinkAlt} /> View Current Proof
-                                    </a>
+                                <label className="input-label">Payment Screenshot / Bank Proof(s)</label>
+                                
+                                {existingFiles.paymentScreenshotUrls?.length > 0 && (
+                                    <div className="mb-10">
+                                        <div className="text-small text-muted mb-5">Current Proofs:</div>
+                                        {existingFiles.paymentScreenshotUrls.map((url, idx) => (
+                                            <a key={idx} href={getFileUrl(url)} target="_blank" rel="noreferrer" className="text-primary fw-600 fs-12 mb-5 d-block">
+                                                <FontAwesomeIcon icon={faExternalLinkAlt} /> View Proof {idx + 1}
+                                            </a>
+                                        ))}
+                                    </div>
                                 )}
-                                <input className="custom-file-input" type="file" accept="image/*,application/pdf" onChange={e => handleFileChange(e, 'paymentScreenshot')} />
+
+                                <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" onChange={e => handleFileChange(e, 'paymentScreenshots')} />
+                                
+                                {newFiles.paymentScreenshots.length > 0 && (
+                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
+                                        {newFiles.paymentScreenshots.length} new proof file(s) selected
+                                    </p>
+                                )}
                             </div>
 
+                            {/* Media Files */}
                             <div className="form-group expense-file-area">
                                 <label className="input-label">{getMediaLabel()}</label>
+                                
                                 {existingFiles.expenseMediaUrls?.length > 0 && (
                                     <div className="fw-bold fs-12 mb-5 text-green">
                                         {existingFiles.expenseMediaUrls.length} Media File(s) Currently Uploaded
                                     </div>
                                 )}
+
                                 <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
+                                
                                 {newFiles.expenseMedia.length > 0 && (
-                                    <p className="file-success-text">
+                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
                                         {newFiles.expenseMedia.length} new file(s) selected
                                     </p>
                                 )}
