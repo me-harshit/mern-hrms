@@ -97,33 +97,39 @@ const AddExpense = () => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
 
-        setIsCompressing(true); // Disable submit button while phone is working
+        setIsCompressing(true); // Disable submit button
 
         for (let file of selectedFiles) {
-            if (file.type.startsWith('image/')) {
+            // 1. Android fallback: Check extension if file.type is missing
+            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
+
+            if (isImage) {
                 try {
                     const options = {
                         maxSizeMB: 1,
                         maxWidthOrHeight: 1920,
-                        useWebWorker: true,
+                        useWebWorker: false,       // 🚀 FIX 1: Disable Web Worker for mobile stability
+                        fileType: 'image/jpeg'     // 🚀 FIX 2: Force HEIC/PNG into standard JPEG
                     };
                     const compressedBlob = await imageCompression(file, options);
 
-                    // 🚀 THE FIX: Reconstruct the File object with the original name and type!
-                    const safelyNamedFile = new File([compressedBlob], file.name, {
-                        type: file.type,
+                    // 🚀 FIX 3: Strip old extension (.heic) and force .jpg so Multer accepts it
+                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+
+                    const safelyNamedFile = new File([compressedBlob], safeName, {
+                        type: 'image/jpeg',
                         lastModified: Date.now()
                     });
 
                     processedFiles.push(safelyNamedFile);
                 } catch (error) {
                     console.error("Error compressing image:", error);
-                    processedFiles.push(file); // Fallback to original if compression fails
+                    processedFiles.push(file); // Fallback
                 }
             } else if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
                 Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
             } else {
-                processedFiles.push(file); // PDFs and videos pass through untouched
+                processedFiles.push(file);
             }
         }
 

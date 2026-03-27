@@ -123,7 +123,6 @@ const EditExpense = () => {
 
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    // 👇 RECONSTRUCTED FILE LOGIC 👇
     const handleFileChange = async (e, fieldName) => {
         const selectedFiles = Array.from(e.target.files); 
         const processedFiles = [];
@@ -131,18 +130,24 @@ const EditExpense = () => {
         setIsCompressing(true); // Disable submit button
 
         for (let file of selectedFiles) {
-            if (file.type.startsWith('image/')) {
+            // 1. Android fallback: Check extension if file.type is missing
+            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
+
+            if (isImage) {
                 try {
                     const options = {
                         maxSizeMB: 1,             
                         maxWidthOrHeight: 1920,   
-                        useWebWorker: true,       
+                        useWebWorker: false,       // 🚀 FIX 1: Disable Web Worker for mobile stability
+                        fileType: 'image/jpeg'     // 🚀 FIX 2: Force HEIC/PNG into standard JPEG
                     };
                     const compressedBlob = await imageCompression(file, options);
                     
-                    // 🚀 THE FIX: Reconstruct the File object
-                    const safelyNamedFile = new File([compressedBlob], file.name, {
-                        type: file.type,
+                    // 🚀 FIX 3: Strip old extension (.heic) and force .jpg so Multer accepts it
+                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+
+                    const safelyNamedFile = new File([compressedBlob], safeName, {
+                        type: 'image/jpeg',
                         lastModified: Date.now()
                     });
 
@@ -158,7 +163,7 @@ const EditExpense = () => {
             }
         }
 
-        setNewFiles(prev => ({ ...prev, [fieldName]: processedFiles }));
+        setFiles(prev => ({ ...prev, [fieldName]: processedFiles }));
         setIsCompressing(false); // Re-enable submit button
     };
 

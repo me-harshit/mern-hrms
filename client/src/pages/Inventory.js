@@ -55,7 +55,6 @@ const Inventory = () => {
         setFilteredInventory(result);
     }, [inventory, statusFilter, searchTerm]);
 
-    // 👇 FIXED: Math now calculates the SUM of 'quantity', not just row counts! 👇
     const totalItems = inventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
     const availableItems = inventory.filter(i => i.status === 'Available').reduce((sum, item) => sum + (item.quantity || 1), 0);
     const assignedItems = inventory.filter(i => i.status === 'Assigned').reduce((sum, item) => sum + (item.quantity || 1), 0);
@@ -74,6 +73,40 @@ const Inventory = () => {
     const getFileUrl = (url) => {
         if (!url) return '';
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
+    };
+
+    // 👇 FIXED: Reduced popup widths and added max-height to images 👇
+    const viewSingleFile = (url, title) => {
+        const fullUrl = getFileUrl(url);
+        const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+        const isPdf = url.toLowerCase().endsWith('.pdf');
+
+        if (isVideo) {
+            Swal.fire({ 
+                title, 
+                html: `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:350px; background:#000;"></video>`, 
+                width: '500px', // Reduced from 800px
+                showCloseButton: true, 
+                showConfirmButton: false 
+            });
+        } else if (isPdf) {
+            Swal.fire({ 
+                title, 
+                html: `<iframe src="${fullUrl}" width="100%" height="400px" style="border: none; border-radius: 6px;"></iframe>`, 
+                width: '600px', // Reduced from 800px (PDFs need a bit more width to be readable)
+                showCloseButton: true, 
+                showConfirmButton: false 
+            });
+        } else {
+            Swal.fire({ 
+                title, 
+                // Render image as HTML to strictly enforce max-height so it doesn't overflow the screen
+                html: `<img src="${fullUrl}" style="width:100%; max-height: 350px; object-fit: contain; border-radius: 6px;" alt="${title}" />`,
+                width: '450px', // Reduced significantly from 800px
+                showCloseButton: true, 
+                showConfirmButton: false 
+            });
+        }
     };
 
     return (
@@ -154,7 +187,15 @@ const Inventory = () => {
                                     <td data-label="Item Name & Qty">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                             {item.mediaUrls && item.mediaUrls.length > 0 ? (
-                                                <img src={getFileUrl(item.mediaUrls[0])} alt="asset" style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
+                                                <img 
+                                                    src={getFileUrl(item.mediaUrls[0])} 
+                                                    alt="asset" 
+                                                    style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid #e2e8f0', transition: 'transform 0.2s' }} 
+                                                    onClick={() => viewSingleFile(item.mediaUrls[0], item.itemName)}
+                                                    title="Click to view image"
+                                                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                                />
                                             ) : (
                                                 <div style={{ width: '40px', height: '40px', borderRadius: '6px', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                     <FontAwesomeIcon icon={faBoxes} style={{ color: '#94a3b8' }} />
@@ -163,7 +204,6 @@ const Inventory = () => {
                                             <div>
                                                 <div className="fw-600 text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     {item.itemName}
-                                                    {/* 👇 NEW: Quantity Badge 👇 */}
                                                     <span style={{ padding: '2px 6px', background: '#f1f5f9', color: '#475569', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #cbd5e1' }}>
                                                         Qty: {item.quantity || 1}
                                                     </span>

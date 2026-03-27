@@ -4,7 +4,7 @@ import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture, faEdit, faWallet, faHistory, faTimes, faRupeeSign
+    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture, faEdit, faWallet, faHistory, faTimes
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 
