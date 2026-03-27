@@ -6,16 +6,16 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faLayerGroup, faSpinner, faFileVideo, faFilePdf, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import '../styles/App.css';
-import '../styles/expenses.css'; 
+import '../styles/expenses.css';
 
 const EditInventory = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [isCompressing, setIsCompressing] = useState(false); 
+    const [isCompressing, setIsCompressing] = useState(false);
 
     const [employees, setEmployees] = useState([]);
     const [locations, setLocations] = useState(['IT Closet', 'Server Room A', 'Storage Cabinet 1']);
@@ -26,11 +26,11 @@ const EditInventory = () => {
         storageLocation: '',
         assignedTo: '',
         notes: '',
-        quantityToUpdate: 1 
+        quantityToUpdate: 1
     });
 
-    const [originalQuantity, setOriginalQuantity] = useState(1); 
-    const [originalStatus, setOriginalStatus] = useState(''); 
+    const [originalQuantity, setOriginalQuantity] = useState(1);
+    const [originalStatus, setOriginalStatus] = useState('');
 
     const [existingMedia, setExistingMedia] = useState([]);
     const [newFiles, setNewFiles] = useState({ media: [] });
@@ -54,7 +54,7 @@ const EditInventory = () => {
                 storageLocation: data.storageLocation || '',
                 assignedTo: data.assignedTo?._id || '',
                 notes: data.notes || '',
-                quantityToUpdate: data.quantity || 1 
+                quantityToUpdate: data.quantity || 1
             });
 
             setOriginalQuantity(data.quantity || 1);
@@ -75,24 +75,23 @@ const EditInventory = () => {
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    // 👇 NEW: Reconstructed File Logic for Edit Inventory 👇
     const handleFileChange = async (e) => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
-        
-        setIsCompressing(true); 
+
+        setIsCompressing(true);
 
         for (let file of selectedFiles) {
             if (file.type.startsWith('image/')) {
                 try {
                     const options = {
-                        maxSizeMB: 1,             
-                        maxWidthOrHeight: 1920,   
-                        useWebWorker: true,       
+                        maxSizeMB: 1,
+                        maxWidthOrHeight: 1920,
+                        useWebWorker: true,
                     };
+
                     const compressedBlob = await imageCompression(file, options);
-                    
-                    // 🚀 THE FIX: Reconstruct the File object
+
                     const safelyNamedFile = new File([compressedBlob], file.name, {
                         type: file.type,
                         lastModified: Date.now()
@@ -101,7 +100,7 @@ const EditInventory = () => {
                     processedFiles.push(safelyNamedFile);
                 } catch (error) {
                     console.error("Error compressing image:", error);
-                    processedFiles.push(file); 
+                    processedFiles.push(file);
                 }
             } else if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
                 Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
@@ -110,8 +109,8 @@ const EditInventory = () => {
             }
         }
 
-        setNewFiles({ media: processedFiles });
-        setIsCompressing(false); 
+        setNewFiles({ media: processedFiles }); // 👇 Uses setNewFiles
+        setIsCompressing(false);
     };
 
     const handleAddLocation = async () => {
@@ -130,7 +129,7 @@ const EditInventory = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!formData.itemName) return Swal.fire('Error', 'Item Name is required', 'warning');
         if (formData.status === 'Assigned' && !formData.assignedTo) return Swal.fire('Error', 'Please select an employee', 'warning');
         if (formData.quantityToUpdate < 1) return Swal.fire('Error', 'Quantity must be at least 1', 'warning');
@@ -192,7 +191,7 @@ const EditInventory = () => {
         const fullUrl = getFileUrl(url);
         const isPdf = url.toLowerCase().endsWith('.pdf');
         const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
-        
+
         let iconContent;
         if (isPdf) {
             iconContent = <FontAwesomeIcon icon={faFilePdf} style={{ fontSize: '32px', color: '#dc2626' }} />;
@@ -224,7 +223,7 @@ const EditInventory = () => {
                 </button>
                 <h1 className="page-title header-no-margin">Edit Asset Details</h1>
             </div>
-            
+
             <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '15px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <div style={{ background: '#3b82f6', color: 'white', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
                     <FontAwesomeIcon icon={faLayerGroup} />
@@ -235,16 +234,16 @@ const EditInventory = () => {
                 </div>
             </div>
 
-            <div className="expense-form-card"> 
+            <div className="expense-form-card">
                 <form onSubmit={handleSubmit} className="profile-form">
-                    
+
                     <div className="expense-form-section">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faInfoCircle} /> Asset Details
                         </div>
-                        
-                        <div className="expense-grid"> 
-                            
+
+                        <div className="expense-grid">
+
                             <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px' }}>
                                 <div style={{ flex: '3' }}>
                                     <label className="input-label">Item / Asset Name *</label>
@@ -252,16 +251,16 @@ const EditInventory = () => {
                                 </div>
                                 <div style={{ flex: '1' }}>
                                     <label className="input-label" style={{ color: '#0f172a', fontWeight: 'bold' }}>Qty to Modify *</label>
-                                    <input 
-                                        className="custom-input" 
-                                        type="number" 
-                                        name="quantityToUpdate" 
-                                        required 
-                                        min="1" 
-                                        max={originalQuantity} 
-                                        value={formData.quantityToUpdate} 
-                                        onChange={handleChange} 
-                                        disabled={originalQuantity === 1} 
+                                    <input
+                                        className="custom-input"
+                                        type="number"
+                                        name="quantityToUpdate"
+                                        required
+                                        min="1"
+                                        max={originalQuantity}
+                                        value={formData.quantityToUpdate}
+                                        onChange={handleChange}
+                                        disabled={originalQuantity === 1}
                                         style={{ background: originalQuantity === 1 ? '#f1f5f9' : 'white' }}
                                     />
                                     {originalQuantity > 1 && (
@@ -317,16 +316,16 @@ const EditInventory = () => {
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faPaperclip} /> Asset Media
                         </div>
-                        
+
                         {(existingMedia.length > 0) && (
                             <div className="alert-message warning mb-20" style={{ padding: '12px', borderRadius: '8px', fontSize: '13px', background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309' }}>
                                 <FontAwesomeIcon icon={faInfoCircle} /> <strong>Note:</strong> Uploading new files will add to your existing attachments.
                             </div>
                         )}
 
-                        <div className="expense-grid"> 
+                        <div className="expense-grid">
                             <div className="form-group expense-file-area grid-span-2">
-                                
+
                                 <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
                                     Upload Images / Videos of Asset
                                 </label>
@@ -343,7 +342,7 @@ const EditInventory = () => {
                                 <div className="upload-container-new">
                                     <div className="text-small text-muted mb-5 fw-600">Upload Additional Files (Optional):</div>
                                     <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
-                                    
+
                                     {isCompressing ? (
                                         <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
                                             <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
@@ -367,7 +366,7 @@ const EditInventory = () => {
                         )}
 
                         <button type="submit" className="save-btn expense-submit-btn" disabled={saving || isCompressing}>
-                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
+                            <FontAwesomeIcon icon={faSave} className="btn-icon" />
                             {saving ? 'Processing...' : isCompressing ? 'Compressing Files...' : 'Save Updates'}
                         </button>
                     </div>

@@ -4,29 +4,29 @@ import Swal from 'sweetalert2';
 import api, { SERVER_URL } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faCheckCircle, faFilePdf, faFileVideo, faBuilding, faUser, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import imageCompression from 'browser-image-compression'; 
+import imageCompression from 'browser-image-compression';
 import '../styles/App.css';
-import '../styles/expenses.css'; 
+import '../styles/expenses.css';
 
 const EditExpense = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
-    
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [isCompressing, setIsCompressing] = useState(false); 
-    
+    const [isCompressing, setIsCompressing] = useState(false);
+
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
 
     const [formData, setFormData] = useState({
-        expenseType: 'Project Expense', 
+        expenseType: 'Project Expense',
         category: 'Product / Item Purchase',
-        expenseDate: '', 
+        expenseDate: '',
         amount: '',
-        paymentSourceId: '', 
+        paymentSourceId: '',
         projectName: '',
         descriptionTags: ''
     });
@@ -39,7 +39,7 @@ const EditExpense = () => {
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
         vendorName: '', billingCycle: 'Monthly', expenseDescription: '',
         participantName: '',
-        gstNumber: '' 
+        gstNumber: ''
     });
 
     const [existingFiles, setExistingFiles] = useState({ paymentScreenshotUrls: [], expenseMediaUrls: [] });
@@ -57,14 +57,14 @@ const EditExpense = () => {
 
             const projRes = await api.get('/projects');
             setProjectsList(projRes.data);
-            
+
             const res = await api.get(`/expenses/${id}`);
             const data = res.data;
-            
+
             setFormData({
                 expenseType: data.expenseType || 'Project Expense',
                 category: data.category || 'Product / Item Purchase',
-                expenseDate: data.expenseDate ? new Date(data.expenseDate).toISOString().split('T')[0] : '', 
+                expenseDate: data.expenseDate ? new Date(data.expenseDate).toISOString().split('T')[0] : '',
                 amount: data.amount || '',
                 paymentSourceId: data.paymentSourceId?._id || data.paymentSourceId || currentUser.id,
                 projectName: data.projectName || '',
@@ -76,15 +76,15 @@ const EditExpense = () => {
             }
 
             setExistingFiles({
-                paymentScreenshotUrls: data.paymentScreenshotUrls?.length > 0 
-                    ? data.paymentScreenshotUrls 
+                paymentScreenshotUrls: data.paymentScreenshotUrls?.length > 0
+                    ? data.paymentScreenshotUrls
                     : (data.paymentScreenshotUrl ? [data.paymentScreenshotUrl] : []),
                 expenseMediaUrls: data.expenseMediaUrls || []
             });
 
         } catch (err) {
             Swal.fire('Error', 'Could not load expense details', 'error');
-            navigate('/expenses'); 
+            navigate('/expenses');
         } finally {
             setLoading(false);
         }
@@ -113,9 +113,9 @@ const EditExpense = () => {
 
         if (name === 'expenseType') {
             if (value === 'Project Expense' && updatedData.category === 'Regular Office Expense') {
-                updatedData.category = 'Product / Item Purchase'; 
+                updatedData.category = 'Product / Item Purchase';
             } else if (value === 'Regular Office Expense' && ['Participant Payment', 'Vendor Payment'].includes(updatedData.category)) {
-                updatedData.category = 'Regular Office Expense'; 
+                updatedData.category = 'Regular Office Expense';
             }
         }
         setFormData(updatedData);
@@ -124,47 +124,41 @@ const EditExpense = () => {
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
     const handleFileChange = async (e, fieldName) => {
-        const selectedFiles = Array.from(e.target.files); 
+        const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
-        
-        setIsCompressing(true); // Disable submit button
+
+        setIsCompressing(true);
 
         for (let file of selectedFiles) {
-            // 1. Android fallback: Check extension if file.type is missing
-            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
-
-            if (isImage) {
+            if (file.type.startsWith('image/')) {
                 try {
                     const options = {
-                        maxSizeMB: 1,             
-                        maxWidthOrHeight: 1920,   
-                        useWebWorker: false,       // 🚀 FIX 1: Disable Web Worker for mobile stability
-                        fileType: 'image/jpeg'     // 🚀 FIX 2: Force HEIC/PNG into standard JPEG
+                        maxSizeMB: 1,
+                        maxWidthOrHeight: 1920,
+                        useWebWorker: true,
                     };
-                    const compressedBlob = await imageCompression(file, options);
-                    
-                    // 🚀 FIX 3: Strip old extension (.heic) and force .jpg so Multer accepts it
-                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
 
-                    const safelyNamedFile = new File([compressedBlob], safeName, {
-                        type: 'image/jpeg',
+                    const compressedBlob = await imageCompression(file, options);
+
+                    const safelyNamedFile = new File([compressedBlob], file.name, {
+                        type: file.type,
                         lastModified: Date.now()
                     });
 
                     processedFiles.push(safelyNamedFile);
                 } catch (error) {
                     console.error("Error compressing image:", error);
-                    processedFiles.push(file); // Fallback
+                    processedFiles.push(file);
                 }
             } else if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
                 Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
             } else {
-                processedFiles.push(file); 
+                processedFiles.push(file);
             }
         }
 
-        setFiles(prev => ({ ...prev, [fieldName]: processedFiles }));
-        setIsCompressing(false); // Re-enable submit button
+        setNewFiles(prev => ({ ...prev, [fieldName]: processedFiles })); // 👇 Uses setNewFiles with fieldName
+        setIsCompressing(false);
     };
 
     const handleSubmit = async (e) => {
@@ -172,7 +166,7 @@ const EditExpense = () => {
         if (!formData.amount || !formData.descriptionTags) {
             return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
         }
-        
+
         setSaving(true);
         setUploadProgress(0);
 
@@ -183,17 +177,17 @@ const EditExpense = () => {
 
             if (newFiles.paymentScreenshots && newFiles.paymentScreenshots.length > 0) {
                 for (let i = 0; i < newFiles.paymentScreenshots.length; i++) {
-                    data.append('paymentScreenshots', newFiles.paymentScreenshots[i]); 
-                }
-            }
-            
-            if (newFiles.expenseMedia && newFiles.expenseMedia.length > 0) {
-                for (let i = 0; i < newFiles.expenseMedia.length; i++) {
-                    data.append('expenseMedia', newFiles.expenseMedia[i]); 
+                    data.append('paymentScreenshots', newFiles.paymentScreenshots[i]);
                 }
             }
 
-            await api.put(`/expenses/${id}`, data, { 
+            if (newFiles.expenseMedia && newFiles.expenseMedia.length > 0) {
+                for (let i = 0; i < newFiles.expenseMedia.length; i++) {
+                    data.append('expenseMedia', newFiles.expenseMedia[i]);
+                }
+            }
+
+            await api.put(`/expenses/${id}`, data, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -202,11 +196,11 @@ const EditExpense = () => {
             });
 
             Swal.fire({ icon: 'success', title: 'Update Saved', timer: 1500, showConfirmButton: false });
-            navigate('/expenses'); 
-        } catch (err) { 
-            Swal.fire('Error', 'Failed to update expense', 'error'); 
-        } finally { 
-            setSaving(false); 
+            navigate('/expenses');
+        } catch (err) {
+            Swal.fire('Error', 'Failed to update expense', 'error');
+        } finally {
+            setSaving(false);
             setUploadProgress(0);
         }
     };
@@ -234,7 +228,7 @@ const EditExpense = () => {
         const fullUrl = getFileUrl(url);
         const isPdf = url.toLowerCase().endsWith('.pdf');
         const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
-        
+
         let iconContent;
         if (isPdf) {
             iconContent = <FontAwesomeIcon icon={faFilePdf} style={{ fontSize: '32px', color: '#dc2626' }} />;
@@ -264,7 +258,7 @@ const EditExpense = () => {
             case 'Accommodation': return 'Hotel Receipt / Invoice';
             case 'Product / Item Purchase': return 'Product Photo(s) / Video(s)';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
-            case 'Participant Payment': return 'Payment Receipt / Acknowledgment'; 
+            case 'Participant Payment': return 'Payment Receipt / Acknowledgment';
             case 'Vendor Payment': return 'Vendor Invoice / Bill';
             default: return 'Expense Media (Photos/Videos)';
         }
@@ -272,14 +266,14 @@ const EditExpense = () => {
 
     const renderCategoryFields = () => {
         switch (formData.category) {
-            case 'Vendor Payment': 
+            case 'Vendor Payment':
                 return (
                     <>
                         <div className="form-group"><label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Vendor Name *</label><input className="custom-input" name="vendorName" value={expenseDetails.vendorName} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">GST Number</label><input className="custom-input" name="gstNumber" value={expenseDetails.gstNumber} onChange={handleDetailChange} placeholder="Optional" style={{ textTransform: 'uppercase' }} /></div>
                     </>
                 );
-            case 'Participant Payment': 
+            case 'Participant Payment':
                 return (
                     <div className="form-group grid-span-2">
                         <label className="input-label"><FontAwesomeIcon icon={faUser} /> Participant Name *</label>
@@ -361,16 +355,16 @@ const EditExpense = () => {
                 </button>
                 <h1 className="page-title header-no-margin">Edit Expense Details</h1>
             </div>
-            
+
             <div className="expense-form-card">
                 <form onSubmit={handleSubmit} className="profile-form">
-                    
+
                     {/* --- SECTION 1: CORE DETAILS --- */}
                     <div className="expense-form-section">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faInfoCircle} /> General Information
                         </div>
-                        
+
                         <div className="expense-grid">
                             <div className="form-group grid-span-2">
                                 <label className="input-label">Expense Type</label>
@@ -407,7 +401,7 @@ const EditExpense = () => {
                                     {formData.expenseType === 'Project Expense' && (
                                         <>
                                             <option value="Participant Payment">Participant Payment</option>
-                                            <option value="Vendor Payment">Vendor Payment</option> 
+                                            <option value="Vendor Payment">Vendor Payment</option>
                                         </>
                                     )}
                                     {formData.expenseType === 'Regular Office Expense' && (
@@ -422,12 +416,12 @@ const EditExpense = () => {
                             </div>
 
                             <div className="form-group">
-                                <label className="input-label"><FontAwesomeIcon icon={faRupeeSign}/> Amount (₹) *</label>
+                                <label className="input-label"><FontAwesomeIcon icon={faRupeeSign} /> Amount (₹) *</label>
                                 <input className="custom-input" type="number" name="amount" required placeholder="5000" value={formData.amount} onChange={handleMainChange} />
                             </div>
 
                             <div className="form-group">
-                                <label className="input-label"><FontAwesomeIcon icon={faCreditCard}/> Payment Source (Who paid?) *</label>
+                                <label className="input-label"><FontAwesomeIcon icon={faCreditCard} /> Payment Source (Who paid?) *</label>
                                 <select className="swal2-select custom-select" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange}>
                                     <option value={currentUser?.id || currentUser?._id || ''}>Myself (Reimburse Me)</option>
                                     {usersList.map(u => (
@@ -437,7 +431,7 @@ const EditExpense = () => {
                             </div>
 
                             <div className="form-group grid-span-2">
-                                <label className="input-label"><FontAwesomeIcon icon={faTags}/> Description / Tags *</label>
+                                <label className="input-label"><FontAwesomeIcon icon={faTags} /> Description / Tags *</label>
                                 <input className="custom-input" type="text" name="descriptionTags" required placeholder="e.g. N95 Mask, Train Ticket, Client Dinner" value={formData.descriptionTags} onChange={handleMainChange} />
                             </div>
                         </div>
@@ -458,7 +452,7 @@ const EditExpense = () => {
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faPaperclip} /> Attachments & Proof
                         </div>
-                        
+
                         {(existingFiles.paymentScreenshotUrls.length > 0 || existingFiles.expenseMediaUrls.length > 0) && (
                             <div className="alert-message warning mb-20" style={{ padding: '12px', borderRadius: '8px', fontSize: '13px', background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309' }}>
                                 <FontAwesomeIcon icon={faInfoCircle} /> <strong>Note:</strong> Uploading new files will overwrite your existing attachments. Leave the upload fields empty to keep your current files.
@@ -466,13 +460,13 @@ const EditExpense = () => {
                         )}
 
                         <div className="expense-grid">
-                            
+
                             {/* PAYMENT SCREENSHOTS */}
                             <div className="form-group expense-file-area">
                                 <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
                                     Payment Screenshot / Bank Proof(s)
                                 </label>
-                                
+
                                 {existingFiles.paymentScreenshotUrls?.length > 0 && (
                                     <div className="mb-15">
                                         <div className="text-small text-muted mb-10 fw-600">Currently Saved Files:</div>
@@ -485,7 +479,7 @@ const EditExpense = () => {
                                 <div className="upload-container-new">
                                     <div className="text-small text-muted mb-5 fw-600">Upload New Files (Optional):</div>
                                     <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" onChange={e => handleFileChange(e, 'paymentScreenshots')} />
-                                    
+
                                     {isCompressing ? (
                                         <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
                                             <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
@@ -503,7 +497,7 @@ const EditExpense = () => {
                                 <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
                                     {getMediaLabel()}
                                 </label>
-                                
+
                                 {existingFiles.expenseMediaUrls?.length > 0 && (
                                     <div className="mb-15">
                                         <div className="text-small text-muted mb-10 fw-600">Currently Saved Files:</div>
@@ -516,7 +510,7 @@ const EditExpense = () => {
                                 <div className="upload-container-new">
                                     <div className="text-small text-muted mb-5 fw-600">Upload New Files (Optional):</div>
                                     <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
-                                    
+
                                     {isCompressing ? (
                                         <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
                                             <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
@@ -533,7 +527,7 @@ const EditExpense = () => {
 
                     {/* Actions & Progress Bar */}
                     <div className="profile-actions mt-30 flex-col gap-15">
-                        
+
                         {saving && uploadProgress > 0 && (
                             <div className="upload-progress-container">
                                 <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}></div>
@@ -542,7 +536,7 @@ const EditExpense = () => {
                         )}
 
                         <button type="submit" className="save-btn expense-submit-btn" disabled={saving || isCompressing}>
-                            <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
+                            <FontAwesomeIcon icon={faSave} className="btn-icon" />
                             {saving ? 'Processing & Saving...' : isCompressing ? 'Compressing Files...' : 'Save Updates'}
                         </button>
                     </div>

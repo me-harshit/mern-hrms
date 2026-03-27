@@ -91,40 +91,32 @@ const AddExpense = () => {
 
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    // 👇 NEW: Async handler to intercept and compress images before saving to state 👇
-    // 👇 NEW: Async handler to intercept and compress images before saving to state 👇
     const handleFileChange = async (e, fieldName) => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
-
-        setIsCompressing(true); // Disable submit button
+        
+        setIsCompressing(true);
 
         for (let file of selectedFiles) {
-            // 1. Android fallback: Check extension if file.type is missing
-            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
-
-            if (isImage) {
+            if (file.type.startsWith('image/')) {
                 try {
                     const options = {
-                        maxSizeMB: 1,
-                        maxWidthOrHeight: 1920,
-                        useWebWorker: false,       // 🚀 FIX 1: Disable Web Worker for mobile stability
-                        fileType: 'image/jpeg'     // 🚀 FIX 2: Force HEIC/PNG into standard JPEG
+                        maxSizeMB: 1,             
+                        maxWidthOrHeight: 1920,   
+                        useWebWorker: true,       
                     };
+                    
                     const compressedBlob = await imageCompression(file, options);
-
-                    // 🚀 FIX 3: Strip old extension (.heic) and force .jpg so Multer accepts it
-                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
-
-                    const safelyNamedFile = new File([compressedBlob], safeName, {
-                        type: 'image/jpeg',
+                    
+                    const safelyNamedFile = new File([compressedBlob], file.name, {
+                        type: file.type,
                         lastModified: Date.now()
                     });
 
                     processedFiles.push(safelyNamedFile);
                 } catch (error) {
                     console.error("Error compressing image:", error);
-                    processedFiles.push(file); // Fallback
+                    processedFiles.push(file); 
                 }
             } else if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
                 Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
@@ -133,8 +125,8 @@ const AddExpense = () => {
             }
         }
 
-        setFiles(prev => ({ ...prev, [fieldName]: processedFiles }));
-        setIsCompressing(false); // Re-enable submit button
+        setFiles(prev => ({ ...prev, [fieldName]: processedFiles })); // 👇 Keeps other fields intact
+        setIsCompressing(false);
     };
 
     const handleSubmit = async (e) => {

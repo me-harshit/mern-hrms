@@ -6,7 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import '../styles/App.css';
-import '../styles/expenses.css'; // Using the global styling
+import '../styles/expenses.css'; 
 
 const AddInventory = () => {
     const navigate = useNavigate();
@@ -44,6 +44,7 @@ const AddInventory = () => {
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
+    // 👇 FIXED: Brought in the ultimate mobile compression logic 👇
     const handleFileChange = async (e) => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
@@ -51,19 +52,23 @@ const AddInventory = () => {
         setIsCompressing(true);
 
         for (let file of selectedFiles) {
-            if (file.type.startsWith('image/')) {
+            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
+
+            if (isImage) {
                 try {
                     const options = {
                         maxSizeMB: 1,             
                         maxWidthOrHeight: 1920,   
-                        useWebWorker: true,       
+                        useWebWorker: false,       // Fixed for mobile stability
+                        fileType: 'image/jpeg'     // Force standard JPEG
                     };
                     
                     const compressedBlob = await imageCompression(file, options);
                     
-                    // 🚀 THE FIX: Reconstruct the File object
-                    const safelyNamedFile = new File([compressedBlob], file.name, {
-                        type: file.type,
+                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+
+                    const safelyNamedFile = new File([compressedBlob], safeName, {
+                        type: 'image/jpeg',
                         lastModified: Date.now()
                     });
 
@@ -232,16 +237,27 @@ const AddInventory = () => {
                                     Upload Images / Videos of Asset
                                 </label>
                                 <div className="upload-container-new">
-                                    <input ref={fileInputRef} className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
+                                    {/* 👇 FIXED: Added capture="environment" to force the camera to open on mobile */}
+                                    <input 
+                                        ref={fileInputRef} 
+                                        className="custom-file-input" 
+                                        type="file" 
+                                        multiple 
+                                        accept="image/*,video/*,application/pdf" 
+                                        capture="environment"
+                                        onChange={handleFileChange} 
+                                    />
                                     
-                                    {isCompressing ? (
-                                        <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                    {isCompressing && (
+                                        <p className="file-success-text" style={{ color: '#d97706' }}>
                                             <FontAwesomeIcon icon={faSpinner} spin /> Compressing images for fast upload...
-                                        </div>
-                                    ) : files.media.length > 0 && (
-                                        <div className="file-success-badge mt-10">
+                                        </p>
+                                    )}
+                                    
+                                    {!isCompressing && files.media.length > 0 && (
+                                        <p className="file-success-text">
                                             <FontAwesomeIcon icon={faCheckCircle} /> {files.media.length} media file(s) ready
-                                        </div>
+                                        </p>
                                     )}
                                 </div>
                             </div>
