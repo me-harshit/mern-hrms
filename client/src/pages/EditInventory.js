@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api, { SERVER_URL } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faExternalLinkAlt, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faLayerGroup, faSpinner, faFileVideo, faFilePdf, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import imageCompression from 'browser-image-compression';
 import '../styles/App.css';
-import '../styles/expenses.css';
+import '../styles/expenses.css'; 
 
 const EditInventory = () => {
     const { id } = useParams();
@@ -14,6 +15,7 @@ const EditInventory = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [isCompressing, setIsCompressing] = useState(false); 
 
     const [employees, setEmployees] = useState([]);
     const [locations, setLocations] = useState(['IT Closet', 'Server Room A', 'Storage Cabinet 1']);
@@ -73,9 +75,43 @@ const EditInventory = () => {
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    const handleFileChange = (e) => {
+    // 👇 NEW: Reconstructed File Logic for Edit Inventory 👇
+    const handleFileChange = async (e) => {
         const selectedFiles = Array.from(e.target.files);
-        setNewFiles({ media: selectedFiles });
+        const processedFiles = [];
+        
+        setIsCompressing(true); 
+
+        for (let file of selectedFiles) {
+            if (file.type.startsWith('image/')) {
+                try {
+                    const options = {
+                        maxSizeMB: 1,             
+                        maxWidthOrHeight: 1920,   
+                        useWebWorker: true,       
+                    };
+                    const compressedBlob = await imageCompression(file, options);
+                    
+                    // 🚀 THE FIX: Reconstruct the File object
+                    const safelyNamedFile = new File([compressedBlob], file.name, {
+                        type: file.type,
+                        lastModified: Date.now()
+                    });
+
+                    processedFiles.push(safelyNamedFile);
+                } catch (error) {
+                    console.error("Error compressing image:", error);
+                    processedFiles.push(file); 
+                }
+            } else if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+                Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
+            } else {
+                processedFiles.push(file);
+            }
+        }
+
+        setNewFiles({ media: processedFiles });
+        setIsCompressing(false); 
     };
 
     const handleAddLocation = async () => {
@@ -131,9 +167,51 @@ const EditInventory = () => {
         }
     };
 
+    // --- Media Helpers ---
     const getFileUrl = (url) => {
         if (!url) return '';
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
+    };
+
+    const viewSingleFile = (url, title) => {
+        const fullUrl = getFileUrl(url);
+        const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+        const isPdf = url.toLowerCase().endsWith('.pdf');
+
+        if (isVideo) {
+            Swal.fire({ title, html: `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>`, width: '800px', showCloseButton: true, showConfirmButton: false });
+        } else if (isPdf) {
+            Swal.fire({ title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 6px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false });
+        } else {
+            Swal.fire({ title, imageUrl: fullUrl, imageAlt: title, width: '800px', showCloseButton: true, showConfirmButton: false });
+        }
+    };
+
+    // Render the beautiful gallery thumbnail
+    const renderThumbnail = (url, index) => {
+        const fullUrl = getFileUrl(url);
+        const isPdf = url.toLowerCase().endsWith('.pdf');
+        const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+        
+        let iconContent;
+        if (isPdf) {
+            iconContent = <FontAwesomeIcon icon={faFilePdf} style={{ fontSize: '32px', color: '#dc2626' }} />;
+        } else if (isVideo) {
+            iconContent = <FontAwesomeIcon icon={faFileVideo} style={{ fontSize: '32px', color: '#2563eb' }} />;
+        } else {
+            return (
+                <div key={index} className="existing-file-card" onClick={() => viewSingleFile(url, `Media ${index + 1}`)}>
+                    <img src={fullUrl} alt="Thumbnail" className="existing-file-thumb" />
+                </div>
+            );
+        }
+
+        return (
+            <div key={index} className="existing-file-card icon-card" onClick={() => viewSingleFile(url, `Media ${index + 1}`)}>
+                {iconContent}
+                <span className="file-type-label">{isPdf ? 'PDF' : 'VIDEO'}</span>
+            </div>
+        );
     };
 
     if (loading) return <div className="main-content">Loading Asset Data...</div>;
@@ -157,7 +235,7 @@ const EditInventory = () => {
                 </div>
             </div>
 
-            <div className="purchase-form-card">
+            <div className="expense-form-card"> 
                 <form onSubmit={handleSubmit} className="profile-form">
                     
                     <div className="expense-form-section">
@@ -165,9 +243,8 @@ const EditInventory = () => {
                             <FontAwesomeIcon icon={faInfoCircle} /> Asset Details
                         </div>
                         
-                        <div className="purchase-grid">
+                        <div className="expense-grid"> 
                             
-                            {/* 👇 FIXED: Side-by-side layout for Name and Quantity 👇 */}
                             <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px' }}>
                                 <div style={{ flex: '3' }}>
                                     <label className="input-label">Item / Asset Name *</label>
@@ -241,49 +318,47 @@ const EditInventory = () => {
                             <FontAwesomeIcon icon={faPaperclip} /> Asset Media
                         </div>
                         
-                        <div className="purchase-grid">
+                        {(existingMedia.length > 0) && (
+                            <div className="alert-message warning mb-20" style={{ padding: '12px', borderRadius: '8px', fontSize: '13px', background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309' }}>
+                                <FontAwesomeIcon icon={faInfoCircle} /> <strong>Note:</strong> Uploading new files will add to your existing attachments.
+                            </div>
+                        )}
+
+                        <div className="expense-grid"> 
                             <div className="form-group expense-file-area grid-span-2">
                                 
+                                <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
+                                    Upload Images / Videos of Asset
+                                </label>
+
                                 {existingMedia.length > 0 && (
                                     <div className="mb-15">
-                                        <div className="text-small text-muted mb-10 fw-bold">Currently Uploaded Files:</div>
-                                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                            {existingMedia.map((url, idx) => {
-                                                const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
-                                                const fullUrl = getFileUrl(url);
-                                                return (
-                                                    <a key={idx} href={fullUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                                                        <div style={{ width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', position: 'relative', background: '#f1f5f9' }}>
-                                                            {isVideo ? (
-                                                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', color: '#64748b' }}>🎥</div>
-                                                            ) : (
-                                                                <img src={fullUrl} alt={`media-${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                            )}
-                                                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '10px', textAlign: 'center', padding: '2px' }}>
-                                                                <FontAwesomeIcon icon={faExternalLinkAlt} /> View
-                                                            </div>
-                                                        </div>
-                                                    </a>
-                                                );
-                                            })}
+                                        <div className="text-small text-muted mb-10 fw-600">Currently Saved Files:</div>
+                                        <div className="existing-file-gallery">
+                                            {existingMedia.map((url, idx) => renderThumbnail(url, idx))}
                                         </div>
                                     </div>
                                 )}
 
-                                <label className="input-label" style={{ marginTop: existingMedia.length > 0 ? '15px' : '0', borderTop: existingMedia.length > 0 ? '1px solid #e2e8f0' : 'none', paddingTop: existingMedia.length > 0 ? '15px' : '0' }}>
-                                    Upload Additional Images / Videos
-                                </label>
-                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
-                                {newFiles.media.length > 0 && (
-                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
-                                        {newFiles.media.length} new file(s) selected
-                                    </p>
-                                )}
+                                <div className="upload-container-new">
+                                    <div className="text-small text-muted mb-5 fw-600">Upload Additional Files (Optional):</div>
+                                    <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
+                                    
+                                    {isCompressing ? (
+                                        <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                            <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
+                                        </div>
+                                    ) : newFiles.media.length > 0 && (
+                                        <div className="file-success-badge mt-10">
+                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.media.length} new file(s) ready
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="profile-actions mt-30" style={{ flexDirection: 'column', gap: '15px' }}>
+                    <div className="profile-actions mt-30 flex-col gap-15">
                         {saving && uploadProgress > 0 && (
                             <div className="upload-progress-container">
                                 <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}></div>
@@ -291,9 +366,9 @@ const EditInventory = () => {
                             </div>
                         )}
 
-                        <button type="submit" className="save-btn purchase-submit-btn" disabled={saving}>
+                        <button type="submit" className="save-btn expense-submit-btn" disabled={saving || isCompressing}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
-                            {saving ? 'Processing...' : 'Save Updates'}
+                            {saving ? 'Processing...' : isCompressing ? 'Compressing Files...' : 'Save Updates'}
                         </button>
                     </div>
 

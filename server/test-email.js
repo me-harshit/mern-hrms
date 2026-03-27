@@ -5,7 +5,7 @@ const runTest = async () => {
     console.log("Testing email connection with real-world content...");
     
     await sendEmail({
-        email: "ht17grt@gmail.com", 
+        email: "deadshotdaddy07@gmail.com", 
         subject: "Leave Application Approved - HR Department",
         message: `
             <h3>Leave Application Status</h3>

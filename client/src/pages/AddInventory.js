@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import imageCompression from 'browser-image-compression';
 import '../styles/App.css';
+import '../styles/expenses.css'; // Using the global styling
 
 const AddInventory = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [isCompressing, setIsCompressing] = useState(false);
 
     const [employees, setEmployees] = useState([]);
     const [locations, setLocations] = useState(['IT Closet', 'Server Room A', 'Storage Cabinet 1']);
@@ -18,7 +21,7 @@ const AddInventory = () => {
 
     const [formData, setFormData] = useState({
         itemName: '',
-        quantity: 1, // 👇 NEW: Quantity field added, defaults to 1
+        quantity: 1, 
         status: 'Available',
         storageLocation: 'IT Closet', 
         assignedTo: '',
@@ -41,12 +44,45 @@ const AddInventory = () => {
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    const handleFileChange = (e) => {
+    const handleFileChange = async (e) => {
         const selectedFiles = Array.from(e.target.files);
-        setFiles({ media: selectedFiles });
+        const processedFiles = [];
+        
+        setIsCompressing(true);
+
+        for (let file of selectedFiles) {
+            if (file.type.startsWith('image/')) {
+                try {
+                    const options = {
+                        maxSizeMB: 1,             
+                        maxWidthOrHeight: 1920,   
+                        useWebWorker: true,       
+                    };
+                    
+                    const compressedBlob = await imageCompression(file, options);
+                    
+                    // 🚀 THE FIX: Reconstruct the File object
+                    const safelyNamedFile = new File([compressedBlob], file.name, {
+                        type: file.type,
+                        lastModified: Date.now()
+                    });
+
+                    processedFiles.push(safelyNamedFile);
+                } catch (error) {
+                    console.error("Error compressing image:", error);
+                    processedFiles.push(file); 
+                }
+            } else if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+                Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
+            } else {
+                processedFiles.push(file);
+            }
+        }
+
+        setFiles({ media: processedFiles });
+        setIsCompressing(false);
     };
 
-    // --- QUICK ADD LOCATION ---
     const handleAddLocation = async () => {
         const { value: newLocation } = await Swal.fire({
             title: 'Add New Location',
@@ -97,7 +133,6 @@ const AddInventory = () => {
                 showConfirmButton: false 
             });
 
-            // 👇 Clear the Item Name, Quantity, and Files so the admin can quickly log the next item
             setFormData(prev => ({ ...prev, itemName: '', quantity: 1 }));
             setFiles({ media: [] });
             if (fileInputRef.current) {
@@ -121,7 +156,7 @@ const AddInventory = () => {
                 <h1 className="page-title header-no-margin">Add New Asset</h1>
             </div>
             
-            <div className="purchase-form-card">
+            <div className="expense-form-card">
                 <form onSubmit={handleSubmit} className="profile-form">
                     
                     {/* --- CORE DETAILS --- */}
@@ -130,9 +165,8 @@ const AddInventory = () => {
                             <FontAwesomeIcon icon={faInfoCircle} /> Asset Details
                         </div>
                         
-                        <div className="purchase-grid">
+                        <div className="expense-grid"> 
                             
-                            {/* 👇 NEW: Split Item Name and Quantity side-by-side 👇 */}
                             <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px' }}>
                                 <div style={{ flex: '3' }}>
                                     <label className="input-label">Item / Asset Name *</label>
@@ -155,7 +189,6 @@ const AddInventory = () => {
                                 </div>
                             </div>
                             
-                            {/* If Available -> Show Unified Storage Location */}
                             {formData.status === 'Available' && (
                                 <div className="form-group grid-span-2">
                                     <label className="input-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -169,7 +202,6 @@ const AddInventory = () => {
                                 </div>
                             )}
 
-                            {/* If Assigned -> Show Employee List */}
                             {formData.status === 'Assigned' && (
                                 <div className="form-group grid-span-2">
                                     <label className="input-label">Assign To Employee *</label>
@@ -194,21 +226,30 @@ const AddInventory = () => {
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faPaperclip} /> Asset Media
                         </div>
-                        <div className="purchase-grid">
+                        <div className="expense-grid"> 
                             <div className="form-group expense-file-area grid-span-2">
-                                <label className="input-label">Upload Images / Videos of Asset</label>
-                                <input ref={fileInputRef} className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
-                                {files.media.length > 0 && (
-                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
-                                        {files.media.length} media file(s) selected
-                                    </p>
-                                )}
+                                <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
+                                    Upload Images / Videos of Asset
+                                </label>
+                                <div className="upload-container-new">
+                                    <input ref={fileInputRef} className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
+                                    
+                                    {isCompressing ? (
+                                        <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                            <FontAwesomeIcon icon={faSpinner} spin /> Compressing images for fast upload...
+                                        </div>
+                                    ) : files.media.length > 0 && (
+                                        <div className="file-success-badge mt-10">
+                                            <FontAwesomeIcon icon={faCheckCircle} /> {files.media.length} media file(s) ready
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="profile-actions mt-30" style={{ flexDirection: 'column', gap: '15px' }}>
+                    <div className="profile-actions mt-30 flex-col gap-15">
                         {loading && uploadProgress > 0 && (
                             <div className="upload-progress-container">
                                 <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}></div>
@@ -216,9 +257,9 @@ const AddInventory = () => {
                             </div>
                         )}
 
-                        <button type="submit" className="save-btn purchase-submit-btn" disabled={loading}>
+                        <button type="submit" className="save-btn expense-submit-btn" disabled={loading || isCompressing}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
-                            {loading ? 'Processing...' : 'Save Asset & Add Another'}
+                            {loading ? 'Processing...' : isCompressing ? 'Compressing Files...' : 'Save Asset & Add Another'}
                         </button>
                     </div>
 

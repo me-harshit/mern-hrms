@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api, { SERVER_URL } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faCheckCircle, faFilePdf, faFileVideo, faBuilding, faUser } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faCheckCircle, faFilePdf, faFileVideo, faBuilding, faUser, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import imageCompression from 'browser-image-compression'; 
 import '../styles/App.css';
 import '../styles/expenses.css'; 
 
@@ -15,21 +16,21 @@ const EditExpense = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [isCompressing, setIsCompressing] = useState(false); 
+    
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
 
-    // --- MAIN FORM STATE ---
     const [formData, setFormData] = useState({
         expenseType: 'Project Expense', 
         category: 'Product / Item Purchase',
-        expenseDate: '', // 👇 Updated from purchaseDate
+        expenseDate: '', 
         amount: '',
         paymentSourceId: '', 
         projectName: '',
         descriptionTags: ''
     });
 
-    // --- DYNAMIC CATEGORY DETAILS STATE ---
     const [expenseDetails, setExpenseDetails] = useState({
         productName: '', quantity: 1, unitPrice: '', expiryDate: '', storageLocation: '',
         vehicleType: 'Car', vehicleNumber: '', odometerBefore: '', odometerAfter: '', kmTraveled: '', travelFrom: '', travelTo: '', purpose: '',
@@ -57,14 +58,13 @@ const EditExpense = () => {
             const projRes = await api.get('/projects');
             setProjectsList(projRes.data);
             
-            // 👇 Updated endpoint
             const res = await api.get(`/expenses/${id}`);
             const data = res.data;
             
             setFormData({
                 expenseType: data.expenseType || 'Project Expense',
                 category: data.category || 'Product / Item Purchase',
-                expenseDate: data.expenseDate ? new Date(data.expenseDate).toISOString().split('T')[0] : '', // 👇 Updated
+                expenseDate: data.expenseDate ? new Date(data.expenseDate).toISOString().split('T')[0] : '', 
                 amount: data.amount || '',
                 paymentSourceId: data.paymentSourceId?._id || data.paymentSourceId || currentUser.id,
                 projectName: data.projectName || '',
@@ -84,13 +84,12 @@ const EditExpense = () => {
 
         } catch (err) {
             Swal.fire('Error', 'Could not load expense details', 'error');
-            navigate('/expenses'); // 👇 Updated navigation
+            navigate('/expenses'); 
         } finally {
             setLoading(false);
         }
     };
 
-    // --- AUTO-CALCULATORS ---
     useEffect(() => {
         if (formData.category === 'Fuel Expense (Car / Bike)') {
             const before = parseFloat(expenseDetails.odometerBefore) || 0;
@@ -108,7 +107,6 @@ const EditExpense = () => {
         }
     }, [expenseDetails.odometerBefore, expenseDetails.odometerAfter, expenseDetails.checkInDate, expenseDetails.checkOutDate, formData.category]);
 
-    // --- HANDLERS ---
     const handleMainChange = (e) => {
         const { name, value } = e.target;
         let updatedData = { ...formData, [name]: value };
@@ -125,17 +123,43 @@ const EditExpense = () => {
 
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    const handleFileChange = (e, fieldName) => {
+    // 👇 RECONSTRUCTED FILE LOGIC 👇
+    const handleFileChange = async (e, fieldName) => {
         const selectedFiles = Array.from(e.target.files); 
-        const validFiles = [];
+        const processedFiles = [];
+        
+        setIsCompressing(true); // Disable submit button
+
         for (let file of selectedFiles) {
-            if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
+            if (file.type.startsWith('image/')) {
+                try {
+                    const options = {
+                        maxSizeMB: 1,             
+                        maxWidthOrHeight: 1920,   
+                        useWebWorker: true,       
+                    };
+                    const compressedBlob = await imageCompression(file, options);
+                    
+                    // 🚀 THE FIX: Reconstruct the File object
+                    const safelyNamedFile = new File([compressedBlob], file.name, {
+                        type: file.type,
+                        lastModified: Date.now()
+                    });
+
+                    processedFiles.push(safelyNamedFile);
+                } catch (error) {
+                    console.error("Error compressing image:", error);
+                    processedFiles.push(file); // Fallback
+                }
+            } else if (file.type.startsWith('video/') && file.size > 15 * 1024 * 1024) {
                 Swal.fire('Too Large', `Video "${file.name}" is larger than 15MB.`, 'warning');
             } else {
-                validFiles.push(file);
+                processedFiles.push(file); 
             }
         }
-        setNewFiles(prev => ({ ...prev, [fieldName]: validFiles }));
+
+        setNewFiles(prev => ({ ...prev, [fieldName]: processedFiles }));
+        setIsCompressing(false); // Re-enable submit button
     };
 
     const handleSubmit = async (e) => {
@@ -164,7 +188,6 @@ const EditExpense = () => {
                 }
             }
 
-            // 👇 Updated endpoint
             await api.put(`/expenses/${id}`, data, { 
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent) => {
@@ -174,7 +197,7 @@ const EditExpense = () => {
             });
 
             Swal.fire({ icon: 'success', title: 'Update Saved', timer: 1500, showConfirmButton: false });
-            navigate('/expenses'); // 👇 Updated navigation
+            navigate('/expenses'); 
         } catch (err) { 
             Swal.fire('Error', 'Failed to update expense', 'error'); 
         } finally { 
@@ -188,7 +211,6 @@ const EditExpense = () => {
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
     };
 
-    // 👇 NEW HELPER: Opens file beautifully in SweetAlert 
     const viewSingleFile = (url, title) => {
         const fullUrl = getFileUrl(url);
         const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
@@ -203,7 +225,6 @@ const EditExpense = () => {
         }
     };
 
-    // 👇 NEW HELPER: Renders a preview thumbnail box for existing files
     const renderThumbnail = (url, index, titlePrefix) => {
         const fullUrl = getFileUrl(url);
         const isPdf = url.toLowerCase().endsWith('.pdf');
@@ -215,7 +236,6 @@ const EditExpense = () => {
         } else if (isVideo) {
             iconContent = <FontAwesomeIcon icon={faFileVideo} style={{ fontSize: '32px', color: '#2563eb' }} />;
         } else {
-            // For images, show actual thumbnail
             return (
                 <div key={index} className="existing-file-card" onClick={() => viewSingleFile(url, `${titlePrefix} ${index + 1}`)}>
                     <img src={fullUrl} alt="Thumbnail" className="existing-file-thumb" />
@@ -223,7 +243,6 @@ const EditExpense = () => {
             );
         }
 
-        // For non-images, show an icon card
         return (
             <div key={index} className="existing-file-card icon-card" onClick={() => viewSingleFile(url, `${titlePrefix} ${index + 1}`)}>
                 {iconContent}
@@ -435,7 +454,6 @@ const EditExpense = () => {
                             <FontAwesomeIcon icon={faPaperclip} /> Attachments & Proof
                         </div>
                         
-                        {/* WARNING MESSAGE ONLY SHOWN IF FILES EXIST */}
                         {(existingFiles.paymentScreenshotUrls.length > 0 || existingFiles.expenseMediaUrls.length > 0) && (
                             <div className="alert-message warning mb-20" style={{ padding: '12px', borderRadius: '8px', fontSize: '13px', background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309' }}>
                                 <FontAwesomeIcon icon={faInfoCircle} /> <strong>Note:</strong> Uploading new files will overwrite your existing attachments. Leave the upload fields empty to keep your current files.
@@ -463,9 +481,13 @@ const EditExpense = () => {
                                     <div className="text-small text-muted mb-5 fw-600">Upload New Files (Optional):</div>
                                     <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" onChange={e => handleFileChange(e, 'paymentScreenshots')} />
                                     
-                                    {newFiles.paymentScreenshots.length > 0 && (
+                                    {isCompressing ? (
+                                        <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                            <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
+                                        </div>
+                                    ) : newFiles.paymentScreenshots.length > 0 && (
                                         <div className="file-success-badge mt-10">
-                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.paymentScreenshots.length} new file(s) ready to upload
+                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.paymentScreenshots.length} new file(s) ready
                                         </div>
                                     )}
                                 </div>
@@ -490,9 +512,13 @@ const EditExpense = () => {
                                     <div className="text-small text-muted mb-5 fw-600">Upload New Files (Optional):</div>
                                     <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
                                     
-                                    {newFiles.expenseMedia.length > 0 && (
+                                    {isCompressing ? (
+                                        <div className="file-success-badge mt-10" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                            <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
+                                        </div>
+                                    ) : newFiles.expenseMedia.length > 0 && (
                                         <div className="file-success-badge mt-10">
-                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.expenseMedia.length} new file(s) ready to upload
+                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.expenseMedia.length} new file(s) ready
                                         </div>
                                     )}
                                 </div>
@@ -510,9 +536,9 @@ const EditExpense = () => {
                             </div>
                         )}
 
-                        <button type="submit" className="save-btn expense-submit-btn" disabled={saving}>
+                        <button type="submit" className="save-btn expense-submit-btn" disabled={saving || isCompressing}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
-                            {saving ? 'Processing & Saving...' : 'Save Updates'}
+                            {saving ? 'Processing & Saving...' : isCompressing ? 'Compressing Files...' : 'Save Updates'}
                         </button>
                     </div>
 
