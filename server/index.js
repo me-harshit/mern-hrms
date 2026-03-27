@@ -15,11 +15,11 @@ const attendanceRoutes = require('./routes/attendance');
 const leaveRoutes = require('./routes/leaves');
 const dashboardRoutes = require('./routes/dashboard');
 const holidays = require('./routes/holidays');
-const purchaseRoutes = require('./routes/purchases');
 const chatRoutes = require('./routes/chat');
 const projectsRoutes = require('./routes/projects');
 const walletsRoute = require('./routes/wallets');
 const inventoryRoute = require('./routes/inventory');
+const expenseRoute = require('./routes/expenses');
 
 
 const app = express();
@@ -39,11 +39,12 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/holidays', holidays);
-app.use('/api/purchases', purchaseRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/wallets', walletsRoute);
 app.use('/api/inventory', inventoryRoute);
+app.use('/api/expenses', expenseRoute);
+
 
 app.get('/', (req, res) => res.send("GTS HRMS API is running..."));
 

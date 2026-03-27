@@ -2,7 +2,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const User = require('../models/User');
 const Leave = require('../models/Leave');
 const Attendance = require('../models/Attendance');
-const Purchase = require('../models/Purchase');
+const Purchase = require('../models/Expense');
 
 // Initialize Gemini (Requires GEMINI_API_KEY in .env)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);

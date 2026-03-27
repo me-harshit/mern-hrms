@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api, { SERVER_URL } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faCheckCircle, faFilePdf, faFileVideo, faBuilding, faUser } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
-import '../styles/purchase.css'; 
+import '../styles/expenses.css'; 
 
-const EditPurchase = () => {
+const EditExpense = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
@@ -22,7 +22,7 @@ const EditPurchase = () => {
     const [formData, setFormData] = useState({
         expenseType: 'Project Expense', 
         category: 'Product / Item Purchase',
-        purchaseDate: '',
+        expenseDate: '', // 👇 Updated from purchaseDate
         amount: '',
         paymentSourceId: '', 
         projectName: '',
@@ -36,10 +36,11 @@ const EditPurchase = () => {
         restaurantName: '', foodItemsOrdered: '', numberOfPeople: '',
         travelMode: 'Flight', distanceKm: '', bookingReference: '',
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
-        vendorName: '', billingCycle: 'Monthly', expenseDescription: ''
+        vendorName: '', billingCycle: 'Monthly', expenseDescription: '',
+        participantName: '',
+        gstNumber: '' 
     });
 
-    // 👇 FIXED: Changed to plural arrays to handle multiple files 👇
     const [existingFiles, setExistingFiles] = useState({ paymentScreenshotUrls: [], expenseMediaUrls: [] });
     const [newFiles, setNewFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
 
@@ -55,13 +56,15 @@ const EditPurchase = () => {
 
             const projRes = await api.get('/projects');
             setProjectsList(projRes.data);
-            const res = await api.get(`/purchases/${id}`);
+            
+            // 👇 Updated endpoint
+            const res = await api.get(`/expenses/${id}`);
             const data = res.data;
             
             setFormData({
                 expenseType: data.expenseType || 'Project Expense',
                 category: data.category || 'Product / Item Purchase',
-                purchaseDate: data.purchaseDate ? new Date(data.purchaseDate).toISOString().split('T')[0] : '',
+                expenseDate: data.expenseDate ? new Date(data.expenseDate).toISOString().split('T')[0] : '', // 👇 Updated
                 amount: data.amount || '',
                 paymentSourceId: data.paymentSourceId?._id || data.paymentSourceId || currentUser.id,
                 projectName: data.projectName || '',
@@ -72,7 +75,6 @@ const EditPurchase = () => {
                 setExpenseDetails(prev => ({ ...prev, ...data.expenseDetails }));
             }
 
-            // 👇 FIXED: Extract the array, with a fallback for old single-string entries 👇
             setExistingFiles({
                 paymentScreenshotUrls: data.paymentScreenshotUrls?.length > 0 
                     ? data.paymentScreenshotUrls 
@@ -82,7 +84,7 @@ const EditPurchase = () => {
 
         } catch (err) {
             Swal.fire('Error', 'Could not load expense details', 'error');
-            navigate('/purchases');
+            navigate('/expenses'); // 👇 Updated navigation
         } finally {
             setLoading(false);
         }
@@ -107,10 +109,22 @@ const EditPurchase = () => {
     }, [expenseDetails.odometerBefore, expenseDetails.odometerAfter, expenseDetails.checkInDate, expenseDetails.checkOutDate, formData.category]);
 
     // --- HANDLERS ---
-    const handleMainChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleMainChange = (e) => {
+        const { name, value } = e.target;
+        let updatedData = { ...formData, [name]: value };
+
+        if (name === 'expenseType') {
+            if (value === 'Project Expense' && updatedData.category === 'Regular Office Expense') {
+                updatedData.category = 'Product / Item Purchase'; 
+            } else if (value === 'Regular Office Expense' && ['Participant Payment', 'Vendor Payment'].includes(updatedData.category)) {
+                updatedData.category = 'Regular Office Expense'; 
+            }
+        }
+        setFormData(updatedData);
+    };
+
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    // 👇 FIXED: Unified handler to accept multiple files for both fields 👇
     const handleFileChange = (e, fieldName) => {
         const selectedFiles = Array.from(e.target.files); 
         const validFiles = [];
@@ -138,21 +152,20 @@ const EditPurchase = () => {
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             data.append('expenseDetails', JSON.stringify(expenseDetails));
 
-            // 👇 FIXED: Append multiple new screenshots if provided 👇
             if (newFiles.paymentScreenshots && newFiles.paymentScreenshots.length > 0) {
                 for (let i = 0; i < newFiles.paymentScreenshots.length; i++) {
                     data.append('paymentScreenshots', newFiles.paymentScreenshots[i]); 
                 }
             }
             
-            // Send raw files to backend for S3 Processing
             if (newFiles.expenseMedia && newFiles.expenseMedia.length > 0) {
                 for (let i = 0; i < newFiles.expenseMedia.length; i++) {
                     data.append('expenseMedia', newFiles.expenseMedia[i]); 
                 }
             }
 
-            await api.put(`/purchases/${id}`, data, { 
+            // 👇 Updated endpoint
+            await api.put(`/expenses/${id}`, data, { 
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -161,7 +174,7 @@ const EditPurchase = () => {
             });
 
             Swal.fire({ icon: 'success', title: 'Update Saved', timer: 1500, showConfirmButton: false });
-            navigate('/purchases');
+            navigate('/expenses'); // 👇 Updated navigation
         } catch (err) { 
             Swal.fire('Error', 'Failed to update expense', 'error'); 
         } finally { 
@@ -170,10 +183,53 @@ const EditPurchase = () => {
         }
     };
 
-    // Helper to safely render old local URLs or new S3 URLs
     const getFileUrl = (url) => {
         if (!url) return '';
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
+    };
+
+    // 👇 NEW HELPER: Opens file beautifully in SweetAlert 
+    const viewSingleFile = (url, title) => {
+        const fullUrl = getFileUrl(url);
+        const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+        const isPdf = url.toLowerCase().endsWith('.pdf');
+
+        if (isVideo) {
+            Swal.fire({ title, html: `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>`, width: '800px', showCloseButton: true, showConfirmButton: false });
+        } else if (isPdf) {
+            Swal.fire({ title, html: `<iframe src="${fullUrl}" width="100%" height="500px" style="border: none; border-radius: 6px;"></iframe>`, width: '800px', showCloseButton: true, showConfirmButton: false });
+        } else {
+            Swal.fire({ title, imageUrl: fullUrl, imageAlt: title, width: '800px', showCloseButton: true, showConfirmButton: false });
+        }
+    };
+
+    // 👇 NEW HELPER: Renders a preview thumbnail box for existing files
+    const renderThumbnail = (url, index, titlePrefix) => {
+        const fullUrl = getFileUrl(url);
+        const isPdf = url.toLowerCase().endsWith('.pdf');
+        const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
+        
+        let iconContent;
+        if (isPdf) {
+            iconContent = <FontAwesomeIcon icon={faFilePdf} style={{ fontSize: '32px', color: '#dc2626' }} />;
+        } else if (isVideo) {
+            iconContent = <FontAwesomeIcon icon={faFileVideo} style={{ fontSize: '32px', color: '#2563eb' }} />;
+        } else {
+            // For images, show actual thumbnail
+            return (
+                <div key={index} className="existing-file-card" onClick={() => viewSingleFile(url, `${titlePrefix} ${index + 1}`)}>
+                    <img src={fullUrl} alt="Thumbnail" className="existing-file-thumb" />
+                </div>
+            );
+        }
+
+        // For non-images, show an icon card
+        return (
+            <div key={index} className="existing-file-card icon-card" onClick={() => viewSingleFile(url, `${titlePrefix} ${index + 1}`)}>
+                {iconContent}
+                <span className="file-type-label">{isPdf ? 'PDF' : 'VIDEO'}</span>
+            </div>
+        );
     };
 
     const getMediaLabel = () => {
@@ -184,12 +240,28 @@ const EditPurchase = () => {
             case 'Accommodation': return 'Hotel Receipt / Invoice';
             case 'Product / Item Purchase': return 'Product Photo(s) / Video(s)';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
+            case 'Participant Payment': return 'Payment Receipt / Acknowledgment'; 
+            case 'Vendor Payment': return 'Vendor Invoice / Bill';
             default: return 'Expense Media (Photos/Videos)';
         }
     };
 
     const renderCategoryFields = () => {
         switch (formData.category) {
+            case 'Vendor Payment': 
+                return (
+                    <>
+                        <div className="form-group"><label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Vendor Name *</label><input className="custom-input" name="vendorName" value={expenseDetails.vendorName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">GST Number</label><input className="custom-input" name="gstNumber" value={expenseDetails.gstNumber} onChange={handleDetailChange} placeholder="Optional" style={{ textTransform: 'uppercase' }} /></div>
+                    </>
+                );
+            case 'Participant Payment': 
+                return (
+                    <div className="form-group grid-span-2">
+                        <label className="input-label"><FontAwesomeIcon icon={faUser} /> Participant Name *</label>
+                        <input className="custom-input" name="participantName" value={expenseDetails.participantName} onChange={handleDetailChange} placeholder="Enter the participant's full name" required />
+                    </div>
+                );
             case 'Product / Item Purchase':
                 return (
                     <>
@@ -216,9 +288,9 @@ const EditPurchase = () => {
             case 'Food Expense':
                 return (
                     <>
-                        <div className="form-group"><label className="input-label">Restaurant / Platform Name *</label><input className="custom-input" name="restaurantName" placeholder="e.g. Zomato, Swiggy" value={expenseDetails.restaurantName} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Number of People</label><input className="custom-input" type="number" name="numberOfPeople" value={expenseDetails.numberOfPeople} onChange={handleDetailChange} /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Restaurant / Platform Name *</label><input className="custom-input" name="restaurantName" placeholder="e.g. Zomato, Swiggy" value={expenseDetails.restaurantName} onChange={handleDetailChange} required /></div>
                         <div className="form-group grid-span-2"><label className="input-label">Food Items Ordered *</label><textarea className="custom-input" rows="2" name="foodItemsOrdered" value={expenseDetails.foodItemsOrdered} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Number of People</label><input className="custom-input" type="number" name="numberOfPeople" value={expenseDetails.numberOfPeople} onChange={handleDetailChange} /></div>
                     </>
                 );
             case 'Travel Expense':
@@ -266,7 +338,7 @@ const EditPurchase = () => {
                 <h1 className="page-title header-no-margin">Edit Expense Details</h1>
             </div>
             
-            <div className="purchase-form-card">
+            <div className="expense-form-card">
                 <form onSubmit={handleSubmit} className="profile-form">
                     
                     {/* --- SECTION 1: CORE DETAILS --- */}
@@ -275,7 +347,7 @@ const EditPurchase = () => {
                             <FontAwesomeIcon icon={faInfoCircle} /> General Information
                         </div>
                         
-                        <div className="purchase-grid">
+                        <div className="expense-grid">
                             <div className="form-group grid-span-2">
                                 <label className="input-label">Expense Type</label>
                                 <div className="expense-type-toggle">
@@ -289,7 +361,7 @@ const EditPurchase = () => {
                             </div>
 
                             {formData.expenseType === 'Project Expense' && (
-                                <div className="form-group grid-span-2">
+                                <div className="form-group">
                                     <label className="input-label">Project Name *</label>
                                     <select className="swal2-select custom-select" name="projectName" required value={formData.projectName} onChange={handleMainChange}>
                                         <option value="">-- Select Project --</option>
@@ -308,13 +380,21 @@ const EditPurchase = () => {
                                     <option value="Food Expense">Food Expense</option>
                                     <option value="Travel Expense">Travel Expense</option>
                                     <option value="Accommodation">Accommodation</option>
-                                    <option value="Regular Office Expense">Regular Office Expense</option>
+                                    {formData.expenseType === 'Project Expense' && (
+                                        <>
+                                            <option value="Participant Payment">Participant Payment</option>
+                                            <option value="Vendor Payment">Vendor Payment</option> 
+                                        </>
+                                    )}
+                                    {formData.expenseType === 'Regular Office Expense' && (
+                                        <option value="Regular Office Expense">Regular Office Expense</option>
+                                    )}
                                 </select>
                             </div>
 
                             <div className="form-group">
                                 <label className="input-label">Date of Transaction *</label>
-                                <input className="custom-input" type="date" name="purchaseDate" required value={formData.purchaseDate} onChange={handleMainChange} />
+                                <input className="custom-input" type="date" name="expenseDate" required value={formData.expenseDate} onChange={handleMainChange} />
                             </div>
 
                             <div className="form-group">
@@ -344,61 +424,78 @@ const EditPurchase = () => {
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faListAlt} /> {formData.category} Details
                         </div>
-                        <div className="purchase-grid">
+                        <div className="expense-grid">
                             {renderCategoryFields()}
                         </div>
                     </div>
 
-                    {/* --- SECTION 3: ATTACHMENTS --- */}
+                    {/* --- SECTION 3: ATTACHMENTS (REDESIGNED) --- */}
                     <div className="expense-form-section mb-0">
                         <div className="expense-section-title">
-                            <FontAwesomeIcon icon={faPaperclip} /> Update Attachments
+                            <FontAwesomeIcon icon={faPaperclip} /> Attachments & Proof
                         </div>
-                        <p className="text-small text-muted mb-20">Uploading new files will overwrite the existing ones.</p>
+                        
+                        {/* WARNING MESSAGE ONLY SHOWN IF FILES EXIST */}
+                        {(existingFiles.paymentScreenshotUrls.length > 0 || existingFiles.expenseMediaUrls.length > 0) && (
+                            <div className="alert-message warning mb-20" style={{ padding: '12px', borderRadius: '8px', fontSize: '13px', background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309' }}>
+                                <FontAwesomeIcon icon={faInfoCircle} /> <strong>Note:</strong> Uploading new files will overwrite your existing attachments. Leave the upload fields empty to keep your current files.
+                            </div>
+                        )}
 
-                        <div className="purchase-grid">
+                        <div className="expense-grid">
                             
-                            {/* 👇 FIXED: Multiple Proof Uploads & Iterating Existing Proofs 👇 */}
+                            {/* PAYMENT SCREENSHOTS */}
                             <div className="form-group expense-file-area">
-                                <label className="input-label">Payment Screenshot / Bank Proof(s)</label>
+                                <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
+                                    Payment Screenshot / Bank Proof(s)
+                                </label>
                                 
                                 {existingFiles.paymentScreenshotUrls?.length > 0 && (
-                                    <div className="mb-10">
-                                        <div className="text-small text-muted mb-5">Current Proofs:</div>
-                                        {existingFiles.paymentScreenshotUrls.map((url, idx) => (
-                                            <a key={idx} href={getFileUrl(url)} target="_blank" rel="noreferrer" className="text-primary fw-600 fs-12 mb-5 d-block">
-                                                <FontAwesomeIcon icon={faExternalLinkAlt} /> View Proof {idx + 1}
-                                            </a>
-                                        ))}
+                                    <div className="mb-15">
+                                        <div className="text-small text-muted mb-10 fw-600">Currently Saved Files:</div>
+                                        <div className="existing-file-gallery">
+                                            {existingFiles.paymentScreenshotUrls.map((url, idx) => renderThumbnail(url, idx, 'Proof'))}
+                                        </div>
                                     </div>
                                 )}
 
-                                <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" onChange={e => handleFileChange(e, 'paymentScreenshots')} />
-                                
-                                {newFiles.paymentScreenshots.length > 0 && (
-                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
-                                        {newFiles.paymentScreenshots.length} new proof file(s) selected
-                                    </p>
-                                )}
+                                <div className="upload-container-new">
+                                    <div className="text-small text-muted mb-5 fw-600">Upload New Files (Optional):</div>
+                                    <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" onChange={e => handleFileChange(e, 'paymentScreenshots')} />
+                                    
+                                    {newFiles.paymentScreenshots.length > 0 && (
+                                        <div className="file-success-badge mt-10">
+                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.paymentScreenshots.length} new file(s) ready to upload
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Media Files */}
+                            {/* EXPENSE MEDIA */}
                             <div className="form-group expense-file-area">
-                                <label className="input-label">{getMediaLabel()}</label>
+                                <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
+                                    {getMediaLabel()}
+                                </label>
                                 
                                 {existingFiles.expenseMediaUrls?.length > 0 && (
-                                    <div className="fw-bold fs-12 mb-5 text-green">
-                                        {existingFiles.expenseMediaUrls.length} Media File(s) Currently Uploaded
+                                    <div className="mb-15">
+                                        <div className="text-small text-muted mb-10 fw-600">Currently Saved Files:</div>
+                                        <div className="existing-file-gallery">
+                                            {existingFiles.expenseMediaUrls.map((url, idx) => renderThumbnail(url, idx, 'Media'))}
+                                        </div>
                                     </div>
                                 )}
 
-                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
-                                
-                                {newFiles.expenseMedia.length > 0 && (
-                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
-                                        {newFiles.expenseMedia.length} new file(s) selected
-                                    </p>
-                                )}
+                                <div className="upload-container-new">
+                                    <div className="text-small text-muted mb-5 fw-600">Upload New Files (Optional):</div>
+                                    <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
+                                    
+                                    {newFiles.expenseMedia.length > 0 && (
+                                        <div className="file-success-badge mt-10">
+                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.expenseMedia.length} new file(s) ready to upload
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -406,7 +503,6 @@ const EditPurchase = () => {
                     {/* Actions & Progress Bar */}
                     <div className="profile-actions mt-30 flex-col gap-15">
                         
-                        {/* UPLOAD PROGRESS BAR */}
                         {saving && uploadProgress > 0 && (
                             <div className="upload-progress-container">
                                 <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}></div>
@@ -414,7 +510,7 @@ const EditPurchase = () => {
                             </div>
                         )}
 
-                        <button type="submit" className="save-btn purchase-submit-btn" disabled={saving}>
+                        <button type="submit" className="save-btn expense-submit-btn" disabled={saving}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
                             {saving ? 'Processing & Saving...' : 'Save Updates'}
                         </button>
@@ -426,4 +522,4 @@ const EditPurchase = () => {
     );
 };
 
-export default EditPurchase;
+export default EditExpense;

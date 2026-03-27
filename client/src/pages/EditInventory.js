@@ -5,7 +5,7 @@ import api, { SERVER_URL } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faExternalLinkAlt, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
-import '../styles/purchase.css';
+import '../styles/expenses.css';
 
 const EditInventory = () => {
     const { id } = useParams();

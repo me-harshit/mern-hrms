@@ -1,0 +1,261 @@
+const express = require('express');
+const router = express.Router();
+const auth = require('../middleware/authMiddleware');
+const upload = require('../middleware/uploadMiddleware'); 
+const { uploadToS3 } = require('../utils/s3Service'); 
+
+const Expense = require('../models/Expense'); 
+const User = require('../models/User');
+const Wallet = require('../models/Wallet');
+const WalletTransaction = require('../models/WalletTransaction');
+
+// @route   POST /api/expenses
+// @desc    Add a new dynamic expense entry
+router.post('/', auth, upload.fields([
+    { name: 'paymentScreenshots', maxCount: 5 }, 
+    { name: 'expenseMedia', maxCount: 10 } 
+]), async (req, res) => {
+    try {
+        const {
+            expenseType, category, expenseDate, amount, 
+            paymentSourceId, projectName, descriptionTags, expenseDetails
+        } = req.body;
+
+        let parsedExpenseDetails = {};
+        if (expenseDetails) {
+            try { parsedExpenseDetails = JSON.parse(expenseDetails); } 
+            catch (e) { console.error("Error parsing expenseDetails", e); }
+        }
+
+        let paymentScreenshotUrls = []; 
+        let expenseMediaUrls = [];
+
+        if (req.files && req.files['paymentScreenshots']) {
+            const proofPromises = req.files['paymentScreenshots'].map(file => uploadToS3(file));
+            paymentScreenshotUrls = await Promise.all(proofPromises);
+        }
+
+        if (req.files && req.files['expenseMedia']) {
+            const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
+            expenseMediaUrls = await Promise.all(uploadPromises);
+        }
+
+        const newExpense = new Expense({ 
+            expenseType,
+            category,
+            expenseDate: expenseDate || Date.now(),
+            amount,
+            paymentSourceId,
+            projectName,
+            descriptionTags,
+            expenseDetails: parsedExpenseDetails,
+            submittedBy: req.user.id, 
+            paymentScreenshotUrls, 
+            expenseMediaUrls,      
+            status: 'Pending'
+        });
+
+        await newExpense.save();
+        res.status(201).json(newExpense);
+
+    } catch (err) {
+        console.error("Expense Creation Error:", err.message);
+        res.status(500).json({ message: 'Server Error during upload' });
+    }
+});
+
+// @route   GET /api/expenses
+// @desc    Get all expenses for the logged-in user
+router.get('/', auth, async (req, res) => {
+    try {
+        const expenses = await Expense.find({ submittedBy: req.user.id })
+            .populate('submittedBy', 'name email employeeId')
+            .populate('paymentSourceId', 'name role') 
+            .populate('approvedBy', 'name')
+            .sort({ expenseDate: -1 });
+
+        res.json(expenses);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET /api/expenses/all
+// @desc    Get all expenses across the company (or Team for Managers)
+router.get('/all', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        let query = {};
+
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamMembers = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).select('_id');
+            const teamIds = teamMembers.map(emp => emp._id);
+            query = { submittedBy: { $in: teamIds } };
+        }
+
+        const expenses = await Expense.find(query)
+            .populate('submittedBy', 'name email employeeId')
+            .populate('paymentSourceId', 'name role')
+            .populate('approvedBy', 'name')
+            .sort({ expenseDate: -1 });
+
+        res.json(expenses);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET /api/expenses/:id
+// @desc    Get a single expense by ID (Used for Edit Page)
+router.get('/:id', auth, async (req, res) => {
+    try {
+        const expense = await Expense.findById(req.params.id).populate('paymentSourceId', 'name');
+        if (!expense) return res.status(404).json({ message: 'Expense not found' });
+
+        if (req.user.role === 'EMPLOYEE' && expense.submittedBy.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+        res.json(expense);
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Expense not found' });
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   PUT /api/expenses/:id
+// @desc    Update expense details
+router.put('/:id', auth, upload.fields([
+    { name: 'paymentScreenshots', maxCount: 5 }, 
+    { name: 'expenseMedia', maxCount: 10 }
+]), async (req, res) => {
+    try {
+        let expense = await Expense.findById(req.params.id).populate('submittedBy');
+        if (!expense) return res.status(404).json({ message: 'Expense not found' });
+
+        // Security Check
+        let isAuthorized = false;
+        if (req.user.role === 'ADMIN' || req.user.role === 'HR') isAuthorized = true;
+        else if (expense.submittedBy._id.toString() === req.user.id) isAuthorized = true;
+        else if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            if (expense.submittedBy.reportingManagerEmail === manager.email) isAuthorized = true;
+        }
+
+        if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized' });
+
+        if (expense.status === 'Approved') {
+            return res.status(400).json({ message: 'Cannot edit an approved expense.' });
+        }
+
+        const {
+            expenseType, category, expenseDate, amount, 
+            paymentSourceId, projectName, descriptionTags, expenseDetails,
+            inventoryStatus, notes
+        } = req.body;
+
+        if (expenseType) expense.expenseType = expenseType;
+        if (category) expense.category = category;
+        if (expenseDate) expense.expenseDate = expenseDate;
+        if (amount) expense.amount = amount;
+        if (paymentSourceId) expense.paymentSourceId = paymentSourceId;
+        if (projectName !== undefined) expense.projectName = projectName;
+        if (descriptionTags) expense.descriptionTags = descriptionTags;
+        if (inventoryStatus) expense.inventoryStatus = inventoryStatus;
+        if (notes !== undefined) expense.notes = notes;
+
+        if (expenseDetails) {
+            try { expense.expenseDetails = JSON.parse(expenseDetails); } 
+            catch (e) { console.error("Error parsing expenseDetails"); }
+        }
+
+        if (req.files && req.files['paymentScreenshots']) {
+            const proofPromises = req.files['paymentScreenshots'].map(file => uploadToS3(file));
+            expense.paymentScreenshotUrls = await Promise.all(proofPromises); 
+        }
+        if (req.files && req.files['expenseMedia']) {
+            const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
+            expense.expenseMediaUrls = await Promise.all(uploadPromises);
+        }
+
+        expense.status = 'Pending';
+
+        await expense.save();
+        res.json(expense);
+    } catch (err) {
+        console.error("Update Error:", err.message);
+        res.status(500).json({ message: 'Server Error during update' });
+    }
+});
+
+// @route   DELETE /api/expenses/:id
+// @desc    Delete an expense record
+router.delete('/:id', auth, async (req, res) => {
+    try {
+        const expense = await Expense.findById(req.params.id);
+        if (!expense) return res.status(404).json({ message: 'Expense not found' });
+
+        await expense.deleteOne();
+        res.json({ message: 'Expense record removed' });
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Expense not found' });
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   PUT /api/expenses/:id/status
+// @desc    Approve or Reject an expense & Deduct Wallet (Manager/Admin only)
+router.put('/:id/status', auth, async (req, res) => {
+    try {
+        const { status } = req.body; 
+        const expense = await Expense.findById(req.params.id).populate('submittedBy', 'name email');
+
+        if (!expense) return res.status(404).json({ message: 'Expense not found' });
+        if (expense.status !== 'Pending') return res.status(400).json({ message: 'Expense is already processed' });
+
+        let isAuthorized = false;
+        if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
+            isAuthorized = true;
+        } else if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            if (expense.submittedBy.reportingManagerEmail === manager.email) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized to approve this expense' });
+
+        if (status === 'Approved') {
+            let wallet = await Wallet.findOne({ userId: expense.paymentSourceId });
+            if (!wallet) {
+                wallet = new Wallet({ userId: expense.paymentSourceId, balance: 0 });
+            }
+            wallet.balance -= expense.amount;
+            await wallet.save();
+
+            await WalletTransaction.create({
+                userId: expense.paymentSourceId,
+                amount: expense.amount,
+                type: 'Debit',
+                description: `Expense Approved: ${expense.category} - ${expense.projectName || 'General'}`,
+                performedBy: req.user.id
+            });
+        }
+
+        expense.status = status;
+        expense.approvedBy = req.user.id; 
+        await expense.save();
+
+        res.json(expense);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+module.exports = router;

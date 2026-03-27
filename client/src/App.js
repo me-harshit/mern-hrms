@@ -17,11 +17,11 @@ import AdminSettings from './pages/AdminSettings';
 import AttendanceLogs from './pages/AttendanceLogs';
 import AbsentEmployees from './pages/AbsentEmployees';
 import EmployeeProfile from './pages/EmployeeProfile';
-import Purchases from './pages/Purchases';
-import AdminPurchases from './pages/AdminPurchases';
+import Expenses from './pages/Expenses';
+import AdminExpenses from './pages/AdminExpenses';
 import RawPunches from './pages/RawPunches';
-import AddPurchase from './pages/AddPurchase';
-import EditPurchase from './pages/EditPurchase';
+import AddExpense from './pages/AddExpense';
+import EditExpense from './pages/EditExpense';
 import AdminChat from './pages/AdminChat'
 import Projects from './pages/Projects';
 import Inventory from './pages/Inventory';
@@ -87,9 +87,9 @@ function App() {
             <Route path="/absent-employees" element={<AbsentEmployees />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
-            <Route path="/purchases" element={<Purchases />} />
-            <Route path="/add-purchase" element={<AddPurchase />} />
-            <Route path="/edit-purchase/:id" element={<EditPurchase />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/add-expense" element={<AddExpense />} />
+            <Route path="/edit-expense/:id" element={<EditExpense />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/add-inventory" element={<AddInventory />} />
             <Route path="/edit-inventory/:id" element={<EditInventory />} />
@@ -120,8 +120,8 @@ function App() {
               element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <Projects /> : <Navigate to="/dashboard" />}
             />
             <Route
-              path="/admin-purchases"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AdminPurchases /> : <Navigate to="/dashboard" />}
+              path="/admin-expenses"
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AdminExpenses /> : <Navigate to="/dashboard" />}
             />
 
             {/* LOCKED TO ADMIN ONLY */}

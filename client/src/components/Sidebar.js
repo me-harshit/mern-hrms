@@ -64,8 +64,8 @@ const Sidebar = ({ isOpen, onClose }) => {
 
                 {/* Visible to Purchasers, Admins, HRs, AND Managers */}
                 {(user?.isPurchaser || userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') && (
-                    <Link to="/purchases" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/purchases' ? 'active' : ''}`}>
-                        <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>My Purchases</span>
+                    <Link to="/expenses" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/expenses' ? 'active' : ''}`}>
+                        <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>My Expenses</span>
                     </Link>
                 )}
 
@@ -94,9 +94,9 @@ const Sidebar = ({ isOpen, onClose }) => {
                             <FontAwesomeIcon icon={faFolderOpen} className="nav-icon" /> <span>Projects</span>
                         </Link>
 
-                        <Link to="/admin-purchases" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-purchases' ? 'active' : ''}`}>
+                        <Link to="/admin-expenses" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-expenses' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" />
-                            <span>{userRole === 'MANAGER' ? 'Team Purchases' : 'All Purchases'}</span>
+                            <span>{userRole === 'MANAGER' ? 'Team Expenses' : 'All Expenses'}</span>
                         </Link>
 
                         <Link to="/absent-employees" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/absent-employees' ? 'active' : ''}`}>

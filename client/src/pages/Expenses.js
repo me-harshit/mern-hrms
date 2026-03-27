@@ -7,13 +7,13 @@ import {
     faImage, faFilter, faCheckCircle, faClock, faTimesCircle, faRupeeSign
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
-import '../styles/purchase.css';
+import '../styles/expenses.css';
 import api, { SERVER_URL } from '../utils/api';
 
-const Purchases = () => {
+const Expenses = () => {
     const navigate = useNavigate();
-    const [purchases, setPurchases] = useState([]);
-    const [filteredPurchases, setFilteredPurchases] = useState([]);
+    const [expenses, setExpenses] = useState([]);
+    const [filteredExpenses, setFilteredExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const [walletBalance, setWalletBalance] = useState(0);
@@ -23,15 +23,15 @@ const Purchases = () => {
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
 
     useEffect(() => {
-        fetchPurchases();
+        fetchExpenses(); 
     }, []);
 
-    const fetchPurchases = async () => {
+    const fetchExpenses = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/purchases');
-            setPurchases(res.data);
-            setFilteredPurchases(res.data);
+            const res = await api.get('/expenses'); 
+            setExpenses(res.data);
+            setFilteredExpenses(res.data);
 
             try {
                 const walletRes = await api.get('/wallets/my-balance');
@@ -41,7 +41,7 @@ const Purchases = () => {
             }
 
         } catch (err) {
-            console.error("Error fetching purchases", err);
+            console.error("Error fetching expenses", err);
             Swal.fire('Error', 'Failed to load expenses', 'error');
         } finally {
             setLoading(false);
@@ -49,14 +49,15 @@ const Purchases = () => {
     };
 
     useEffect(() => {
-        let result = purchases;
+        let result = expenses; 
         const now = new Date();
         now.setHours(23, 59, 59, 999);
 
-        if (filterType === 'Today') { const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.purchaseDate); return pDate >= startOfToday && pDate <= now; }); }
-        else if (filterType === 'Week') { const oneWeekAgo = new Date(); oneWeekAgo.setDate(now.getDate() - 7); oneWeekAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.purchaseDate); return pDate >= oneWeekAgo && pDate <= now; }); }
-        else if (filterType === 'Month') { const oneMonthAgo = new Date(); oneMonthAgo.setDate(now.getDate() - 30); oneMonthAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.purchaseDate); return pDate >= oneMonthAgo && pDate <= now; }); }
-        else if (filterType === 'Custom') { if (customDates.from && customDates.to) { const start = new Date(customDates.from); start.setHours(0, 0, 0, 0); const end = new Date(customDates.to); end.setHours(23, 59, 59, 999); result = result.filter(p => { const pDate = new Date(p.purchaseDate); return pDate >= start && pDate <= end; }); } }
+        
+        if (filterType === 'Today') { const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= startOfToday && pDate <= now; }); }
+        else if (filterType === 'Week') { const oneWeekAgo = new Date(); oneWeekAgo.setDate(now.getDate() - 7); oneWeekAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= oneWeekAgo && pDate <= now; }); }
+        else if (filterType === 'Month') { const oneMonthAgo = new Date(); oneMonthAgo.setDate(now.getDate() - 30); oneMonthAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= oneMonthAgo && pDate <= now; }); }
+        else if (filterType === 'Custom') { if (customDates.from && customDates.to) { const start = new Date(customDates.from); start.setHours(0, 0, 0, 0); const end = new Date(customDates.to); end.setHours(23, 59, 59, 999); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= start && pDate <= end; }); } }
 
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
@@ -69,10 +70,9 @@ const Purchases = () => {
             );
         }
 
-        setFilteredPurchases(result);
-    }, [purchases, filterType, searchTerm, customDates]);
+        setFilteredExpenses(result);
+    }, [expenses, filterType, searchTerm, customDates]);
 
-    // Helper to safely render old local URLs or new S3 URLs
     const getFileUrl = (url) => {
         if (!url) return '';
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
@@ -84,16 +84,14 @@ const Purchases = () => {
             fileData.forEach((url, index) => {
                 const fullUrl = getFileUrl(url);
                 const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
-                const isPdf = url.toLowerCase().endsWith('.pdf'); // 👇 NEW CHECK FOR PDF 👇
+                const isPdf = url.toLowerCase().endsWith('.pdf'); 
 
                 let mediaElement = '';
                 if (isVideo) {
                     mediaElement = `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:400px; background:#000;"></video>`;
                 } else if (isPdf) {
-                    // 👇 RENDERS IFRAME FOR PDFS 👇
                     mediaElement = `<iframe src="${fullUrl}" width="100%" height="400px" style="border: none; border-radius: 6px;"></iframe>`;
                 } else {
-                    // Default fallback to Image
                     mediaElement = `<img src="${fullUrl}" style="width:100%; border-radius:6px; max-height:400px; object-fit:contain;" />`;
                 }
 
@@ -119,16 +117,16 @@ const Purchases = () => {
         return <FontAwesomeIcon icon={faClock} style={{ color: '#d97706', marginRight: '5px' }} />;
     };
 
-    const totalFilteredAmount = filteredPurchases.reduce((sum, p) => sum + p.amount, 0);
+    const totalFilteredAmount = filteredExpenses.reduce((sum, p) => sum + p.amount, 0);
 
     return (
         <div className="settings-container fade-in">
             <div className="page-header-row">
                 <h1 className="page-title header-no-margin">
-                    <FontAwesomeIcon icon={faBoxOpen} className="btn-icon" /> My Expenses & Purchases
+                    <FontAwesomeIcon icon={faBoxOpen} className="btn-icon" /> My Expenses
                 </h1>
 
-                <button className="action-btn-primary btn-small" onClick={() => navigate('/add-purchase')}>
+                <button className="action-btn-primary btn-small" onClick={() => navigate('/add-expense')}>
                     <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Log Expense
                 </button>
             </div>
@@ -173,7 +171,8 @@ const Purchases = () => {
             </div>
 
             <div className="table-summary-text fade-in" style={{ marginBottom: '20px', fontSize: '15px', fontWeight: '600', color: '#475569', textAlign: 'right' }}>
-                Showing {filteredPurchases.length} records &nbsp;|&nbsp; Total Requested: <span className="text-orange mx-1" style={{ color: '#e67e22' }}>₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
+                {/* 👇 Updated length reference */}
+                Showing {filteredExpenses.length} records &nbsp;|&nbsp; Total Requested: <span className="text-orange mx-1" style={{ color: '#e67e22' }}>₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
             </div>
 
             {loading ? (
@@ -193,10 +192,11 @@ const Purchases = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredPurchases.length === 0 ? (
+                            
+                            {filteredExpenses.length === 0 ? (
                                 <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
                             ) : (
-                                filteredPurchases.map(item => (
+                                filteredExpenses.map(item => (
                                     <tr key={item._id}>
                                         <td data-label="Category">
                                             <div className="fw-600 text-primary">{item.category}</div>
@@ -210,7 +210,8 @@ const Purchases = () => {
 
                                         <td data-label="Amount & Date">
                                             <div className="expense-amount-large">₹ {item.amount.toLocaleString('en-IN')}</div>
-                                            <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.purchaseDate).toLocaleDateString()}</div>
+                                            {/* 👇 Updated date field */}
+                                            <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.expenseDate).toLocaleDateString()}</div>
                                         </td>
 
                                         <td data-label="Payment Source">
@@ -230,13 +231,10 @@ const Purchases = () => {
 
                                         <td data-label="Proof">
                                             <div className="flex-row gap-5 flex-wrap">
-
-                                                {/* 👇 FIXED: Looking for the array paymentScreenshotUrls 👇 */}
                                                 {item.paymentScreenshotUrls && item.paymentScreenshotUrls.length > 0 ? (
                                                     <button onClick={() => viewFile(item.paymentScreenshotUrls, `Payment Proofs (${item.paymentScreenshotUrls.length})`)} className="gts-btn doc-btn doc-proof" title="View Proofs">
                                                         <FontAwesomeIcon icon={faFileInvoice} />
                                                     </button>
-                                                    // Fallback for older expenses before the S3 migration
                                                 ) : item.paymentScreenshotUrl ? (
                                                     <button onClick={() => viewFile(item.paymentScreenshotUrl, 'Payment Proof')} className="gts-btn doc-btn doc-proof" title="View Proof">
                                                         <FontAwesomeIcon icon={faFileInvoice} />
@@ -253,7 +251,8 @@ const Purchases = () => {
 
                                         <td data-label="Actions">
                                             {item.status !== 'Approved' ? (
-                                                <button className="gts-btn primary btn-small" onClick={() => navigate(`/edit-purchase/${item._id}`)}>
+                                                // 👇 Updated Edit Route
+                                                <button className="gts-btn primary btn-small" onClick={() => navigate(`/edit-expense/${item._id}`)}>
                                                     <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
                                                 </button>
                                             ) : (
@@ -271,4 +270,4 @@ const Purchases = () => {
     );
 };
 
-export default Purchases;
+export default Expenses;

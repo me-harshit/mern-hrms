@@ -8,7 +8,7 @@ import {
     faUserCheck, faExclamationTriangle, faBan, faEdit 
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
-import '../styles/purchase.css'; 
+import '../styles/expenses.css'; 
 
 const Inventory = () => {
     const navigate = useNavigate();

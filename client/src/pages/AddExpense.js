@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faUser, faBuilding } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
-import '../styles/purchase.css';
+import '../styles/expenses.css';
 
-const AddPurchase = () => {
+const AddExpense = () => {
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
     
@@ -20,7 +20,7 @@ const AddPurchase = () => {
     const [formData, setFormData] = useState({
         expenseType: 'Project Expense', 
         category: 'Product / Item Purchase',
-        purchaseDate: new Date().toISOString().split('T')[0],
+        expenseDate: new Date().toISOString().split('T')[0], 
         amount: '',
         paymentSourceId: currentUser?.id || currentUser?._id || '', 
         projectName: '',
@@ -33,10 +33,11 @@ const AddPurchase = () => {
         restaurantName: '', foodItemsOrdered: '', numberOfPeople: '',
         travelMode: 'Flight', distanceKm: '', bookingReference: '',
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
-        vendorName: '', billingCycle: 'Monthly', expenseDescription: ''
+        vendorName: '', billingCycle: 'Monthly', expenseDescription: '',
+        participantName: '',
+        gstNumber: '' 
     });
 
-    // 👇 FIXED: paymentScreenshots is now an array! 👇
     const [files, setFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
 
     useEffect(() => {
@@ -71,10 +72,22 @@ const AddPurchase = () => {
         }
     }, [expenseDetails.odometerBefore, expenseDetails.odometerAfter, expenseDetails.checkInDate, expenseDetails.checkOutDate, formData.category]);
 
-    const handleMainChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleMainChange = (e) => {
+        const { name, value } = e.target;
+        let updatedData = { ...formData, [name]: value };
+
+        if (name === 'expenseType') {
+            if (value === 'Project Expense' && updatedData.category === 'Regular Office Expense') {
+                updatedData.category = 'Product / Item Purchase'; 
+            } else if (value === 'Regular Office Expense' && ['Participant Payment', 'Vendor Payment'].includes(updatedData.category)) {
+                updatedData.category = 'Regular Office Expense'; 
+            }
+        }
+        setFormData(updatedData);
+    };
+
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    // 👇 FIXED: Unified file handler for multiple files on both inputs 👇
     const handleFileChange = (e, fieldName) => { 
         const selectedFiles = Array.from(e.target.files); 
         const validFiles = [];
@@ -91,7 +104,6 @@ const AddPurchase = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // 👇 FIXED: Checking length of array instead of null 👇
         if (!formData.amount || !formData.descriptionTags || files.paymentScreenshots.length === 0) {
             return Swal.fire('Required Fields', 'Amount, Description, and at least one Payment Screenshot are required.', 'warning');
         }
@@ -104,7 +116,6 @@ const AddPurchase = () => {
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             data.append('expenseDetails', JSON.stringify(expenseDetails));
 
-            // 👇 FIXED: Append multiple Payment Screenshots 👇
             if (files.paymentScreenshots && files.paymentScreenshots.length > 0) {
                 for (let i = 0; i < files.paymentScreenshots.length; i++) {
                     data.append('paymentScreenshots', files.paymentScreenshots[i]);
@@ -117,7 +128,7 @@ const AddPurchase = () => {
                 }
             }
 
-            await api.post('/purchases', data, { 
+            await api.post('/expenses', data, { 
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -126,7 +137,7 @@ const AddPurchase = () => {
             });
 
             Swal.fire({ icon: 'success', title: 'Expense Logged for Approval', timer: 1500, showConfirmButton: false });
-            navigate('/purchases');
+            navigate('/expenses'); 
         } catch (err) { 
             Swal.fire('Error', 'Failed to save expense', 'error'); 
         } finally { 
@@ -143,12 +154,29 @@ const AddPurchase = () => {
             case 'Accommodation': return 'Hotel Receipt / Invoice';
             case 'Product / Item Purchase': return 'Product Photo(s) / Video(s)';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
+            case 'Participant Payment': return 'Payment Receipt / Acknowledgment'; 
+            case 'Vendor Payment': return 'Vendor Invoice / Bill'; 
             default: return 'Expense Media (Photos/Videos)';
         }
     };
 
     const renderCategoryFields = () => {
         switch (formData.category) {
+            case 'Vendor Payment': 
+                return (
+                    <>
+                        {/* Removed grid-span-2 so they sit side-by-side */}
+                        <div className="form-group"><label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Vendor Name *</label><input className="custom-input" name="vendorName" value={expenseDetails.vendorName} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">GST Number</label><input className="custom-input" name="gstNumber" value={expenseDetails.gstNumber} onChange={handleDetailChange} placeholder="Optional" style={{ textTransform: 'uppercase' }} /></div>
+                    </>
+                );
+            case 'Participant Payment': 
+                return (
+                    <div className="form-group grid-span-2">
+                        <label className="input-label"><FontAwesomeIcon icon={faUser} /> Participant Name *</label>
+                        <input className="custom-input" name="participantName" value={expenseDetails.participantName} onChange={handleDetailChange} placeholder="Enter the participant's full name" required />
+                    </div>
+                );
             case 'Product / Item Purchase':
                 return (
                     <>
@@ -175,9 +203,9 @@ const AddPurchase = () => {
             case 'Food Expense':
                 return (
                     <>
-                        <div className="form-group"><label className="input-label">Restaurant / Platform Name *</label><input className="custom-input" name="restaurantName" placeholder="e.g. Zomato, Swiggy" value={expenseDetails.restaurantName} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Number of People</label><input className="custom-input" type="number" name="numberOfPeople" value={expenseDetails.numberOfPeople} onChange={handleDetailChange} /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Restaurant / Platform Name *</label><input className="custom-input" name="restaurantName" placeholder="e.g. Zomato, Swiggy" value={expenseDetails.restaurantName} onChange={handleDetailChange} required /></div>
                         <div className="form-group grid-span-2"><label className="input-label">Food Items Ordered *</label><textarea className="custom-input" rows="2" name="foodItemsOrdered" value={expenseDetails.foodItemsOrdered} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Number of People</label><input className="custom-input" type="number" name="numberOfPeople" value={expenseDetails.numberOfPeople} onChange={handleDetailChange} /></div>
                     </>
                 );
             case 'Travel Expense':
@@ -217,13 +245,13 @@ const AddPurchase = () => {
     return (
         <div className="profile-container fade-in">
             <div className="page-header-left">
-                <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/purchases')}>
+                <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/expenses')}>
                     <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back
                 </button>
                 <h1 className="page-title header-no-margin">Log New Expense</h1>
             </div>
             
-            <div className="purchase-form-card">
+            <div className="expense-form-card"> 
                 <form onSubmit={handleSubmit} className="profile-form">
                     
                     {/* --- SECTION 1: CORE DETAILS --- */}
@@ -232,7 +260,7 @@ const AddPurchase = () => {
                             <FontAwesomeIcon icon={faInfoCircle} /> General Information
                         </div>
                         
-                        <div className="purchase-grid">
+                        <div className="expense-grid"> 
                             <div className="form-group grid-span-2">
                                 <label className="input-label">Expense Type</label>
                                 <div className="expense-type-toggle">
@@ -245,8 +273,9 @@ const AddPurchase = () => {
                                 </div>
                             </div>
 
+                            {/* 👇 Removed grid-span-2 to let them sit side-by-side on desktop */}
                             {formData.expenseType === 'Project Expense' && (
-                                <div className="form-group grid-span-2">
+                                <div className="form-group">
                                     <label className="input-label">Project Name *</label>
                                     <select className="swal2-select custom-select" name="projectName" required value={formData.projectName} onChange={handleMainChange}>
                                         <option value="">-- Select Project --</option>
@@ -259,19 +288,34 @@ const AddPurchase = () => {
 
                             <div className="form-group">
                                 <label className="input-label">Expense Category *</label>
-                                <select className="swal2-select custom-select" name="category" value={formData.category} onChange={handleMainChange} style={{ borderColor: '#215D7B' }}>
+                                <select 
+                                    className="swal2-select custom-select" 
+                                    name="category" 
+                                    value={formData.category} 
+                                    onChange={handleMainChange} 
+                                    style={{ borderColor: '#215D7B' }}
+                                >
                                     <option value="Product / Item Purchase">Product / Item Purchase</option>
                                     <option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option>
                                     <option value="Food Expense">Food Expense</option>
                                     <option value="Travel Expense">Travel Expense</option>
                                     <option value="Accommodation">Accommodation</option>
-                                    <option value="Regular Office Expense">Regular Office Expense</option>
+                                    
+                                    {formData.expenseType === 'Project Expense' && (
+                                        <>
+                                            <option value="Participant Payment">Participant Payment</option>
+                                            <option value="Vendor Payment">Vendor Payment</option> 
+                                        </>
+                                    )}
+                                    {formData.expenseType === 'Regular Office Expense' && (
+                                        <option value="Regular Office Expense">Regular Office Expense</option>
+                                    )}
                                 </select>
                             </div>
 
                             <div className="form-group">
                                 <label className="input-label">Date of Transaction *</label>
-                                <input className="custom-input" type="date" name="purchaseDate" required value={formData.purchaseDate} onChange={handleMainChange} />
+                                <input className="custom-input" type="date" name="expenseDate" required value={formData.expenseDate} onChange={handleMainChange} />
                             </div>
 
                             <div className="form-group">
@@ -301,7 +345,7 @@ const AddPurchase = () => {
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faListAlt} /> {formData.category} Details
                         </div>
-                        <div className="purchase-grid">
+                        <div className="expense-grid">
                             {renderCategoryFields()}
                         </div>
                     </div>
@@ -312,8 +356,7 @@ const AddPurchase = () => {
                             <FontAwesomeIcon icon={faPaperclip} /> Attachments & Proof
                         </div>
                         
-                        <div className="purchase-grid">
-                            {/* 👇 FIXED: Multiple inputs enabled & state updated 👇 */}
+                        <div className="expense-grid">
                             <div className="form-group expense-file-area">
                                 <label className="input-label">Payment Screenshot / Bank Proof(s) *</label>
                                 <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" required onChange={e => handleFileChange(e, 'paymentScreenshots')} />
@@ -358,4 +401,4 @@ const AddPurchase = () => {
     );
 };
 
-export default AddPurchase;
+export default AddExpense;

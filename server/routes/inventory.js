@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware'); // Memory storage for S3
+const upload = require('../middleware/uploadMiddleware'); 
 const { uploadToS3 } = require('../utils/s3Service');
 
 const Inventory = require('../models/Inventory');

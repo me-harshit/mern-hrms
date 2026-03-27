@@ -1,28 +1,28 @@
 const mongoose = require('mongoose');
 
-const purchaseSchema = new mongoose.Schema({
+const expenseSchema = new mongoose.Schema({
     // Core Categorization
     expenseType: { type: String, enum: ['Project Expense', 'Regular Office Expense'], required: true },
     category: { type: String, required: true },
     projectName: { type: String }, // Optional, needed if it's a Project Expense
     descriptionTags: { type: String, required: true },
     amount: { type: Number, required: true },
-    purchaseDate: { type: Date, required: true, default: Date.now },
+    
+    expenseDate: { type: Date, required: true, default: Date.now }, 
 
     // Routing & Tracking
-    purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Submitter
-    paymentSourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Whose wallet takes the hit
+    submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
+    paymentSourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
 
     // Approval Flow
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Filled when manager hits approve
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
 
-    // 👇 THE MAGIC FIELD: Stores the dynamic category data (Product, Fuel, Hotel, etc.)
     expenseDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
 
     // File paths
     paymentScreenshotUrls: [{ type: String }],
-    expenseMediaUrls: [{ type: String }], // Replaces productMediaUrls
+    expenseMediaUrls: [{ type: String }], 
 
     // Legacy / Admin Notes
     inventoryStatus: {
@@ -33,4 +33,4 @@ const purchaseSchema = new mongoose.Schema({
     notes: { type: String }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Purchase', purchaseSchema);
+module.exports = mongoose.model('Expense', expenseSchema);
