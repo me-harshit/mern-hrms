@@ -61,6 +61,20 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
+// GET currently logged-in user's assigned inventory
+router.get('/my-items', auth, async (req, res) => {
+    try {
+        const items = await Inventory.find({ 
+            assignedTo: req.user.id, 
+            status: 'Assigned' 
+        });
+        res.json(items);
+    } catch (err) {
+        console.error("Error fetching my inventory:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET /api/inventory/:id
 // @desc    Get a single asset by ID (For Edit Page)
 router.get('/:id', auth, async (req, res) => {

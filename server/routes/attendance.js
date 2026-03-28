@@ -224,6 +224,16 @@ router.get('/absent', auth, async (req, res) => {
         for (const emp of employees) {
             const targetDateStr = empTargetDates.get(emp._id.toString());
 
+            // 👇 SUNDAY CHECK: Parse the date string and check if it's Sunday
+            const [d, m, y] = targetDateStr.split('/').map(Number);
+            const checkDateObj = new Date(y, m - 1, d);
+            
+            // getDay() returns 0 for Sunday. If Sunday, skip flagging this user as absent!
+            if (checkDateObj.getDay() === 0) {
+                continue; 
+            }
+            // 👆 END SUNDAY CHECK
+
             const record = attendances.find(a =>
                 a.userId.toString() === emp._id.toString() &&
                 a.date === targetDateStr &&
@@ -332,13 +342,23 @@ router.post('/absent-report', auth, async (req, res) => {
         const missingList = [];
 
         for (const dateStr of dateArray) {
+            // 👇 SUNDAY CHECK: Parse the date string and check if it's Sunday
+            const [d, m, y] = dateStr.split('/').map(Number);
+            const checkDateObj = new Date(y, m - 1, d);
+            
+            // If it's Sunday (0), skip adding "Absent" flags for this date entirely
+            if (checkDateObj.getDay() === 0) {
+                continue;
+            }
+            // 👆 END SUNDAY CHECK
+
             for (const emp of employees) {
                 if (emp.joiningDate) {
-                    const [d, m, y] = dateStr.split('/').map(Number);
-                    const checkDate = new Date(y, m - 1, d);
+                    const [d2, m2, y2] = dateStr.split('/').map(Number);
+                    const checkDateForJoin = new Date(y2, m2 - 1, d2);
                     const joinDate = new Date(emp.joiningDate);
                     joinDate.setHours(0, 0, 0, 0);
-                    if (checkDate < joinDate) continue;
+                    if (checkDateForJoin < joinDate) continue;
                 }
 
                 const record = attendances.find(a => a.date === dateStr && a.userId.toString() === emp._id.toString());

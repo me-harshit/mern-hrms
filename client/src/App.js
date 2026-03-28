@@ -25,6 +25,7 @@ import EditExpense from './pages/EditExpense';
 import AdminChat from './pages/AdminChat'
 import Projects from './pages/Projects';
 import Inventory from './pages/Inventory';
+import MyInventory from './pages/MyInventory';
 import AddInventory from './pages/AddInventory';
 import EditInventory from './pages/EditInventory';
 
@@ -84,6 +85,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/attendance" element={<Attendance />} />
+            <Route path="/my-inventory" element={<MyInventory />} />
             <Route path="/absent-employees" element={<AbsentEmployees />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />

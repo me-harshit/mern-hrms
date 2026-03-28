@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import api from '../utils/api'; 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faRobot, faPaperPlane, faCircleNotch } from '@fortawesome/free-solid-svg-icons';
+import { faRobot, faPaperPlane, faCircleNotch, faTrash, faUser } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css'; 
 import '../styles/Chat.css'; 
 
+const INITIAL_GREETING = 'Hello! I am your HR & ERP AI Assistant. You can ask me about employee leaves, attendance, inventory, or projects.';
+
 const AdminChat = () => {
   const [messages, setMessages] = useState([
-    { sender: 'bot', text: 'Hello! I am your HR AI Assistant. You can ask me about employee leaves, attendance, or purchases.' }
+    { sender: 'bot', text: INITIAL_GREETING }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,22 +23,39 @@ const AdminChat = () => {
     scrollToBottom();
   }, [messages]);
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(e);
+    }
+  };
+
+  const handleClearChat = () => {
+    setMessages([{ sender: 'bot', text: INITIAL_GREETING }]);
+  };
+
   const handleSend = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+    e?.preventDefault();
+    if (!input.trim() || isLoading) return;
 
     const userMsg = input.trim();
     
-    // 1. Format the history
-    let chatHistory = messages.map(msg => ({
-      role: msg.sender === 'bot' ? 'model' : 'user', 
-      parts: [{ text: msg.text }]
-    }));
+    // Format History securely for Gemini
+    const formattedHistory = [];
+    let lastRole = null;
 
-    // 👇 THE FIX: If the first message is from the bot, remove it from the history payload
-    if (chatHistory.length > 0 && chatHistory[0].role === 'model') {
-      chatHistory.shift(); 
-    }
+    messages.forEach(msg => {
+      if (msg.text === INITIAL_GREETING) return;
+      
+      const currentRole = msg.sender === 'bot' ? 'model' : 'user';
+      
+      if (currentRole === lastRole) {
+        formattedHistory[formattedHistory.length - 1].parts[0].text += `\n\n${msg.text}`;
+      } else {
+        formattedHistory.push({ role: currentRole, parts: [{ text: msg.text }] });
+        lastRole = currentRole;
+      }
+    });
 
     setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
     setInput('');
@@ -45,13 +64,13 @@ const AdminChat = () => {
     try {
       const response = await api.post('/chat', { 
         message: userMsg,
-        history: chatHistory 
+        history: formattedHistory 
       });
 
       setMessages(prev => [...prev, { sender: 'bot', text: response.data.reply }]);
     } catch (error) {
       console.error('Chat API Error:', error);
-      setMessages(prev => [...prev, { sender: 'bot', text: 'Sorry, I am having trouble connecting to the database right now.' }]);
+      setMessages(prev => [...prev, { sender: 'bot', text: 'Sorry, I encountered an error connecting to the database.' }]);
     } finally {
       setIsLoading(false);
     }
@@ -60,33 +79,52 @@ const AdminChat = () => {
   return (
     <div className="chat-page-container fade-in">
       
-      {/* 1. Standard Header */}
-      <div className="page-header-row mb-20">
+      {/* Header */}
+      <div className="page-header-row mb-20" style={{ justifyContent: 'space-between' }}>
         <div className="flex-row gap-10">
           <FontAwesomeIcon icon={faRobot} className="text-primary" style={{ fontSize: '2.2rem' }} />
           <div>
             <h1 className="page-title header-no-margin">AI Assistant</h1>
-            <p className="text-muted text-small m-0">Query employee records, track late days, and monitor purchases.</p>
+            <p className="text-muted text-small m-0">Query HR, Finance, and Operations Data.</p>
           </div>
         </div>
+        <button 
+          onClick={handleClearChat} 
+          className="gts-btn secondary" 
+          disabled={isLoading || messages.length <= 1}
+        >
+          <FontAwesomeIcon icon={faTrash} className="mr-5" /> <span className="hide-on-mobile">Clear Chat</span>
+        </button>
       </div>
 
-      {/* 2. Chat Box Container */}
+      {/* Chat Box Container */}
       <div className="control-card chat-box-card">
         
         {/* Messages Area */}
         <div className="chat-messages-area">
           {messages.map((msg, index) => (
             <div key={index} className={`message-wrapper ${msg.sender}`}>
+              
+              {/* Avatar Icon */}
+              <div className={`chat-avatar ${msg.sender}`}>
+                <FontAwesomeIcon icon={msg.sender === 'user' ? faUser : faRobot} />
+              </div>
+
+              {/* Message Bubble */}
               <div className={`message-bubble ${msg.sender}`}>
                 {msg.text}
               </div>
+
             </div>
           ))}
+          
           {isLoading && (
             <div className="message-wrapper bot">
+              <div className="chat-avatar bot">
+                <FontAwesomeIcon icon={faRobot} />
+              </div>
               <div className="message-bubble bot typing-indicator">
-                <FontAwesomeIcon icon={faCircleNotch} spin className="mr-5" /> Thinking...
+                <FontAwesomeIcon icon={faCircleNotch} spin className="mr-5" /> Analysing data...
               </div>
             </div>
           )}
@@ -95,13 +133,14 @@ const AdminChat = () => {
 
         {/* Input Area */}
         <form onSubmit={handleSend} className="chat-input-area">
-          <input
-            type="text"
+          <textarea
             className="swal2-input chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about leaves, attendance, or purchases..."
+            onKeyDown={handleKeyDown}
+            placeholder="Ask a question... (Press Enter to send)"
             disabled={isLoading}
+            rows={1}
           />
           <button 
             type="submit" 
