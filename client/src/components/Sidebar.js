@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import api from '../utils/api'; 
+import api from '../utils/api';
 import {
     faThLarge,
     faCalendarCheck,
@@ -17,17 +17,17 @@ import {
     faBoxes,
     faRobot,
     faLaptopHouse,
-    faWallet // 👇 Added Wallet icon for Reimbursements
+    faWallet
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
     const location = useLocation();
     const user = JSON.parse(localStorage.getItem('user'));
     const userRole = user?.role || 'EMPLOYEE';
-    
+
     // State to check if the user has inventory assigned
     const [hasInventory, setHasInventory] = useState(false);
-    
+
     useEffect(() => {
         if (userRole === 'EMPLOYEE' || userRole === 'MANAGER') {
             api.get('/inventory/my-items')
@@ -80,21 +80,24 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <Link to="/leaves" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/leaves' ? 'active' : ''}`}>
                     <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
                 </Link>
-                
+
                 {hasInventory && (
                     <Link to="/my-inventory" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/my-inventory' ? 'active' : ''}`}>
                         <FontAwesomeIcon icon={faLaptopHouse} className="nav-icon" /> <span>My Inventory</span>
                     </Link>
                 )}
 
-                {/* Visible to Purchasers, Admins, HRs, AND Managers */}
                 {(user?.isPurchaser || userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') && (
                     <Link to="/expenses" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/expenses' ? 'active' : ''}`}>
                         <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>My Expenses</span>
                     </Link>
                 )}
+                {(userRole === 'HR' || userRole === 'ADMIN') && (
+                    <Link to="/reimbursements" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/reimbursements' ? 'active' : ''}`}>
+                        <FontAwesomeIcon icon={faWallet} className="nav-icon" /> <span>Reimbursements</span>
+                    </Link>
+                )}
 
-                {/* Visible to Admins, HRs, AND Managers */}
                 {(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') && (
                     <>
                         <div className="sidebar-section-label">
@@ -128,18 +131,13 @@ const Sidebar = ({ isOpen, onClose }) => {
                         </Link>
                     </>
                 )}
-                
-                {/* Visible to Admins and HRs */}
+
                 {(userRole === 'ADMIN' || userRole === 'HR') && (
                     <>
                         <Link to="/inventory" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/inventory' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faBoxes} className="nav-icon" /> <span>Global Inventory</span>
                         </Link>
-                        
-                        {/* 👇 NEW: Reimbursements page strictly for HR/Admin */}
-                        <Link to="/reimbursements" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/reimbursements' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faWallet} className="nav-icon" /> <span>Reimbursements</span>
-                        </Link>
+
 
                         <Link to="/admin-chat" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-chat' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faRobot} className="nav-icon" /> <span>AI Assistant</span>
