@@ -8,6 +8,8 @@ const Expense = require('../models/Expense');
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const WalletTransaction = require('../models/WalletTransaction');
+const Project = require('../models/Project'); 
+const Inventory = require('../models/Inventory'); // 👇 NEW: Import Inventory Model
 
 // @route   POST /api/expenses
 // @desc    Add a new dynamic expense entry
@@ -82,7 +84,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   GET /api/expenses/all
-// @desc    Get all expenses across the company (or Team for Managers)
+// @desc    Get all expenses across the company (or Project Specific for Managers)
 router.get('/all', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
@@ -90,10 +92,13 @@ router.get('/all', auth, async (req, res) => {
         let query = {};
 
         if (req.user.role === 'MANAGER') {
-            const manager = await User.findById(req.user.id);
-            const teamMembers = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).select('_id');
-            const teamIds = teamMembers.map(emp => emp._id);
-            query = { submittedBy: { $in: teamIds } };
+            const myProjects = await Project.find({ projectLead: req.user.id }).select('name');
+            const myProjectNames = myProjects.map(p => p.name);
+
+            query = { 
+                expenseType: 'Project Expense',
+                projectName: { $in: myProjectNames } 
+            };
         }
 
         const expenses = await Expense.find(query)
@@ -137,13 +142,16 @@ router.put('/:id', auth, upload.fields([
         let expense = await Expense.findById(req.params.id).populate('submittedBy');
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
 
-        // Security Check
         let isAuthorized = false;
-        if (req.user.role === 'ADMIN' || req.user.role === 'HR') isAuthorized = true;
-        else if (expense.submittedBy._id.toString() === req.user.id) isAuthorized = true;
-        else if (req.user.role === 'MANAGER') {
-            const manager = await User.findById(req.user.id);
-            if (expense.submittedBy.reportingManagerEmail === manager.email) isAuthorized = true;
+        if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
+            isAuthorized = true;
+        } else if (expense.submittedBy._id.toString() === req.user.id) {
+            isAuthorized = true;
+        } else if (req.user.role === 'MANAGER') {
+            if (expense.expenseType === 'Project Expense' && expense.projectName) {
+                const project = await Project.findOne({ name: expense.projectName, projectLead: req.user.id });
+                if (project) isAuthorized = true;
+            }
         }
 
         if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized' });
@@ -154,8 +162,7 @@ router.put('/:id', auth, upload.fields([
 
         const {
             expenseType, category, expenseDate, amount, 
-            paymentSourceId, projectName, descriptionTags, expenseDetails,
-            inventoryStatus, notes
+            paymentSourceId, projectName, descriptionTags, expenseDetails, notes
         } = req.body;
 
         if (expenseType) expense.expenseType = expenseType;
@@ -165,7 +172,6 @@ router.put('/:id', auth, upload.fields([
         if (paymentSourceId) expense.paymentSourceId = paymentSourceId;
         if (projectName !== undefined) expense.projectName = projectName;
         if (descriptionTags) expense.descriptionTags = descriptionTags;
-        if (inventoryStatus) expense.inventoryStatus = inventoryStatus;
         if (notes !== undefined) expense.notes = notes;
 
         if (expenseDetails) {
@@ -209,7 +215,7 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // @route   PUT /api/expenses/:id/status
-// @desc    Approve or Reject an expense & Deduct Wallet (Manager/Admin only)
+// @desc    Approve/Reject expense & Auto-Sync Inventory
 router.put('/:id/status', auth, async (req, res) => {
     try {
         const { status } = req.body; 
@@ -222,15 +228,19 @@ router.put('/:id/status', auth, async (req, res) => {
         if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
             isAuthorized = true;
         } else if (req.user.role === 'MANAGER') {
-            const manager = await User.findById(req.user.id);
-            if (expense.submittedBy.reportingManagerEmail === manager.email) {
-                isAuthorized = true;
+            if (expense.expenseType === 'Project Expense' && expense.projectName) {
+                const project = await Project.findOne({ name: expense.projectName, projectLead: req.user.id });
+                if (project) {
+                    isAuthorized = true;
+                }
             }
         }
 
         if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized to approve this expense' });
 
+        // If Approved: Deduct Wallet & Sync Inventory
         if (status === 'Approved') {
+            // 1. Wallet Deduction
             let wallet = await Wallet.findOne({ userId: expense.paymentSourceId });
             if (!wallet) {
                 wallet = new Wallet({ userId: expense.paymentSourceId, balance: 0 });
@@ -245,6 +255,64 @@ router.put('/:id/status', auth, async (req, res) => {
                 description: `Expense Approved: ${expense.category} - ${expense.projectName || 'General'}`,
                 performedBy: req.user.id
             });
+
+            // 2. 👇 THE MAGIC: Auto-Sync to Inventory 👇
+            if (expense.category === 'Product / Item Purchase' && !expense.inventorySynced) {
+                const details = expense.expenseDetails;
+                
+                if (details && details.inventoryItemStatus && details.inventoryItemStatus !== 'Do Not Track') {
+                    const invStatus = details.inventoryItemStatus;
+                    const qty = Number(details.quantity) || 1;
+                    
+                    let existingPool = null;
+                    if (invStatus === 'Available') {
+                        existingPool = await Inventory.findOne({
+                            itemName: details.productName,
+                            status: 'Available',
+                            storageLocation: details.storageLocation
+                        });
+                    } else if (invStatus === 'Assigned') {
+                        existingPool = await Inventory.findOne({
+                            itemName: details.productName,
+                            status: 'Assigned',
+                            assignedTo: details.inventoryAssignedTo
+                        });
+                    }
+
+                    let linkedInvId;
+
+                    if (existingPool) {
+                        // Merge with existing
+                        existingPool.quantity += qty;
+                        if (expense.expenseMediaUrls && expense.expenseMediaUrls.length > 0) {
+                            const combined = new Set([...existingPool.mediaUrls, ...expense.expenseMediaUrls]);
+                            existingPool.mediaUrls = Array.from(combined);
+                        }
+                        await existingPool.save();
+                        linkedInvId = existingPool._id;
+                    } else {
+                        // Create brand new asset
+                        const newAsset = new Inventory({
+                            itemName: details.productName,
+                            quantity: qty,
+                            status: invStatus,
+                            storageLocation: invStatus === 'Available' ? details.storageLocation : '',
+                            assignedTo: invStatus === 'Assigned' ? details.inventoryAssignedTo : null,
+                            mediaUrls: expense.expenseMediaUrls || [],
+                            createdBy: req.user.id,
+                            linkedExpenseId: expense._id // Ties back to receipt!
+                        });
+                        await newAsset.save();
+                        linkedInvId = newAsset._id;
+                    }
+
+                    expense.inventorySynced = true;
+                    expense.linkedInventoryId = linkedInvId;
+                } else if (details && details.inventoryItemStatus === 'Do Not Track') {
+                    // Mark as synced so we don't try again, but don't create inventory item
+                    expense.inventorySynced = true;
+                }
+            }
         }
 
         expense.status = status;

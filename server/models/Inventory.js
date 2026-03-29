@@ -6,7 +6,6 @@ const inventorySchema = new mongoose.Schema({
         required: true,
         trim: true 
     },
-    // 👇 NEW: The Magic Quantity Field 👇
     quantity: {
         type: Number,
         required: true,
@@ -36,6 +35,12 @@ const inventorySchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User',
         required: true
+    },
+    
+    linkedExpenseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Expense',
+        default: null
     }
 }, { timestamps: true });
 

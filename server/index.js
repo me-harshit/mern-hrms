@@ -20,6 +20,7 @@ const projectsRoutes = require('./routes/projects');
 const walletsRoute = require('./routes/wallets');
 const inventoryRoute = require('./routes/inventory');
 const expenseRoute = require('./routes/expenses');
+const reimbursementRoutes = require('./routes/reimbursements');
 
 
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/projects', projectsRoutes);
 app.use('/api/wallets', walletsRoute);
 app.use('/api/inventory', inventoryRoute);
 app.use('/api/expenses', expenseRoute);
+app.use('/api/reimbursements', reimbursementRoutes);
 
 
 app.get('/', (req, res) => res.send("GTS HRMS API is running..."));

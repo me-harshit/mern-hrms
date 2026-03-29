@@ -16,7 +16,8 @@ import {
     faFolderOpen,
     faBoxes,
     faRobot,
-    faLaptopHouse // 👇 3. Added the missing Laptop icon
+    faLaptopHouse,
+    faWallet // 👇 Added Wallet icon for Reimbursements
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -134,6 +135,12 @@ const Sidebar = ({ isOpen, onClose }) => {
                         <Link to="/inventory" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/inventory' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faBoxes} className="nav-icon" /> <span>Global Inventory</span>
                         </Link>
+                        
+                        {/* 👇 NEW: Reimbursements page strictly for HR/Admin */}
+                        <Link to="/reimbursements" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/reimbursements' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faWallet} className="nav-icon" /> <span>Reimbursements</span>
+                        </Link>
+
                         <Link to="/admin-chat" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-chat' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faRobot} className="nav-icon" /> <span>AI Assistant</span>
                         </Link>

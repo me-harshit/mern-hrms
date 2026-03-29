@@ -28,6 +28,7 @@ import Inventory from './pages/Inventory';
 import MyInventory from './pages/MyInventory';
 import AddInventory from './pages/AddInventory';
 import EditInventory from './pages/EditInventory';
+import Reimbursements from './pages/Reimbursements';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -93,6 +94,7 @@ function App() {
             <Route path="/add-expense" element={<AddExpense />} />
             <Route path="/edit-expense/:id" element={<EditExpense />} />
             <Route path="/inventory" element={<Inventory />} />
+            <Route path="/reimbursements" element={<Reimbursements />} />
             <Route path="/add-inventory" element={<AddInventory />} />
             <Route path="/edit-inventory/:id" element={<EditInventory />} />
 

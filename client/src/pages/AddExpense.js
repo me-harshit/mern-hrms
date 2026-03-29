@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-// 👇 NEW: Added faSpinner for loading state
-import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faUser, faBuilding, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import imageCompression from 'browser-image-compression'; // 👇 NEW: Import compression library
+import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import imageCompression from 'browser-image-compression'; 
 import '../styles/App.css';
 import '../styles/expenses.css';
 
@@ -15,7 +14,7 @@ const AddExpense = () => {
 
     const [loading, setLoading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [isCompressing, setIsCompressing] = useState(false); // 👇 Track compression
+    const [isCompressing, setIsCompressing] = useState(false); 
 
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
@@ -31,14 +30,25 @@ const AddExpense = () => {
     });
 
     const [expenseDetails, setExpenseDetails] = useState({
+        // Product / Inventory specific
         productName: '', quantity: 1, unitPrice: '', expiryDate: '', storageLocation: '',
+        inventoryItemStatus: 'Available', // 👇 NEW: To track auto-inventory insertion
+        inventoryAssignedTo: '',          // 👇 NEW: To assign immediately
+
+        // Vehicle & Travel
         vehicleType: 'Car', vehicleNumber: '', odometerBefore: '', odometerAfter: '', kmTraveled: '', travelFrom: '', travelTo: '', purpose: '',
-        restaurantName: '', foodItemsOrdered: '', numberOfPeople: '',
         travelMode: 'Flight', distanceKm: '', bookingReference: '',
+        
+        // Food & Hotel
+        restaurantName: '', foodItemsOrdered: '', numberOfPeople: '',
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
-        vendorName: '', billingCycle: 'Monthly', expenseDescription: '',
-        participantName: '',
-        gstNumber: ''
+        
+        // General / Vendor
+        vendorName: '', billingCycle: 'Monthly', expenseDescription: '', participantName: '', gstNumber: '',
+
+        // 👇 NEW: Utilities & Maintenance
+        utilityType: 'Electricity', billingMonth: '', invoiceNumber: '',
+        repairType: 'Equipment / IT', serviceProvider: '', warrantyIncluded: 'No'
     });
 
     const [files, setFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
@@ -49,7 +59,7 @@ const AddExpense = () => {
                 const userRes = await api.get('/employees/payment-sources');
                 setUsersList(userRes.data);
 
-                const projRes = await api.get('/projects');
+                const projRes = await api.get('/projects/all').catch(() => api.get('/projects'));
                 setProjectsList(projRes.data);
             } catch (err) {
                 console.error("Could not fetch dropdown data", err);
@@ -98,21 +108,14 @@ const AddExpense = () => {
         setIsCompressing(true);
 
         for (let file of selectedFiles) {
-            if (file.type.startsWith('image/')) {
-                try {
-                    const options = {
-                        maxSizeMB: 1,             
-                        maxWidthOrHeight: 1920,   
-                        useWebWorker: true,       
-                    };
-                    
-                    const compressedBlob = await imageCompression(file, options);
-                    
-                    const safelyNamedFile = new File([compressedBlob], file.name, {
-                        type: file.type,
-                        lastModified: Date.now()
-                    });
+            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
 
+            if (isImage) {
+                try {
+                    const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: false, fileType: 'image/jpeg' };
+                    const compressedBlob = await imageCompression(file, options);
+                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                    const safelyNamedFile = new File([compressedBlob], safeName, { type: 'image/jpeg', lastModified: Date.now() });
                     processedFiles.push(safelyNamedFile);
                 } catch (error) {
                     console.error("Error compressing image:", error);
@@ -125,15 +128,15 @@ const AddExpense = () => {
             }
         }
 
-        setFiles(prev => ({ ...prev, [fieldName]: processedFiles })); // 👇 Keeps other fields intact
+        setFiles(prev => ({ ...prev, [fieldName]: processedFiles })); 
         setIsCompressing(false);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.amount || !formData.descriptionTags || files.paymentScreenshots.length === 0) {
-            return Swal.fire('Required Fields', 'Amount, Description, and at least one Payment Screenshot are required.', 'warning');
+        if (!formData.amount || !formData.descriptionTags) {
+            return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
         }
 
         setLoading(true);
@@ -142,7 +145,37 @@ const AddExpense = () => {
         try {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
-            data.append('expenseDetails', JSON.stringify(expenseDetails));
+            
+            let relevantDetails = {};
+            const d = expenseDetails;
+            
+            switch (formData.category) {
+                case 'Vendor Payment': 
+                    relevantDetails = { vendorName: d.vendorName, gstNumber: d.gstNumber }; break;
+                case 'Participant Payment': 
+                    relevantDetails = { participantName: d.participantName }; break;
+                case 'Product / Item Purchase': 
+                    // 👇 NEW: Capturing the inventory sync choices
+                    relevantDetails = { productName: d.productName, quantity: d.quantity, unitPrice: d.unitPrice, inventoryItemStatus: d.inventoryItemStatus, storageLocation: d.inventoryItemStatus === 'Available' ? d.storageLocation : '', inventoryAssignedTo: d.inventoryItemStatus === 'Assigned' ? d.inventoryAssignedTo : '', expiryDate: d.expiryDate }; break;
+                case 'Fuel Expense (Car / Bike)': 
+                    relevantDetails = { vehicleType: d.vehicleType, vehicleNumber: d.vehicleNumber, travelFrom: d.travelFrom, travelTo: d.travelTo, odometerBefore: d.odometerBefore, odometerAfter: d.odometerAfter, kmTraveled: d.kmTraveled, purpose: d.purpose }; break;
+                case 'Food Expense': 
+                    relevantDetails = { restaurantName: d.restaurantName, foodItemsOrdered: d.foodItemsOrdered, numberOfPeople: d.numberOfPeople }; break;
+                case 'Travel Expense': 
+                    relevantDetails = { travelMode: d.travelMode, distanceKm: d.distanceKm, travelFrom: d.travelFrom, travelTo: d.travelTo, bookingReference: d.bookingReference, purpose: d.purpose }; break;
+                case 'Accommodation': 
+                    relevantDetails = { hotelName: d.hotelName, city: d.city, bookingReference: d.bookingReference, checkInDate: d.checkInDate, checkOutDate: d.checkOutDate, numberOfNights: d.numberOfNights }; break;
+                case 'Regular Office Expense': 
+                    relevantDetails = { vendorName: d.vendorName, billingCycle: d.billingCycle, expenseDescription: d.expenseDescription }; break;
+                case 'Utility / Bills': 
+                    relevantDetails = { utilityType: d.utilityType, billingMonth: d.billingMonth, invoiceNumber: d.invoiceNumber }; break;
+                case 'Maintenance & Repairs': 
+                    relevantDetails = { repairType: d.repairType, serviceProvider: d.serviceProvider, warrantyIncluded: d.warrantyIncluded }; break;
+                default: 
+                    relevantDetails = {};
+            }
+
+            data.append('expenseDetails', JSON.stringify(relevantDetails));
 
             if (files.paymentScreenshots && files.paymentScreenshots.length > 0) {
                 for (let i = 0; i < files.paymentScreenshots.length; i++) {
@@ -181,6 +214,8 @@ const AddExpense = () => {
             case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
             case 'Accommodation': return 'Hotel Receipt / Invoice';
             case 'Product / Item Purchase': return 'Product Photo(s) / Video(s)';
+            case 'Utility / Bills': return 'Utility Bill / Invoice';
+            case 'Maintenance & Repairs': return 'Service Receipt / Invoice';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
             case 'Participant Payment': return 'Payment Receipt / Acknowledgment';
             case 'Vendor Payment': return 'Vendor Invoice / Bill';
@@ -204,16 +239,88 @@ const AddExpense = () => {
                         <input className="custom-input" name="participantName" value={expenseDetails.participantName} onChange={handleDetailChange} placeholder="Enter the participant's full name" required />
                     </div>
                 );
+            
+            // 👇 NEW: Upgraded Product Purchase UI
             case 'Product / Item Purchase':
                 return (
                     <>
                         <div className="form-group grid-span-2"><label className="input-label">Product Name *</label><input className="custom-input" name="productName" value={expenseDetails.productName} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" name="quantity" value={expenseDetails.quantity} onChange={handleDetailChange} required /></div>
+                        <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" min="1" name="quantity" value={expenseDetails.quantity} onChange={handleDetailChange} required /></div>
                         <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" name="unitPrice" value={expenseDetails.unitPrice} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. Office Room A" required /></div>
-                        <div className="form-group"><label className="input-label">Expiry Date (If applicable)</label><input className="custom-input" type="date" name="expiryDate" value={expenseDetails.expiryDate} onChange={handleDetailChange} /></div>
+                        
+                        <div className="form-group grid-span-2">
+                            <label className="input-label" style={{ color: '#0f172a' }}>Will this item be added to Company Inventory?</label>
+                            <div className="expense-type-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <label className={expenseDetails.inventoryItemStatus === 'Available' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
+                                    <input type="radio" name="inventoryItemStatus" value="Available" onChange={handleDetailChange} /> Yes, Keep in Office (Available)
+                                </label>
+                                <label className={expenseDetails.inventoryItemStatus === 'Assigned' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
+                                    <input type="radio" name="inventoryItemStatus" value="Assigned" onChange={handleDetailChange} /> Yes, Assign to Employee
+                                </label>
+                                <label className={expenseDetails.inventoryItemStatus === 'Do Not Track' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start', background: expenseDetails.inventoryItemStatus === 'Do Not Track' ? '#f1f5f9' : '', color: expenseDetails.inventoryItemStatus === 'Do Not Track' ? '#64748b' : '' }}>
+                                    <input type="radio" name="inventoryItemStatus" value="Do Not Track" onChange={handleDetailChange} /> No, Consumable / Do Not Track
+                                </label>
+                            </div>
+                        </div>
+
+                        {expenseDetails.inventoryItemStatus === 'Available' && (
+                            <div className="form-group grid-span-2"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. IT Closet, Rack A" required /></div>
+                        )}
+                        
+                        {expenseDetails.inventoryItemStatus === 'Assigned' && (
+                            <div className="form-group grid-span-2"><label className="input-label">Assign To Employee *</label>
+                                <select className="swal2-select custom-select" name="inventoryAssignedTo" value={expenseDetails.inventoryAssignedTo} onChange={handleDetailChange} required>
+                                    <option value="">-- Select Employee --</option>
+                                    {usersList.map(u => <option key={u._id} value={u._id}>{u.name} ({u.role})</option>)}
+                                </select>
+                            </div>
+                        )}
+
+                        <div className="form-group grid-span-2"><label className="input-label">Expiry Date (If applicable)</label><input className="custom-input" type="date" name="expiryDate" value={expenseDetails.expiryDate} onChange={handleDetailChange} /></div>
                     </>
                 );
+
+            // 👇 NEW: Utilities & Maintenance Forms
+            case 'Utility / Bills':
+                return (
+                    <>
+                        <div className="form-group">
+                            <label className="input-label">Utility Type *</label>
+                            <select className="swal2-select custom-select" name="utilityType" value={expenseDetails.utilityType} onChange={handleDetailChange}>
+                                <option value="Electricity">Electricity</option>
+                                <option value="Internet / Wi-Fi">Internet / Wi-Fi</option>
+                                <option value="Water">Water</option>
+                                <option value="Software Subscription">Software Subscription</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div className="form-group"><label className="input-label">Billing Month / Period</label><input className="custom-input" type="text" placeholder="e.g. Oct 2026" name="billingMonth" value={expenseDetails.billingMonth} onChange={handleDetailChange} /></div>
+                        <div className="form-group grid-span-2"><label className="input-label">Invoice / Account Number</label><input className="custom-input" name="invoiceNumber" value={expenseDetails.invoiceNumber} onChange={handleDetailChange} /></div>
+                    </>
+                );
+            case 'Maintenance & Repairs':
+                return (
+                    <>
+                        <div className="form-group">
+                            <label className="input-label">Repair Category *</label>
+                            <select className="swal2-select custom-select" name="repairType" value={expenseDetails.repairType} onChange={handleDetailChange}>
+                                <option value="Equipment / IT">Equipment / IT</option>
+                                <option value="Facility / Office">Facility / Office</option>
+                                <option value="Vehicle">Vehicle</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="input-label">Warranty Included?</label>
+                            <select className="swal2-select custom-select" name="warrantyIncluded" value={expenseDetails.warrantyIncluded} onChange={handleDetailChange}>
+                                <option value="No">No</option>
+                                <option value="Yes">Yes</option>
+                            </select>
+                        </div>
+                        <div className="form-group grid-span-2"><label className="input-label">Service Provider / Technician Name *</label><input className="custom-input" name="serviceProvider" value={expenseDetails.serviceProvider} onChange={handleDetailChange} required /></div>
+                    </>
+                );
+
             case 'Fuel Expense (Car / Bike)':
                 return (
                     <>
@@ -322,6 +429,8 @@ const AddExpense = () => {
                                     style={{ borderColor: '#215D7B' }}
                                 >
                                     <option value="Product / Item Purchase">Product / Item Purchase</option>
+                                    <option value="Utility / Bills">Utility / Bills</option>
+                                    <option value="Maintenance & Repairs">Maintenance & Repairs</option>
                                     <option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option>
                                     <option value="Food Expense">Food Expense</option>
                                     <option value="Travel Expense">Travel Expense</option>
@@ -384,33 +493,50 @@ const AddExpense = () => {
 
                         <div className="expense-grid">
                             <div className="form-group expense-file-area">
-                                <label className="input-label">Payment Screenshot / Bank Proof(s) *</label>
-                                <input className="custom-file-input" type="file" multiple accept="image/*,application/pdf" required onChange={e => handleFileChange(e, 'paymentScreenshots')} />
+                                <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
+                                    Payment Screenshot / Bank Proof(s) (Optional)
+                                </label>
+                                
+                                <input 
+                                    className="custom-file-input" 
+                                    type="file" 
+                                    multiple 
+                                    accept="image/*,application/pdf" 
+                                    capture="environment"
+                                    onChange={e => handleFileChange(e, 'paymentScreenshots')} 
+                                />
 
-                                {/* 👇 Show compressing state for proofs */}
                                 {isCompressing ? (
                                     <p className="file-success-text" style={{ color: '#d97706', marginTop: '5px', fontWeight: '600' }}>
                                         <FontAwesomeIcon icon={faSpinner} spin /> Compressing images...
                                     </p>
                                 ) : files.paymentScreenshots.length > 0 && (
                                     <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
-                                        {files.paymentScreenshots.length} proof file(s) ready
+                                        <FontAwesomeIcon icon={faCheckCircle} /> {files.paymentScreenshots.length} proof file(s) ready
                                     </p>
                                 )}
                             </div>
 
                             <div className="form-group expense-file-area">
-                                <label className="input-label">{getMediaLabel()}</label>
-                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} />
+                                <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
+                                    {getMediaLabel()} (Optional)
+                                </label>
+                                <input 
+                                    className="custom-file-input" 
+                                    type="file" 
+                                    multiple 
+                                    accept="image/*,video/*" 
+                                    capture="environment"
+                                    onChange={e => handleFileChange(e, 'expenseMedia')} 
+                                />
 
-                                {/* 👇 Show compressing state for media */}
                                 {isCompressing ? (
                                     <p className="file-success-text" style={{ color: '#d97706', marginTop: '5px', fontWeight: '600' }}>
                                         <FontAwesomeIcon icon={faSpinner} spin /> Compressing images...
                                     </p>
                                 ) : files.expenseMedia.length > 0 && (
                                     <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}>
-                                        {files.expenseMedia.length} media file(s) ready
+                                        <FontAwesomeIcon icon={faCheckCircle} /> {files.expenseMedia.length} media file(s) ready
                                     </p>
                                 )}
                             </div>
@@ -427,7 +553,6 @@ const AddExpense = () => {
                             </div>
                         )}
 
-                        {/* 👇 Disable button if loading or compressing */}
                         <button type="submit" className="save-btn purchase-submit-btn" disabled={loading || isCompressing}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" />
                             {loading ? 'Processing & Uploading...' : isCompressing ? 'Compressing Files...' : 'Submit Expense for Approval'}

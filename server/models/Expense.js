@@ -24,6 +24,16 @@ const expenseSchema = new mongoose.Schema({
     paymentScreenshotUrls: [{ type: String }],
     expenseMediaUrls: [{ type: String }], 
 
+    // 👇 NEW: Auto-Sync Engine Tracking 👇
+    inventorySynced: { 
+        type: Boolean, 
+        default: false 
+    },
+    linkedInventoryId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Inventory' // Links the purchase directly to the generated asset
+    },
+
     // Legacy / Admin Notes
     inventoryStatus: {
         type: String,
