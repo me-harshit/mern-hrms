@@ -61,7 +61,6 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
-// GET currently logged-in user's assigned inventory
 router.get('/my-items', auth, async (req, res) => {
     try {
         const items = await Inventory.find({ 
