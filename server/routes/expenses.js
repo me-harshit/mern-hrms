@@ -9,7 +9,7 @@ const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const WalletTransaction = require('../models/WalletTransaction');
 const Project = require('../models/Project'); 
-const Inventory = require('../models/Inventory'); // 👇 NEW: Import Inventory Model
+const Inventory = require('../models/Inventory'); 
 
 // @route   POST /api/expenses
 // @desc    Add a new dynamic expense entry
@@ -156,6 +156,7 @@ router.put('/:id', auth, upload.fields([
 
         if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized' });
 
+        // Still block edits if it was already Approved
         if (expense.status === 'Approved') {
             return res.status(400).json({ message: 'Cannot edit an approved expense.' });
         }
@@ -188,7 +189,9 @@ router.put('/:id', auth, upload.fields([
             expense.expenseMediaUrls = await Promise.all(uploadPromises);
         }
 
+        // 👇 FIXED: Reset status to Pending and wipe out the old admin feedback
         expense.status = 'Pending';
+        expense.adminFeedback = ''; 
 
         await expense.save();
         res.json(expense);
@@ -215,14 +218,16 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // @route   PUT /api/expenses/:id/status
-// @desc    Approve/Reject expense & Auto-Sync Inventory
+// @desc    Approve/Reject/Return expense & Auto-Sync Inventory
 router.put('/:id/status', auth, async (req, res) => {
     try {
-        const { status } = req.body; 
+        const { status, adminFeedback } = req.body; 
         const expense = await Expense.findById(req.params.id).populate('submittedBy', 'name email');
 
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
-        if (expense.status !== 'Pending') return res.status(400).json({ message: 'Expense is already processed' });
+        if (expense.status !== 'Pending' && expense.status !== 'Returned') {
+            return res.status(400).json({ message: 'Expense is already processed' });
+        }
 
         let isAuthorized = false;
         if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
@@ -256,7 +261,7 @@ router.put('/:id/status', auth, async (req, res) => {
                 performedBy: req.user.id
             });
 
-            // 2. 👇 THE MAGIC: Auto-Sync to Inventory 👇
+            // 2. Auto-Sync to Inventory
             if (expense.category === 'Product / Item Purchase' && !expense.inventorySynced) {
                 const details = expense.expenseDetails;
                 
@@ -300,7 +305,7 @@ router.put('/:id/status', auth, async (req, res) => {
                             assignedTo: invStatus === 'Assigned' ? details.inventoryAssignedTo : null,
                             mediaUrls: expense.expenseMediaUrls || [],
                             createdBy: req.user.id,
-                            linkedExpenseId: expense._id // Ties back to receipt!
+                            linkedExpenseId: expense._id 
                         });
                         await newAsset.save();
                         linkedInvId = newAsset._id;
@@ -309,10 +314,13 @@ router.put('/:id/status', auth, async (req, res) => {
                     expense.inventorySynced = true;
                     expense.linkedInventoryId = linkedInvId;
                 } else if (details && details.inventoryItemStatus === 'Do Not Track') {
-                    // Mark as synced so we don't try again, but don't create inventory item
                     expense.inventorySynced = true;
                 }
             }
+        } 
+        // 👇 FIXED: Handle "Returned" or "Rejected" feedback saving
+        else if (status === 'Returned' || status === 'Rejected') {
+            expense.adminFeedback = adminFeedback || '';
         }
 
         expense.status = status;

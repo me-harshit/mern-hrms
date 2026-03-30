@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faBoxOpen, faSearch, faFileInvoice, faImage, faFilter, 
     faCheckCircle, faClock, faTimesCircle, faChartLine, 
-    faRupeeSign, faHourglassHalf, faEye, faTimes 
+    faRupeeSign, faHourglassHalf, faEye, faTimes, faUndo // 👇 Added faUndo for the Return button
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 import '../styles/expenses.css';
@@ -19,7 +19,7 @@ const AdminExpenses = () => {
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
 
-    // --- SIDEBAR STATE --- 👇 NEW
+    // --- SIDEBAR STATE ---
     const [selectedExpense, setSelectedExpense] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -104,7 +104,39 @@ const AdminExpenses = () => {
 
     // --- ACTION HANDLERS ---
     const handleStatusUpdate = async (id, newStatus) => {
-        const confirmText = newStatus === 'Approved' ? 'This will deduct funds from the selected payment source.' : 'Reject this expense?';
+        // 👇 NEW: Handle the "Returned" workflow with a required note input
+        if (newStatus === 'Returned') {
+            const { value: adminNote } = await Swal.fire({
+                title: 'Return for Correction',
+                text: "Please provide a reason so the employee knows what to fix.",
+                input: 'textarea',
+                inputPlaceholder: 'e.g., Please upload a clearer image of the GST invoice...',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b', // Amber color for Return
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Return to Employee',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'You need to write a reason!'
+                    }
+                }
+            });
+
+            if (adminNote) {
+                try {
+                    await api.put(`/expenses/${id}/status`, { status: newStatus, adminFeedback: adminNote });
+                    Swal.fire('Returned', `Expense sent back to employee for correction.`, 'success');
+                    fetchInitialData(); 
+                    setIsSidebarOpen(false); 
+                } catch (err) {
+                    Swal.fire('Error', err.response?.data?.message || 'Failed to update status', 'error');
+                }
+            }
+            return; // Exit the function so it doesn't trigger the Approve/Reject swal below
+        }
+
+        // Standard Approve / Reject Workflow
+        const confirmText = newStatus === 'Approved' ? 'This will deduct funds from the selected payment source and sync Inventory (if applicable).' : 'Reject this expense permanently?';
         const confirmColor = newStatus === 'Approved' ? '#16a34a' : '#dc2626';
 
         const result = await Swal.fire({
@@ -122,14 +154,14 @@ const AdminExpenses = () => {
                 await api.put(`/expenses/${id}/status`, { status: newStatus });
                 Swal.fire('Success', `Expense marked as ${newStatus}`, 'success');
                 fetchInitialData(); 
-                setIsSidebarOpen(false); // Close sidebar on action
+                setIsSidebarOpen(false); 
             } catch (err) {
                 Swal.fire('Error', err.response?.data?.message || 'Failed to update status', 'error');
             }
         }
     };
 
-    // 👇 NEW: Sidebar Handlers
+    // Sidebar Handlers
     const openSidebar = (expense) => {
         setSelectedExpense(expense);
         setIsSidebarOpen(true);
@@ -137,10 +169,9 @@ const AdminExpenses = () => {
 
     const closeSidebar = () => {
         setIsSidebarOpen(false);
-        setTimeout(() => setSelectedExpense(null), 300); // Clear data after slide animation
+        setTimeout(() => setSelectedExpense(null), 300); 
     };
 
-    // Helper to format object keys (e.g. 'gstNumber' -> 'GST Number')
     const formatKeyToLabel = (key) => {
         const withSpaces = key.replace(/([A-Z])/g, ' $1').trim();
         return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1);
@@ -188,6 +219,7 @@ const AdminExpenses = () => {
     const getStatusIcon = (status) => {
         if (status === 'Approved') return <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a', marginRight: '5px' }} />;
         if (status === 'Rejected') return <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626', marginRight: '5px' }} />;
+        if (status === 'Returned') return <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c', marginRight: '5px' }} />; // 👇 NEW: Icon for Returned
         return <FontAwesomeIcon icon={faClock} style={{ color: '#d97706', marginRight: '5px' }} />;
     };
 
@@ -236,16 +268,28 @@ const AdminExpenses = () => {
                     <button className="gts-btn btn-small" onClick={clearFilters} style={{ marginLeft: 'auto', background: '#f1f5f9', color: '#64748b' }}>Clear All</button>
                 </div>
                 <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                    {/* Filters omitted for brevity in explanation, exactly the same as before */}
+                    
                     <div className="search-wrapper" style={{ gridColumn: '1 / -1', maxWidth: '100%' }}>
                         <FontAwesomeIcon icon={faSearch} className="search-icon" />
                         <input type="text" placeholder="Search by name, tags, project..." className="swal2-input search-input" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>From Date</label><input type="date" className="custom-input" name="fromDate" value={filters.fromDate} onChange={handleFilterChange} /></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>To Date</label><input type="date" className="custom-input" name="toDate" value={filters.toDate} onChange={handleFilterChange} /></div>
-                    <div><label className="input-label" style={{ fontSize: '11px' }}>Status</label><select className="custom-input" name="status" value={filters.status} onChange={handleFilterChange}><option value="">All Statuses</option><option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option></select></div>
+                    
+                    {/* 👇 FIXED: Added 'Returned' to the filter dropdown */}
+                    <div>
+                        <label className="input-label" style={{ fontSize: '11px' }}>Status</label>
+                        <select className="custom-input" name="status" value={filters.status} onChange={handleFilterChange}>
+                            <option value="">All Statuses</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Rejected">Rejected</option>
+                            <option value="Returned">Returned</option> 
+                        </select>
+                    </div>
+
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Expense Type</label><select className="custom-input" name="expenseType" value={filters.expenseType} onChange={handleFilterChange}><option value="">All Types</option><option value="Project Expense">Project Expense</option><option value="Regular Office Expense">Regular Office Expense</option></select></div>
-                    <div><label className="input-label" style={{ fontSize: '11px' }}>Category</label><select className="custom-input" name="category" value={filters.category} onChange={handleFilterChange}><option value="">All Categories</option><option value="Product / Item Purchase">Product / Item Purchase</option><option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option><option value="Food Expense">Food Expense</option><option value="Travel Expense">Travel Expense</option><option value="Accommodation">Accommodation</option><option value="Regular Office Expense">Regular Office Expense</option><option value="Participant Payment">Participant Payment</option><option value="Vendor Payment">Vendor Payment</option></select></div>
+                    <div><label className="input-label" style={{ fontSize: '11px' }}>Category</label><select className="custom-input" name="category" value={filters.category} onChange={handleFilterChange}><option value="">All Categories</option><option value="Product / Item Purchase">Product / Item Purchase</option><option value="Utility / Bills">Utility / Bills</option><option value="Maintenance & Repairs">Maintenance & Repairs</option><option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option><option value="Food Expense">Food Expense</option><option value="Travel Expense">Travel Expense</option><option value="Accommodation">Accommodation</option><option value="Regular Office Expense">Regular Office Expense</option><option value="Participant Payment">Participant Payment</option><option value="Vendor Payment">Vendor Payment</option></select></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Project</label><select className="custom-input" name="projectName" value={filters.projectName} onChange={handleFilterChange}><option value="">All Projects</option>{projectsList.map(proj => <option key={proj._id} value={proj.name}>{proj.name}</option>)}</select></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Submitted By</label><select className="custom-input" name="submittedBy" value={filters.submittedBy} onChange={handleFilterChange}><option value="">Anyone</option>{usersList.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}</select></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Approved By</label><select className="custom-input" name="approvedBy" value={filters.approvedBy} onChange={handleFilterChange}><option value="">Anyone</option>{usersList.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}</select></div>
@@ -286,7 +330,6 @@ const AdminExpenses = () => {
                                         <div className="fw-600">{item.category}</div>
                                         <div className="expense-tag-pill">{item.projectName || 'Regular Office'}</div>
                                         
-                                        {/* 👇 NEW: View Details Button right next to the tags */}
                                         <div style={{ marginTop: '8px' }}>
                                             <button className="gts-btn doc-btn" style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', background: '#f1f5f9', color: '#215D7B' }} onClick={() => openSidebar(item)}>
                                                 <FontAwesomeIcon icon={faEye} /> View Details
@@ -304,7 +347,8 @@ const AdminExpenses = () => {
                                     </td>
                                     
                                     <td data-label="Status & Approver">
-                                        <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>
+                                        {/* 👇 FIXED: Displaying the Returned badge */}
+                                        <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : item.status === 'Returned' ? 'warning' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>
                                             {getStatusIcon(item.status)} {item.status || 'Pending'}
                                         </span>
                                         {item.status !== 'Pending' && item.approvedBy && (
@@ -335,14 +379,20 @@ const AdminExpenses = () => {
                                     </td>
                                     
                                     <td data-label="Admin Action">
+                                        {/* 👇 NEW: The 3 Buttons layout for Pending records */}
                                         {item.status === 'Pending' ? (
                                             <div className="flex-col gap-5">
-                                                <button className="gts-btn btn-small" style={{ background: '#dcfce7', color: '#16a34a', width: '100%', justifyContent: 'center' }} onClick={() => handleStatusUpdate(item._id, 'Approved')}>
+                                                <button className="gts-btn btn-small m-0" style={{ background: '#dcfce7', color: '#16a34a', width: '100%', justifyContent: 'center' }} onClick={() => handleStatusUpdate(item._id, 'Approved')}>
                                                     Approve
                                                 </button>
-                                                <button className="gts-btn btn-small" style={{ background: '#fee2e2', color: '#dc2626', width: '100%', justifyContent: 'center' }} onClick={() => handleStatusUpdate(item._id, 'Rejected')}>
-                                                    Reject
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '5px' }}>
+                                                    <button className="gts-btn btn-small m-0" style={{ flex: 1, background: '#fef3c7', color: '#d97706', justifyContent: 'center', padding: '6px' }} onClick={() => handleStatusUpdate(item._id, 'Returned')} title="Return to Employee for Correction">
+                                                        <FontAwesomeIcon icon={faUndo} /> Return
+                                                    </button>
+                                                    <button className="gts-btn btn-small m-0" style={{ flex: 1, background: '#fee2e2', color: '#dc2626', justifyContent: 'center', padding: '6px' }} onClick={() => handleStatusUpdate(item._id, 'Rejected')} title="Reject Permanently">
+                                                        <FontAwesomeIcon icon={faTimes} /> Reject
+                                                    </button>
+                                                </div>
                                             </div>
                                         ) : (
                                             <span className="text-small text-muted fw-600">Processed</span>
@@ -366,7 +416,8 @@ const AdminExpenses = () => {
                         <div className="sidebar-header">
                             <div>
                                 <h2 className="sidebar-title">{selectedExpense.category}</h2>
-                                <span className={`status-badge ${selectedExpense.status === 'Approved' ? 'success' : selectedExpense.status === 'Rejected' ? 'danger' : 'warning'}`} style={{ padding: '4px 8px', fontSize: '10px' }}>
+                                {/* 👇 FIXED: Status badge inside sidebar */}
+                                <span className={`status-badge ${selectedExpense.status === 'Approved' ? 'success' : selectedExpense.status === 'Rejected' ? 'danger' : selectedExpense.status === 'Returned' ? 'warning' : 'warning'}`} style={{ padding: '4px 8px', fontSize: '10px' }}>
                                     {selectedExpense.status}
                                 </span>
                             </div>
@@ -404,18 +455,25 @@ const AdminExpenses = () => {
                                     <span className="detail-label">Description Tags</span>
                                     <span className="detail-value">{selectedExpense.descriptionTags}</span>
                                 </div>
+                                
+                                {/* 👇 NEW: Show Admin Note in sidebar if it was returned or rejected */}
+                                {selectedExpense.adminFeedback && (
+                                    <div className="detail-group" style={{ gridColumn: 'span 2' }}>
+                                        <span className="detail-label" style={{ color: '#ea580c' }}>Admin Note / Feedback</span>
+                                        <span className="detail-value" style={{ background: '#fef3c7', padding: '8px', borderRadius: '4px', fontStyle: 'italic' }}>
+                                            "{selectedExpense.adminFeedback}"
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Dynamic Details Section (Auto-renders any category-specific data!) */}
+                            {/* Dynamic Details Section */}
                             {selectedExpense.expenseDetails && Object.keys(selectedExpense.expenseDetails).length > 0 && (
                                 <>
                                     <h3 className="sidebar-section-title mt-20">Granular Details</h3>
                                     <div className="detail-grid-2">
                                         {Object.entries(selectedExpense.expenseDetails).map(([key, value]) => {
-                                            // Skip rendering empty fields to keep UI clean
                                             if (!value) return null; 
-                                            
-                                            // Make long fields take up full width (like descriptions or addresses)
                                             const isLongText = typeof value === 'string' && value.length > 30;
 
                                             return (
@@ -429,12 +487,15 @@ const AdminExpenses = () => {
                                 </>
                             )}
 
-                            {/* Action Buttons inside Sidebar (Bonus feature) */}
+                            {/* 👇 NEW: 3 Action Buttons inside Sidebar */}
                             {selectedExpense.status === 'Pending' && (
                                 <div className="mt-20 pt-20" style={{ borderTop: '1px solid #e2e8f0' }}>
                                     <div className="flex-row gap-10">
-                                        <button className="gts-btn btn-small" style={{ flex: 1, background: '#16a34a', color: 'white', justifyContent: 'center' }} onClick={() => handleStatusUpdate(selectedExpense._id, 'Approved')}>
+                                        <button className="gts-btn btn-small" style={{ flex: 2, background: '#16a34a', color: 'white', justifyContent: 'center' }} onClick={() => handleStatusUpdate(selectedExpense._id, 'Approved')}>
                                             <FontAwesomeIcon icon={faCheckCircle} /> Approve
+                                        </button>
+                                        <button className="gts-btn btn-small" style={{ flex: 1, background: '#f59e0b', color: 'white', justifyContent: 'center' }} onClick={() => handleStatusUpdate(selectedExpense._id, 'Returned')}>
+                                            <FontAwesomeIcon icon={faUndo} /> Return
                                         </button>
                                         <button className="gts-btn btn-small" style={{ flex: 1, background: '#dc2626', color: 'white', justifyContent: 'center' }} onClick={() => handleStatusUpdate(selectedExpense._id, 'Rejected')}>
                                             <FontAwesomeIcon icon={faTimesCircle} /> Reject

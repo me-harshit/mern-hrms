@@ -18,6 +18,10 @@ const EditExpense = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isCompressing, setIsCompressing] = useState(false);
 
+    // 👇 NEW: Track the status and admin feedback for the Returned workflow
+    const [expenseStatus, setExpenseStatus] = useState('');
+    const [adminFeedback, setAdminFeedback] = useState('');
+
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
 
@@ -71,6 +75,10 @@ const EditExpense = () => {
 
             const res = await api.get(`/expenses/${id}`);
             const data = res.data;
+
+            // 👇 Capturing the status and feedback
+            setExpenseStatus(data.status || '');
+            setAdminFeedback(data.adminFeedback || '');
 
             setFormData({
                 expenseType: data.expenseType || 'Project Expense',
@@ -189,7 +197,6 @@ const EditExpense = () => {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             
-            // 👇 THE FIX: Filter the giant expenseDetails object based on the selected category for edits!
             let relevantDetails = {};
             const d = expenseDetails;
             
@@ -218,7 +225,6 @@ const EditExpense = () => {
                     relevantDetails = {};
             }
 
-            // Append ONLY the clean, relevant data
             data.append('expenseDetails', JSON.stringify(relevantDetails));
 
             if (newFiles.paymentScreenshots && newFiles.paymentScreenshots.length > 0) {
@@ -241,7 +247,7 @@ const EditExpense = () => {
                 }
             });
 
-            Swal.fire({ icon: 'success', title: 'Update Saved', timer: 1500, showConfirmButton: false });
+            Swal.fire({ icon: 'success', title: expenseStatus === 'Returned' ? 'Resubmitted' : 'Update Saved', timer: 1500, showConfirmButton: false });
             navigate('/expenses');
         } catch (err) {
             Swal.fire('Error', 'Failed to update expense', 'error');
@@ -472,6 +478,15 @@ const EditExpense = () => {
             </div>
 
             <div className="expense-form-card">
+                
+                {/* 👇 NEW: Warning Banner for Returned Expenses */}
+                {expenseStatus === 'Returned' && adminFeedback && (
+                    <div className="alert-message warning mb-20" style={{ padding: '12px', borderRadius: '8px', fontSize: '13px', background: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b' }}>
+                        <FontAwesomeIcon icon={faInfoCircle} style={{ marginRight: '6px' }} /> 
+                        <strong>Returned for Correction:</strong> {adminFeedback}
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="profile-form">
 
                     {/* --- SECTION 1: CORE DETAILS --- */}
@@ -675,7 +690,8 @@ const EditExpense = () => {
 
                         <button type="submit" className="save-btn expense-submit-btn" disabled={saving || isCompressing}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" />
-                            {saving ? 'Processing & Saving...' : isCompressing ? 'Compressing Files...' : 'Save Updates'}
+                            {/* 👇 NEW: Dynamic button text depending on if it's a resubmission */}
+                            {saving ? 'Processing & Saving...' : isCompressing ? 'Compressing Files...' : expenseStatus === 'Returned' ? 'Resubmit for Approval' : 'Save Updates'}
                         </button>
                     </div>
 

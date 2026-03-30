@@ -12,8 +12,9 @@ const expenseSchema = new mongoose.Schema({
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
     paymentSourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
 
-    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    status: { type: String, enum: ['Pending', 'Approved', 'Rejected', 'Returned'], default: 'Pending' },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
+    adminFeedback: { type: String, default: '' },
 
     expenseDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
 
