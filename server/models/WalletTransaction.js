@@ -6,7 +6,8 @@ const walletTransactionSchema = new mongoose.Schema({
     type: { type: String, enum: ['Credit', 'Debit'], required: true },
     description: { type: String, required: true },
     performedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    attachmentUrl: { type: String } 
+    attachmentUrl: { type: String } ,
+    linkedExpenseIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Expense' }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('WalletTransaction', walletTransactionSchema);

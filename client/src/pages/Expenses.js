@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faBoxOpen, faPlus, faSearch, faEdit, faFileInvoice,
-    faImage, faFilter, faCheckCircle, faClock, faTimesCircle, faRupeeSign, faUndo
+    faImage, faFilter, faCheckCircle, faClock, faTimesCircle, faUndo, faWallet
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/App.css';
 import '../styles/expenses.css';
@@ -14,9 +14,8 @@ const Expenses = () => {
     const navigate = useNavigate();
     const [expenses, setExpenses] = useState([]);
     
-    // 👇 NEW: Split filtered expenses into two tiers to drive the cards and the table separately
-    const [baseExpenses, setBaseExpenses] = useState([]); // Holds expenses after Time/Search (Drives Cards)
-    const [filteredExpenses, setFilteredExpenses] = useState([]); // Holds expenses after Status filter (Drives Table)
+    const [baseExpenses, setBaseExpenses] = useState([]); 
+    const [filteredExpenses, setFilteredExpenses] = useState([]); 
     
     const [loading, setLoading] = useState(true);
     const [walletBalance, setWalletBalance] = useState(0);
@@ -25,7 +24,6 @@ const Expenses = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
     
-    // 👇 NEW: State to track which card was clicked
     const [statusFilter, setStatusFilter] = useState('All'); 
 
     useEffect(() => {
@@ -55,19 +53,16 @@ const Expenses = () => {
         }
     };
 
-    // --- ENHANCED FILTER ENGINE ---
     useEffect(() => {
         let result = expenses; 
         const now = new Date();
         now.setHours(23, 59, 59, 999);
 
-        // 1. Time Filters
         if (filterType === 'Today') { const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= startOfToday && pDate <= now; }); }
         else if (filterType === 'Week') { const oneWeekAgo = new Date(); oneWeekAgo.setDate(now.getDate() - 7); oneWeekAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= oneWeekAgo && pDate <= now; }); }
         else if (filterType === 'Month') { const oneMonthAgo = new Date(); oneMonthAgo.setDate(now.getDate() - 30); oneMonthAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= oneMonthAgo && pDate <= now; }); }
         else if (filterType === 'Custom') { if (customDates.from && customDates.to) { const start = new Date(customDates.from); start.setHours(0, 0, 0, 0); const end = new Date(customDates.to); end.setHours(23, 59, 59, 999); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= start && pDate <= end; }); } }
 
-        // 2. Search Filters
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             result = result.filter(p =>
@@ -79,9 +74,8 @@ const Expenses = () => {
             );
         }
 
-        setBaseExpenses(result); // Set the base pool to calculate card totals!
+        setBaseExpenses(result); 
 
-        // 3. Status Filter (Card Clicks)
         if (statusFilter !== 'All') {
             result = result.filter(p => p.status === statusFilter);
         }
@@ -89,7 +83,6 @@ const Expenses = () => {
         setFilteredExpenses(result);
     }, [expenses, filterType, searchTerm, customDates, statusFilter]);
 
-    // --- CARD CALCULATIONS ---
     const pendingExps = baseExpenses.filter(e => e.status === 'Pending');
     const approvedExps = baseExpenses.filter(e => e.status === 'Approved');
     const returnedExps = baseExpenses.filter(e => e.status === 'Returned');
@@ -101,11 +94,9 @@ const Expenses = () => {
     const rejectedTotal = rejectedExps.reduce((sum, e) => sum + e.amount, 0);
 
     const handleCardClick = (status) => {
-        // Toggle off if already selected, otherwise set to the new status
         setStatusFilter(prev => prev === status ? 'All' : status);
     };
 
-    // --- UI HELPERS ---
     const getFileUrl = (url) => {
         if (!url) return '';
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
@@ -151,76 +142,84 @@ const Expenses = () => {
         return <FontAwesomeIcon icon={faClock} style={{ color: '#d97706', marginRight: '5px' }} />;
     };
 
+    // 👇 NEW: Helper function to generate clean, minimalist styles for the filter pills
+    const getMinimalCardStyle = (status, colorHex) => ({
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        opacity: statusFilter === 'All' || statusFilter === status ? 1 : 0.4,
+        border: statusFilter === status ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0',
+        background: '#ffffff',
+        padding: '12px 16px',
+        borderRadius: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        minWidth: '140px',
+        boxShadow: statusFilter === status ? `0 2px 8px ${colorHex}15` : 'none'
+    });
+
     const totalFilteredAmount = filteredExpenses.reduce((sum, p) => sum + p.amount, 0);
 
     return (
         <div className="settings-container fade-in">
-            <div className="page-header-row">
+            <div className="page-header-row mb-20">
                 <h1 className="page-title header-no-margin">
                     <FontAwesomeIcon icon={faBoxOpen} className="btn-icon" /> My Expenses
                 </h1>
 
-                <button className="action-btn-primary btn-small" onClick={() => navigate('/add-expense')}>
+                <button className="action-btn-primary btn-small m-0" onClick={() => navigate('/add-expense')}>
                     <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Log Expense
                 </button>
             </div>
 
-            {/* --- INTERACTIVE SUMMARY CARDS --- */}
-            <div className="stats-grid" style={{ marginBottom: '20px' }}>
+            {/* --- MINIMALIST SUMMARY METRICS & FILTERS --- */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '25px', alignItems: 'stretch' }}>
                 
-                {/* Fixed Wallet Card */}
-                <div className={`stat-card ${walletBalance < 0 ? 'theme-red' : 'theme-green'}`}>
-                    <div className="stat-icon">
-                        <FontAwesomeIcon icon={faRupeeSign} />
+                {/* Wallet Pill */}
+                <div style={{ background: walletBalance < 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${walletBalance < 0 ? '#fecaca' : '#bbf7d0'}`, padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '160px', gap: '4px' }}>
+                    <div style={{ fontSize: '12px', color: walletBalance < 0 ? '#dc2626' : '#16a34a', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faWallet} /> Wallet Balance
                     </div>
-                    <div className="stat-info">
-                        <p>My Wallet Balance</p>
-                        <h3 style={{ color: walletBalance < 0 ? '#dc2626' : '#16a34a' }}>
-                            {walletBalance < 0 ? '-' : ''}₹ {Math.abs(walletBalance).toLocaleString('en-IN')}
-                        </h3>
-                        {walletBalance < 0 && (
-                            <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: 'bold' }}>Pending Reimbursement</span>
-                        )}
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: walletBalance < 0 ? '#b91c1c' : '#15803d' }}>
+                        {walletBalance < 0 ? '-' : ''}₹ {Math.abs(walletBalance).toLocaleString('en-IN')}
                     </div>
                 </div>
 
-                {/* Filterable Status Cards */}
-                <div className="stat-card theme-yellow" onClick={() => handleCardClick('Pending')} style={{ cursor: 'pointer', transition: 'all 0.2s ease', opacity: statusFilter === 'All' || statusFilter === 'Pending' ? 1 : 0.4, transform: statusFilter === 'Pending' ? 'scale(1.02)' : 'scale(1)', border: statusFilter === 'Pending' ? '2px solid #d97706' : '1px solid transparent' }}>
-                    <div className="stat-icon"><FontAwesomeIcon icon={faClock} /></div>
-                    <div className="stat-info">
-                        <p>Pending</p>
-                        <h3>₹ {pendingTotal.toLocaleString('en-IN')}</h3>
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#d97706' }}>{pendingExps.length} Requests</span>
+                {/* Vertical Divider */}
+                <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
+
+                {/* Minimalist Filter Pills */}
+                <div style={getMinimalCardStyle('Pending', '#d97706')} onClick={() => handleCardClick('Pending')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }}/> Pending
                     </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {pendingTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{pendingExps.length} items</div>
                 </div>
 
-                <div className="stat-card theme-green" onClick={() => handleCardClick('Approved')} style={{ cursor: 'pointer', transition: 'all 0.2s ease', opacity: statusFilter === 'All' || statusFilter === 'Approved' ? 1 : 0.4, transform: statusFilter === 'Approved' ? 'scale(1.02)' : 'scale(1)', border: statusFilter === 'Approved' ? '2px solid #16a34a' : '1px solid transparent' }}>
-                    <div className="stat-icon"><FontAwesomeIcon icon={faCheckCircle} /></div>
-                    <div className="stat-info">
-                        <p>Accepted</p>
-                        <h3>₹ {approvedTotal.toLocaleString('en-IN')}</h3>
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#16a34a' }}>{approvedExps.length} Requests</span>
+                <div style={getMinimalCardStyle('Approved', '#16a34a')} onClick={() => handleCardClick('Approved')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }}/> Accepted
                     </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {approvedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{approvedExps.length} items</div>
                 </div>
 
-                <div className="stat-card theme-orange" onClick={() => handleCardClick('Returned')} style={{ cursor: 'pointer', transition: 'all 0.2s ease', opacity: statusFilter === 'All' || statusFilter === 'Returned' ? 1 : 0.4, transform: statusFilter === 'Returned' ? 'scale(1.02)' : 'scale(1)', border: statusFilter === 'Returned' ? '2px solid #ea580c' : '1px solid transparent', background: '#ffedd5', color: '#9a3412' }}>
-                    <div className="stat-icon" style={{ background: '#fdba74', color: '#ea580c' }}><FontAwesomeIcon icon={faUndo} /></div>
-                    <div className="stat-info">
-                        <p style={{ color: '#c2410c' }}>Returned</p>
-                        <h3 style={{ color: '#9a3412' }}>₹ {returnedTotal.toLocaleString('en-IN')}</h3>
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#ea580c' }}>{returnedExps.length} Needs Action</span>
+                <div style={getMinimalCardStyle('Returned', '#ea580c')} onClick={() => handleCardClick('Returned')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }}/> Returned
                     </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {returnedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{returnedExps.length} items</div>
                 </div>
 
-                <div className="stat-card theme-red" onClick={() => handleCardClick('Rejected')} style={{ cursor: 'pointer', transition: 'all 0.2s ease', opacity: statusFilter === 'All' || statusFilter === 'Rejected' ? 1 : 0.4, transform: statusFilter === 'Rejected' ? 'scale(1.02)' : 'scale(1)', border: statusFilter === 'Rejected' ? '2px solid #dc2626' : '1px solid transparent' }}>
-                    <div className="stat-icon"><FontAwesomeIcon icon={faTimesCircle} /></div>
-                    <div className="stat-info">
-                        <p>Rejected</p>
-                        <h3>₹ {rejectedTotal.toLocaleString('en-IN')}</h3>
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#dc2626' }}>{rejectedExps.length} Requests</span>
+                <div style={getMinimalCardStyle('Rejected', '#dc2626')} onClick={() => handleCardClick('Rejected')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }}/> Rejected
                     </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {rejectedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{rejectedExps.length} items</div>
                 </div>
-
             </div>
 
             <div className="filter-bar-card fade-in">
@@ -245,8 +244,8 @@ const Expenses = () => {
                 </div>
             </div>
 
-            <div className="table-summary-text fade-in" style={{ marginBottom: '20px', fontSize: '15px', fontWeight: '600', color: '#475569', textAlign: 'right' }}>
-                Showing {filteredExpenses.length} records &nbsp;|&nbsp; Total View: <span className="text-orange mx-1" style={{ color: '#e67e22' }}>₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
+            <div className="table-summary-text fade-in" style={{ marginBottom: '20px', fontSize: '14px', fontWeight: '600', color: '#64748b', textAlign: 'right' }}>
+                Showing {filteredExpenses.length} records &nbsp;|&nbsp; View Total: <span style={{ color: '#0f172a' }}>₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
             </div>
 
             {loading ? (
@@ -328,7 +327,6 @@ const Expenses = () => {
                                         </td>
 
                                         <td data-label="Actions">
-                                            {/* 👇 FIXED: Edit is allowed for Pending AND Returned */}
                                             {item.status === 'Pending' || item.status === 'Returned' ? (
                                                 <button className="gts-btn primary btn-small" onClick={() => navigate(`/edit-expense/${item._id}`)}>
                                                     <FontAwesomeIcon icon={faEdit} className="btn-icon" /> {item.status === 'Returned' ? 'Fix & Resubmit' : 'Edit'}

@@ -35,7 +35,10 @@ const expenseSchema = new mongoose.Schema({
         enum: ['Available', 'In Use', 'Consumed', 'Lost/Damaged'],
         default: 'Available'
     },
-    notes: { type: String }
+    notes: { type: String },
+    
+    isReimbursed: { type: Boolean, default: false },
+    reimbursementTxnId: { type: mongoose.Schema.Types.ObjectId, ref: 'WalletTransaction', default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Expense', expenseSchema);
