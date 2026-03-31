@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle, faPlus, faSearch } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression'; 
 import '../styles/App.css';
 import '../styles/expenses.css';
@@ -17,7 +17,19 @@ const AddExpense = () => {
     const [isCompressing, setIsCompressing] = useState(false); 
 
     const [usersList, setUsersList] = useState([]);
+    const [allEmployeesList, setAllEmployeesList] = useState([]); 
     const [projectsList, setProjectsList] = useState([]);
+    const [vendorsList, setVendorsList] = useState([]); 
+
+    // State for the custom searchable dropdowns
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // 👇 NEW: State & Ref for Vendor Search
+    const [vendorSearchTerm, setVendorSearchTerm] = useState('');
+    const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
+    const vendorDropdownRef = useRef(null);
 
     const [formData, setFormData] = useState({
         expenseType: 'Project Expense',
@@ -26,32 +38,45 @@ const AddExpense = () => {
         amount: '',
         paymentSourceId: currentUser?.id || currentUser?._id || '',
         projectName: '',
-        descriptionTags: ''
+        descriptionTags: '',
+        vendorId: '', 
+        isCompanyPayment: false 
     });
 
     const [expenseDetails, setExpenseDetails] = useState({
-        // Product / Inventory specific
         productName: '', quantity: 1, unitPrice: '', expiryDate: '', storageLocation: '',
-        inventoryItemStatus: 'Available', // 👇 NEW: To track auto-inventory insertion
-        inventoryAssignedTo: '',          // 👇 NEW: To assign immediately
+        inventoryItemStatus: 'Available', 
+        inventoryAssignedTo: '', 
 
-        // Vehicle & Travel
         vehicleType: 'Car', vehicleNumber: '', odometerBefore: '', odometerAfter: '', kmTraveled: '', travelFrom: '', travelTo: '', purpose: '',
         travelMode: 'Flight', distanceKm: '', bookingReference: '',
         
-        // Food & Hotel
         restaurantName: '', foodItemsOrdered: '', numberOfPeople: '',
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
         
-        // General / Vendor
         vendorName: '', billingCycle: 'Monthly', expenseDescription: '', participantName: '', gstNumber: '',
+        paymentDate: '', 
 
-        // 👇 NEW: Utilities & Maintenance
         utilityType: 'Electricity', billingMonth: '', invoiceNumber: '',
         repairType: 'Equipment / IT', serviceProvider: '', warrantyIncluded: 'No'
     });
 
     const [files, setFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
+
+    // Click-outside listener to close BOTH dropdowns
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsEmployeeDropdownOpen(false);
+            }
+            // 👇 NEW: Close vendor dropdown if clicked outside
+            if (vendorDropdownRef.current && !vendorDropdownRef.current.contains(event.target)) {
+                setIsVendorDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -59,8 +84,14 @@ const AddExpense = () => {
                 const userRes = await api.get('/employees/payment-sources');
                 setUsersList(userRes.data);
 
-                const projRes = await api.get('/projects/all').catch(() => api.get('/projects'));
+                const allEmpRes = await api.get('/employees/directory').catch(() => ({ data: [] }));
+                setAllEmployeesList(allEmpRes.data);
+
+                const projRes = await api.get('/projects');
                 setProjectsList(projRes.data);
+
+                const venRes = await api.get('/vendors').catch(() => ({ data: [] }));
+                setVendorsList(venRes.data);
             } catch (err) {
                 console.error("Could not fetch dropdown data", err);
             }
@@ -86,8 +117,14 @@ const AddExpense = () => {
     }, [expenseDetails.odometerBefore, expenseDetails.odometerAfter, expenseDetails.checkInDate, expenseDetails.checkOutDate, formData.category]);
 
     const handleMainChange = (e) => {
-        const { name, value } = e.target;
-        let updatedData = { ...formData, [name]: value };
+        const { name, value, type, checked } = e.target;
+        let updatedData = { ...formData };
+
+        if (type === 'checkbox') {
+            updatedData[name] = checked;
+        } else {
+            updatedData[name] = value;
+        }
 
         if (name === 'expenseType') {
             if (value === 'Project Expense' && updatedData.category === 'Regular Office Expense') {
@@ -132,11 +169,62 @@ const AddExpense = () => {
         setIsCompressing(false);
     };
 
+    const handleAddVendor = async () => {
+        const { value: formValues } = await Swal.fire({
+            title: 'Add New Vendor',
+            html: `
+                <div style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                    <input id="swal-vname" class="swal2-input m-0" placeholder="Vendor Name *" required>
+                    <input id="swal-vaddress" class="swal2-input m-0" placeholder="Vendor Address *" required>
+                    <input id="swal-vgst" class="swal2-input m-0" placeholder="GST Number (Optional)" style="text-transform: uppercase;">
+                    <input id="swal-vnotes" class="swal2-input m-0" placeholder="Notes / Bank Details (Optional)">
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Save Vendor',
+            confirmButtonColor: '#16a34a',
+            preConfirm: () => {
+                const name = document.getElementById('swal-vname').value;
+                const address = document.getElementById('swal-vaddress').value;
+                if (!name || !address) {
+                    Swal.showValidationMessage('Name and Address are required!');
+                    return false;
+                }
+                return {
+                    name, address,
+                    gstNumber: document.getElementById('swal-vgst').value,
+                    notes: document.getElementById('swal-vnotes').value
+                };
+            }
+        });
+
+        if (formValues) {
+            try {
+                const res = await api.post('/vendors', formValues);
+                const updatedList = [...vendorsList, res.data].sort((a, b) => a.name.localeCompare(b.name));
+                setVendorsList(updatedList);
+                setFormData(prev => ({ ...prev, vendorId: res.data._id }));
+                Swal.fire({ icon: 'success', title: 'Vendor Added!', timer: 1500, showConfirmButton: false });
+            } catch (err) {
+                Swal.fire('Error', err.response?.data?.message || 'Failed to add vendor', 'error');
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!formData.amount || !formData.descriptionTags) {
             return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
+        }
+
+        if (formData.category === 'Vendor Payment' && !formData.vendorId) {
+            return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
+        }
+
+        if (formData.category === 'Product / Item Purchase' && expenseDetails.inventoryItemStatus === 'Assigned' && !expenseDetails.inventoryAssignedTo) {
+            return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
         }
 
         setLoading(true);
@@ -151,11 +239,10 @@ const AddExpense = () => {
             
             switch (formData.category) {
                 case 'Vendor Payment': 
-                    relevantDetails = { vendorName: d.vendorName, gstNumber: d.gstNumber }; break;
+                    relevantDetails = { paymentDate: d.paymentDate }; break;
                 case 'Participant Payment': 
                     relevantDetails = { participantName: d.participantName }; break;
                 case 'Product / Item Purchase': 
-                    // 👇 NEW: Capturing the inventory sync choices
                     relevantDetails = { productName: d.productName, quantity: d.quantity, unitPrice: d.unitPrice, inventoryItemStatus: d.inventoryItemStatus, storageLocation: d.inventoryItemStatus === 'Available' ? d.storageLocation : '', inventoryAssignedTo: d.inventoryItemStatus === 'Assigned' ? d.inventoryAssignedTo : '', expiryDate: d.expiryDate }; break;
                 case 'Fuel Expense (Car / Bike)': 
                     relevantDetails = { vehicleType: d.vehicleType, vehicleNumber: d.vehicleNumber, travelFrom: d.travelFrom, travelTo: d.travelTo, odometerBefore: d.odometerBefore, odometerAfter: d.odometerAfter, kmTraveled: d.kmTraveled, purpose: d.purpose }; break;
@@ -209,6 +296,7 @@ const AddExpense = () => {
 
     const getMediaLabel = () => {
         switch (formData.category) {
+            case 'Vendor Payment': return 'Upload Vendor Invoice / Bill (Required)'; 
             case 'Fuel Expense (Car / Bike)': return 'Odometer Image(s) / Fuel Station Receipt';
             case 'Food Expense': return 'Order Screenshot / Restaurant Bill';
             case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
@@ -218,18 +306,97 @@ const AddExpense = () => {
             case 'Maintenance & Repairs': return 'Service Receipt / Invoice';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
             case 'Participant Payment': return 'Payment Receipt / Acknowledgment';
-            case 'Vendor Payment': return 'Vendor Invoice / Bill';
             default: return 'Expense Media (Photos/Videos)';
         }
     };
+
+    const filteredEmployees = allEmployeesList.filter(emp =>
+        emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
+        emp.role.toLowerCase().includes(employeeSearchTerm.toLowerCase())
+    );
+
+    // 👇 NEW: Filter logic for Vendors
+    const filteredVendors = vendorsList.filter(v =>
+        v.name.toLowerCase().includes(vendorSearchTerm.toLowerCase()) ||
+        (v.gstNumber && v.gstNumber.toLowerCase().includes(vendorSearchTerm.toLowerCase()))
+    );
 
     const renderCategoryFields = () => {
         switch (formData.category) {
             case 'Vendor Payment':
                 return (
                     <>
-                        <div className="form-group"><label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Vendor Name *</label><input className="custom-input" name="vendorName" value={expenseDetails.vendorName} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">GST Number</label><input className="custom-input" name="gstNumber" value={expenseDetails.gstNumber} onChange={handleDetailChange} placeholder="Optional" style={{ textTransform: 'uppercase' }} /></div>
+                        {/* 👇 UPDATED: Custom Searchable Dropdown UI for Vendors */}
+                        <div className="form-group grid-span-2" ref={vendorDropdownRef}>
+                            <label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Select Vendor *</label>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                        <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '12px', color: '#94a3b8' }} />
+                                        <input
+                                            type="text"
+                                            className="custom-input m-0"
+                                            placeholder="Search by vendor name or GST..."
+                                            style={{ paddingLeft: '35px', borderColor: formData.vendorId ? '#16a34a' : '#cbd5e1' }}
+                                            value={
+                                                formData.vendorId && !isVendorDropdownOpen
+                                                ? `${vendorsList.find(v => v._id === formData.vendorId)?.name} ${vendorsList.find(v => v._id === formData.vendorId)?.gstNumber ? `(GST: ${vendorsList.find(v => v._id === formData.vendorId)?.gstNumber})` : ''}`
+                                                : vendorSearchTerm
+                                            }
+                                            onChange={(e) => {
+                                                setVendorSearchTerm(e.target.value);
+                                                setFormData({ ...formData, vendorId: '' }); 
+                                                setIsVendorDropdownOpen(true);
+                                            }}
+                                            onFocus={() => setIsVendorDropdownOpen(true)}
+                                        />
+                                    </div>
+                                    
+                                    {isVendorDropdownOpen && (
+                                        <div style={{
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: '4px',
+                                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px',
+                                            maxHeight: '220px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                        }}>
+                                            {filteredVendors.length > 0 ? (
+                                                filteredVendors.map(v => (
+                                                    <div
+                                                        key={v._id}
+                                                        style={{ 
+                                                            padding: '10px 15px', cursor: 'pointer', 
+                                                            borderBottom: '1px solid #f8fafc', fontSize: '14px',
+                                                            transition: 'background 0.2s'
+                                                        }}
+                                                        onMouseDown={() => {
+                                                            setFormData({ ...formData, vendorId: v._id });
+                                                            setVendorSearchTerm('');
+                                                            setIsVendorDropdownOpen(false);
+                                                        }}
+                                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+                                                    >
+                                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{v.name}</div>
+                                                        {v.gstNumber && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>GST: {v.gstNumber}</div>}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div style={{ padding: '15px', color: '#64748b', fontSize: '14px', textAlign: 'center' }}>No vendors match "{vendorSearchTerm}"</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <button type="button" className="gts-btn success btn-small m-0" onClick={handleAddVendor} title="Add New Vendor to Database" style={{ height: '42px' }}>
+                                    <FontAwesomeIcon icon={faPlus} /> Add New
+                                </button>
+                            </div>
+                        </div>
+
+                        {formData.isCompanyPayment && (
+                            <div className="form-group grid-span-2">
+                                <label className="input-label" style={{ color: '#16a34a' }}>Date of Payment (Accounts) - <span style={{fontWeight: 'normal', color: '#64748b'}}>If already paid via Company Card</span></label>
+                                <input className="custom-input" type="date" name="paymentDate" value={expenseDetails.paymentDate} onChange={handleDetailChange} />
+                            </div>
+                        )}
                     </>
                 );
             case 'Participant Payment':
@@ -239,8 +406,6 @@ const AddExpense = () => {
                         <input className="custom-input" name="participantName" value={expenseDetails.participantName} onChange={handleDetailChange} placeholder="Enter the participant's full name" required />
                     </div>
                 );
-            
-            // 👇 NEW: Upgraded Product Purchase UI
             case 'Product / Item Purchase':
                 return (
                     <>
@@ -264,23 +429,73 @@ const AddExpense = () => {
                         </div>
 
                         {expenseDetails.inventoryItemStatus === 'Available' && (
-                            <div className="form-group grid-span-2"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. IT Closet, Rack A" required /></div>
+                            <div className="form-group grid-span-2"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. Office Room A" required /></div>
                         )}
                         
                         {expenseDetails.inventoryItemStatus === 'Assigned' && (
-                            <div className="form-group grid-span-2"><label className="input-label">Assign To Employee *</label>
-                                <select className="swal2-select custom-select" name="inventoryAssignedTo" value={expenseDetails.inventoryAssignedTo} onChange={handleDetailChange} required>
-                                    <option value="">-- Select Employee --</option>
-                                    {usersList.map(u => <option key={u._id} value={u._id}>{u.name} ({u.role})</option>)}
-                                </select>
+                            <div className="form-group grid-span-2" ref={dropdownRef}>
+                                <label className="input-label">Assign To Employee *</label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                        <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '12px', color: '#94a3b8' }} />
+                                        <input
+                                            type="text"
+                                            className="custom-input"
+                                            placeholder="Search by name or role..."
+                                            style={{ paddingLeft: '35px', borderColor: expenseDetails.inventoryAssignedTo ? '#16a34a' : '#cbd5e1' }}
+                                            value={
+                                                expenseDetails.inventoryAssignedTo && !isEmployeeDropdownOpen
+                                                ? `${allEmployeesList.find(e => e._id === expenseDetails.inventoryAssignedTo)?.name} (${allEmployeesList.find(e => e._id === expenseDetails.inventoryAssignedTo)?.role})`
+                                                : employeeSearchTerm
+                                            }
+                                            onChange={(e) => {
+                                                setEmployeeSearchTerm(e.target.value);
+                                                setExpenseDetails({ ...expenseDetails, inventoryAssignedTo: '' }); 
+                                                setIsEmployeeDropdownOpen(true);
+                                            }}
+                                            onFocus={() => setIsEmployeeDropdownOpen(true)}
+                                        />
+                                    </div>
+                                    
+                                    {isEmployeeDropdownOpen && (
+                                        <div style={{
+                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: '4px',
+                                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px',
+                                            maxHeight: '220px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                        }}>
+                                            {filteredEmployees.length > 0 ? (
+                                                filteredEmployees.map(u => (
+                                                    <div
+                                                        key={u._id}
+                                                        style={{ 
+                                                            padding: '10px 15px', cursor: 'pointer', 
+                                                            borderBottom: '1px solid #f8fafc', fontSize: '14px',
+                                                            transition: 'background 0.2s'
+                                                        }}
+                                                        onMouseDown={() => {
+                                                            setExpenseDetails({ ...expenseDetails, inventoryAssignedTo: u._id });
+                                                            setEmployeeSearchTerm('');
+                                                            setIsEmployeeDropdownOpen(false);
+                                                        }}
+                                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+                                                    >
+                                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
+                                                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{u.role}</div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div style={{ padding: '15px', color: '#64748b', fontSize: '14px', textAlign: 'center' }}>No employees match "{employeeSearchTerm}"</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
                         <div className="form-group grid-span-2"><label className="input-label">Expiry Date (If applicable)</label><input className="custom-input" type="date" name="expiryDate" value={expenseDetails.expiryDate} onChange={handleDetailChange} /></div>
                     </>
                 );
-
-            // 👇 NEW: Utilities & Maintenance Forms
             case 'Utility / Bills':
                 return (
                     <>
@@ -320,7 +535,6 @@ const AddExpense = () => {
                         <div className="form-group grid-span-2"><label className="input-label">Service Provider / Technician Name *</label><input className="custom-input" name="serviceProvider" value={expenseDetails.serviceProvider} onChange={handleDetailChange} required /></div>
                     </>
                 );
-
             case 'Fuel Expense (Car / Bike)':
                 return (
                     <>
@@ -395,6 +609,7 @@ const AddExpense = () => {
                         </div>
 
                         <div className="expense-grid">
+
                             <div className="form-group grid-span-2">
                                 <label className="input-label">Expense Type</label>
                                 <div className="expense-type-toggle">
@@ -439,9 +654,9 @@ const AddExpense = () => {
                                     {formData.expenseType === 'Project Expense' && (
                                         <>
                                             <option value="Participant Payment">Participant Payment</option>
-                                            <option value="Vendor Payment">Vendor Payment</option>
                                         </>
                                     )}
+                                    <option value="Vendor Payment">Vendor Payment</option>
                                     {formData.expenseType === 'Regular Office Expense' && (
                                         <option value="Regular Office Expense">Regular Office Expense</option>
                                     )}
@@ -449,7 +664,9 @@ const AddExpense = () => {
                             </div>
 
                             <div className="form-group">
-                                <label className="input-label">Date of Transaction *</label>
+                                <label className="input-label">
+                                    {formData.category === 'Vendor Payment' ? 'Date of Invoice *' : 'Date of Transaction *'}
+                                </label>
                                 <input className="custom-input" type="date" name="expenseDate" required value={formData.expenseDate} onChange={handleMainChange} />
                             </div>
 
@@ -458,15 +675,41 @@ const AddExpense = () => {
                                 <input className="custom-input" type="number" name="amount" required placeholder="5000" value={formData.amount} onChange={handleMainChange} />
                             </div>
 
-                            <div className="form-group">
-                                <label className="input-label"><FontAwesomeIcon icon={faCreditCard} /> Payment Source (Who paid?) *</label>
-                                <select className="swal2-select custom-select" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange}>
-                                    <option value={currentUser?.id || currentUser?._id || ''}>Myself</option>
-                                    {usersList.map(u => (
-                                        <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
-                                    ))}
-                                </select>
+                            <div className="form-group grid-span-2" style={{ marginTop: '5px', marginBottom: '5px' }}>
+                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', cursor: 'pointer', userSelect: 'none' }}>
+                                    <div style={{
+                                        position: 'relative', width: '44px', height: '24px', 
+                                        background: formData.isCompanyPayment ? '#16a34a' : '#cbd5e1', 
+                                        borderRadius: '24px', transition: 'background 0.3s ease'
+                                    }}>
+                                        <div style={{
+                                            position: 'absolute', top: '2px', left: formData.isCompanyPayment ? '22px' : '2px',
+                                            width: '20px', height: '20px', background: 'white', borderRadius: '50%',
+                                            transition: 'left 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                        }} />
+                                    </div>
+                                    <span style={{ fontWeight: '600', color: '#334155', fontSize: '14px' }}>Is company Account ?</span>
+                                    <input 
+                                        type="checkbox" 
+                                        name="isCompanyPayment" 
+                                        checked={formData.isCompanyPayment} 
+                                        onChange={handleMainChange} 
+                                        style={{ display: 'none' }} 
+                                    />
+                                </label>
                             </div>
+
+                            {!formData.isCompanyPayment && (
+                                <div className="form-group">
+                                    <label className="input-label"><FontAwesomeIcon icon={faCreditCard} /> Payment Source (Who paid?) *</label>
+                                    <select className="swal2-select custom-select" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange} required>
+                                        <option value={currentUser?.id || currentUser?._id || ''}>Myself (Reimburse Me)</option>
+                                        {usersList.map(u => (
+                                            <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
                             <div className="form-group grid-span-2">
                                 <label className="input-label"><FontAwesomeIcon icon={faTags} /> Description / Tags *</label>
@@ -519,7 +762,7 @@ const AddExpense = () => {
 
                             <div className="form-group expense-file-area">
                                 <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
-                                    {getMediaLabel()} (Optional)
+                                    {getMediaLabel()}
                                 </label>
                                 <input 
                                     className="custom-file-input" 
@@ -528,6 +771,7 @@ const AddExpense = () => {
                                     accept="image/*,video/*" 
                                     capture="environment"
                                     onChange={e => handleFileChange(e, 'expenseMedia')} 
+                                    required={formData.category === 'Vendor Payment'} // Make required for Vendors
                                 />
 
                                 {isCompressing ? (

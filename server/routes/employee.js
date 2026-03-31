@@ -25,6 +25,19 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/directory
+// @desc    Get a safe, basic list of all employees for dropdowns
+router.get('/directory', auth, async (req, res) => {
+    try {
+        // We use .select() to ensure sensitive data (passwords, salaries) is NEVER sent
+        const employees = await User.find({}).select('name role employeeId').sort({ name: 1 });
+        res.json(employees);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET /api/employees/payment-sources
 // @desc    Get allowed payment sources for an employee (Themselves, Manager, HR)
 router.get('/payment-sources', auth, async (req, res) => {

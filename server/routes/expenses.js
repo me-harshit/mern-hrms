@@ -1,35 +1,40 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware'); 
-const { uploadToS3 } = require('../utils/s3Service'); 
+const upload = require('../middleware/uploadMiddleware');
+const { uploadToS3 } = require('../utils/s3Service');
 
-const Expense = require('../models/Expense'); 
+const Expense = require('../models/Expense');
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const WalletTransaction = require('../models/WalletTransaction');
-const Project = require('../models/Project'); 
-const Inventory = require('../models/Inventory'); 
+const Project = require('../models/Project');
+const Inventory = require('../models/Inventory');
 
 // @route   POST /api/expenses
 // @desc    Add a new dynamic expense entry
 router.post('/', auth, upload.fields([
-    { name: 'paymentScreenshots', maxCount: 5 }, 
-    { name: 'expenseMedia', maxCount: 10 } 
+    { name: 'paymentScreenshots', maxCount: 5 },
+    { name: 'expenseMedia', maxCount: 10 }
 ]), async (req, res) => {
     try {
         const {
-            expenseType, category, expenseDate, amount, 
-            paymentSourceId, projectName, descriptionTags, expenseDetails
+            expenseType, category, expenseDate, amount,
+            paymentSourceId, projectName, descriptionTags, expenseDetails,
+            vendorId,
+            isCompanyPayment // 👇 NEW: Extract payment method
         } = req.body;
 
         let parsedExpenseDetails = {};
         if (expenseDetails) {
-            try { parsedExpenseDetails = JSON.parse(expenseDetails); } 
+            try { parsedExpenseDetails = JSON.parse(expenseDetails); }
             catch (e) { console.error("Error parsing expenseDetails", e); }
         }
 
-        let paymentScreenshotUrls = []; 
+        // Handle FormData boolean strings
+        const isCorpPayment = isCompanyPayment === 'true' || isCompanyPayment === true;
+
+        let paymentScreenshotUrls = [];
         let expenseMediaUrls = [];
 
         if (req.files && req.files['paymentScreenshots']) {
@@ -42,18 +47,21 @@ router.post('/', auth, upload.fields([
             expenseMediaUrls = await Promise.all(uploadPromises);
         }
 
-        const newExpense = new Expense({ 
+        const newExpense = new Expense({
             expenseType,
             category,
             expenseDate: expenseDate || Date.now(),
             amount,
-            paymentSourceId,
+            // 👇 NEW: If it's a company payment, force payment source to null
+            paymentSourceId: isCorpPayment ? null : paymentSourceId,
+            isCompanyPayment: isCorpPayment,
             projectName,
             descriptionTags,
             expenseDetails: parsedExpenseDetails,
-            submittedBy: req.user.id, 
-            paymentScreenshotUrls, 
-            expenseMediaUrls,      
+            vendorId: vendorId || null,
+            submittedBy: req.user.id,
+            paymentScreenshotUrls,
+            expenseMediaUrls,
             status: 'Pending'
         });
 
@@ -72,8 +80,9 @@ router.get('/', auth, async (req, res) => {
     try {
         const expenses = await Expense.find({ submittedBy: req.user.id })
             .populate('submittedBy', 'name email employeeId')
-            .populate('paymentSourceId', 'name role') 
+            .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
+            .populate('vendorId', 'name gstNumber')
             .sort({ expenseDate: -1 });
 
         res.json(expenses);
@@ -95,9 +104,9 @@ router.get('/all', auth, async (req, res) => {
             const myProjects = await Project.find({ projectLead: req.user.id }).select('name');
             const myProjectNames = myProjects.map(p => p.name);
 
-            query = { 
+            query = {
                 expenseType: 'Project Expense',
-                projectName: { $in: myProjectNames } 
+                projectName: { $in: myProjectNames }
             };
         }
 
@@ -105,6 +114,7 @@ router.get('/all', auth, async (req, res) => {
             .populate('submittedBy', 'name email employeeId')
             .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
+            .populate('vendorId', 'name gstNumber')
             .sort({ expenseDate: -1 });
 
         res.json(expenses);
@@ -118,7 +128,10 @@ router.get('/all', auth, async (req, res) => {
 // @desc    Get a single expense by ID (Used for Edit Page)
 router.get('/:id', auth, async (req, res) => {
     try {
-        const expense = await Expense.findById(req.params.id).populate('paymentSourceId', 'name');
+        const expense = await Expense.findById(req.params.id)
+            .populate('paymentSourceId', 'name')
+            .populate('vendorId', 'name gstNumber');
+
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
 
         if (req.user.role === 'EMPLOYEE' && expense.submittedBy.toString() !== req.user.id) {
@@ -135,7 +148,7 @@ router.get('/:id', auth, async (req, res) => {
 // @route   PUT /api/expenses/:id
 // @desc    Update expense details
 router.put('/:id', auth, upload.fields([
-    { name: 'paymentScreenshots', maxCount: 5 }, 
+    { name: 'paymentScreenshots', maxCount: 5 },
     { name: 'expenseMedia', maxCount: 10 }
 ]), async (req, res) => {
     try {
@@ -156,42 +169,52 @@ router.put('/:id', auth, upload.fields([
 
         if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized' });
 
-        // Still block edits if it was already Approved
-        if (expense.status === 'Approved') {
+        if (expense.status === 'Approved' && req.user.role !== 'ADMIN' && req.user.role !== 'HR') {
             return res.status(400).json({ message: 'Cannot edit an approved expense.' });
         }
 
         const {
-            expenseType, category, expenseDate, amount, 
-            paymentSourceId, projectName, descriptionTags, expenseDetails, notes
+            expenseType, category, expenseDate, amount,
+            paymentSourceId, projectName, descriptionTags, expenseDetails, notes,
+            vendorId, isCompanyPayment // 👇 NEW
         } = req.body;
 
         if (expenseType) expense.expenseType = expenseType;
         if (category) expense.category = category;
         if (expenseDate) expense.expenseDate = expenseDate;
         if (amount) expense.amount = amount;
-        if (paymentSourceId) expense.paymentSourceId = paymentSourceId;
         if (projectName !== undefined) expense.projectName = projectName;
         if (descriptionTags) expense.descriptionTags = descriptionTags;
         if (notes !== undefined) expense.notes = notes;
+        if (vendorId !== undefined) expense.vendorId = vendorId === '' ? null : vendorId;
+
+        // 👇 NEW: Handle Payment Method Switch on Edit
+        if (isCompanyPayment !== undefined) {
+            const isCorpPayment = isCompanyPayment === 'true' || isCompanyPayment === true;
+            expense.isCompanyPayment = isCorpPayment;
+            expense.paymentSourceId = isCorpPayment ? null : (paymentSourceId || expense.paymentSourceId);
+        } else if (paymentSourceId) {
+            expense.paymentSourceId = paymentSourceId;
+        }
 
         if (expenseDetails) {
-            try { expense.expenseDetails = JSON.parse(expenseDetails); } 
+            try { expense.expenseDetails = JSON.parse(expenseDetails); }
             catch (e) { console.error("Error parsing expenseDetails"); }
         }
 
         if (req.files && req.files['paymentScreenshots']) {
             const proofPromises = req.files['paymentScreenshots'].map(file => uploadToS3(file));
-            expense.paymentScreenshotUrls = await Promise.all(proofPromises); 
+            expense.paymentScreenshotUrls = await Promise.all(proofPromises);
         }
         if (req.files && req.files['expenseMedia']) {
             const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
             expense.expenseMediaUrls = await Promise.all(uploadPromises);
         }
 
-        // 👇 FIXED: Reset status to Pending and wipe out the old admin feedback
-        expense.status = 'Pending';
-        expense.adminFeedback = ''; 
+        if (expense.status === 'Pending' || expense.status === 'Returned') {
+            expense.status = 'Pending';
+            expense.adminFeedback = '';
+        }
 
         await expense.save();
         res.json(expense);
@@ -221,7 +244,7 @@ router.delete('/:id', auth, async (req, res) => {
 // @desc    Approve/Reject/Return expense & Auto-Sync Inventory
 router.put('/:id/status', auth, async (req, res) => {
     try {
-        const { status, adminFeedback } = req.body; 
+        const { status, adminFeedback } = req.body;
         const expense = await Expense.findById(req.params.id).populate('submittedBy', 'name email');
 
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
@@ -245,30 +268,33 @@ router.put('/:id/status', auth, async (req, res) => {
 
         // If Approved: Deduct Wallet & Sync Inventory
         if (status === 'Approved') {
-            // 1. Wallet Deduction
-            let wallet = await Wallet.findOne({ userId: expense.paymentSourceId });
-            if (!wallet) {
-                wallet = new Wallet({ userId: expense.paymentSourceId, balance: 0 });
-            }
-            wallet.balance -= expense.amount;
-            await wallet.save();
 
-            await WalletTransaction.create({
-                userId: expense.paymentSourceId,
-                amount: expense.amount,
-                type: 'Debit',
-                description: `Expense Approved: ${expense.category} - ${expense.projectName || 'General'}`,
-                performedBy: req.user.id
-            });
+            // 1. 👇 FIXED LOGIC: Skip wallet deduction ONLY if it's a Company Payment
+            if (!expense.isCompanyPayment) {
+                let wallet = await Wallet.findOne({ userId: expense.paymentSourceId });
+                if (!wallet) {
+                    wallet = new Wallet({ userId: expense.paymentSourceId, balance: 0 });
+                }
+                wallet.balance -= expense.amount;
+                await wallet.save();
+
+                await WalletTransaction.create({
+                    userId: expense.paymentSourceId,
+                    amount: expense.amount,
+                    type: 'Debit',
+                    description: `Expense Approved: ${expense.category} - ${expense.projectName || 'General'}`,
+                    performedBy: req.user.id
+                });
+            }
 
             // 2. Auto-Sync to Inventory
             if (expense.category === 'Product / Item Purchase' && !expense.inventorySynced) {
                 const details = expense.expenseDetails;
-                
+
                 if (details && details.inventoryItemStatus && details.inventoryItemStatus !== 'Do Not Track') {
                     const invStatus = details.inventoryItemStatus;
                     const qty = Number(details.quantity) || 1;
-                    
+
                     let existingPool = null;
                     if (invStatus === 'Available') {
                         existingPool = await Inventory.findOne({
@@ -287,7 +313,6 @@ router.put('/:id/status', auth, async (req, res) => {
                     let linkedInvId;
 
                     if (existingPool) {
-                        // Merge with existing
                         existingPool.quantity += qty;
                         if (expense.expenseMediaUrls && expense.expenseMediaUrls.length > 0) {
                             const combined = new Set([...existingPool.mediaUrls, ...expense.expenseMediaUrls]);
@@ -296,7 +321,6 @@ router.put('/:id/status', auth, async (req, res) => {
                         await existingPool.save();
                         linkedInvId = existingPool._id;
                     } else {
-                        // Create brand new asset
                         const newAsset = new Inventory({
                             itemName: details.productName,
                             quantity: qty,
@@ -305,7 +329,7 @@ router.put('/:id/status', auth, async (req, res) => {
                             assignedTo: invStatus === 'Assigned' ? details.inventoryAssignedTo : null,
                             mediaUrls: expense.expenseMediaUrls || [],
                             createdBy: req.user.id,
-                            linkedExpenseId: expense._id 
+                            linkedExpenseId: expense._id
                         });
                         await newAsset.save();
                         linkedInvId = newAsset._id;
@@ -317,14 +341,13 @@ router.put('/:id/status', auth, async (req, res) => {
                     expense.inventorySynced = true;
                 }
             }
-        } 
-        // 👇 FIXED: Handle "Returned" or "Rejected" feedback saving
+        }
         else if (status === 'Returned' || status === 'Rejected') {
             expense.adminFeedback = adminFeedback || '';
         }
 
         expense.status = status;
-        expense.approvedBy = req.user.id; 
+        expense.approvedBy = req.user.id;
         await expense.save();
 
         res.json(expense);

@@ -13,27 +13,27 @@ import api, { SERVER_URL } from '../utils/api';
 const Expenses = () => {
     const navigate = useNavigate();
     const [expenses, setExpenses] = useState([]);
-    
-    const [baseExpenses, setBaseExpenses] = useState([]); 
-    const [filteredExpenses, setFilteredExpenses] = useState([]); 
-    
+
+    const [baseExpenses, setBaseExpenses] = useState([]);
+    const [filteredExpenses, setFilteredExpenses] = useState([]);
+
     const [loading, setLoading] = useState(true);
     const [walletBalance, setWalletBalance] = useState(0);
 
     const [filterType, setFilterType] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
-    
-    const [statusFilter, setStatusFilter] = useState('All'); 
+
+    const [statusFilter, setStatusFilter] = useState('All');
 
     useEffect(() => {
-        fetchExpenses(); 
+        fetchExpenses();
     }, []);
 
     const fetchExpenses = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/expenses'); 
+            const res = await api.get('/expenses');
             setExpenses(res.data);
             setBaseExpenses(res.data);
             setFilteredExpenses(res.data);
@@ -54,7 +54,7 @@ const Expenses = () => {
     };
 
     useEffect(() => {
-        let result = expenses; 
+        let result = expenses;
         const now = new Date();
         now.setHours(23, 59, 59, 999);
 
@@ -74,7 +74,7 @@ const Expenses = () => {
             );
         }
 
-        setBaseExpenses(result); 
+        setBaseExpenses(result);
 
         if (statusFilter !== 'All') {
             result = result.filter(p => p.status === statusFilter);
@@ -108,7 +108,7 @@ const Expenses = () => {
             fileData.forEach((url, index) => {
                 const fullUrl = getFileUrl(url);
                 const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
-                const isPdf = url.toLowerCase().endsWith('.pdf'); 
+                const isPdf = url.toLowerCase().endsWith('.pdf');
 
                 let mediaElement = '';
                 if (isVideo) {
@@ -174,7 +174,7 @@ const Expenses = () => {
 
             {/* --- MINIMALIST SUMMARY METRICS & FILTERS --- */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '25px', alignItems: 'stretch' }}>
-                
+
                 {/* Wallet Pill */}
                 <div style={{ background: walletBalance < 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${walletBalance < 0 ? '#fecaca' : '#bbf7d0'}`, padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '160px', gap: '4px' }}>
                     <div style={{ fontSize: '12px', color: walletBalance < 0 ? '#dc2626' : '#16a34a', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -191,7 +191,7 @@ const Expenses = () => {
                 {/* Minimalist Filter Pills */}
                 <div style={getMinimalCardStyle('Pending', '#d97706')} onClick={() => handleCardClick('Pending')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }}/> Pending
+                        <FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }} /> Pending
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {pendingTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{pendingExps.length} items</div>
@@ -199,7 +199,7 @@ const Expenses = () => {
 
                 <div style={getMinimalCardStyle('Approved', '#16a34a')} onClick={() => handleCardClick('Approved')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }}/> Accepted
+                        <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }} /> Accepted
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {approvedTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{approvedExps.length} items</div>
@@ -207,7 +207,7 @@ const Expenses = () => {
 
                 <div style={getMinimalCardStyle('Returned', '#ea580c')} onClick={() => handleCardClick('Returned')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }}/> Returned
+                        <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }} /> Returned
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {returnedTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{returnedExps.length} items</div>
@@ -215,7 +215,7 @@ const Expenses = () => {
 
                 <div style={getMinimalCardStyle('Rejected', '#dc2626')} onClick={() => handleCardClick('Rejected')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }}/> Rejected
+                        <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }} /> Rejected
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {rejectedTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{rejectedExps.length} items</div>
@@ -265,7 +265,7 @@ const Expenses = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            
+
                             {filteredExpenses.length === 0 ? (
                                 <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
                             ) : (
@@ -287,7 +287,7 @@ const Expenses = () => {
                                         </td>
 
                                         <td data-label="Payment Source">
-                                            <div className="text-small">{item.paymentSourceId?.name || 'Myself'}</div>
+                                            <div className="text-small">{item.isCompanyPayment ? 'Company Account' : item.paymentSourceId?.name || 'Myself'}</div>
                                         </td>
 
                                         <td data-label="Status">
