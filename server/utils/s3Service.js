@@ -11,8 +11,7 @@ const s3Client = new S3Client({
     }
 });
 
-// We added `subFolder` here, defaulting to 'Purchase' if not provided
-const uploadToS3 = async (file, subFolder = 'Purchase') => {
+const uploadToS3 = async (file, subFolder = 'Default') => {
     const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(4).toString('hex');
     let fileBuffer = file.buffer;
     let mimeType = file.mimetype;
