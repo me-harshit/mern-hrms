@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFolderOpen, faPlus, faEdit, faSearch, faCalendarAlt, faUserTie } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
+import '../../styles/App.css';
 
 const Projects = () => {
     const [projects, setProjects] = useState([]);

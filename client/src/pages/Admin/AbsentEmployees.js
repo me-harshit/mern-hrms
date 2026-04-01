@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserTimes, faSearch, faFilter, faArrowLeft, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
+import '../../styles/App.css';
 
 const AbsentEmployees = () => {
     const navigate = useNavigate();

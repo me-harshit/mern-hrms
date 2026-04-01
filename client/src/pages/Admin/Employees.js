@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../utils/api';
+import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faUserTie, faEdit, faCalendarAlt, faSearch, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
+import '../../styles/App.css';
 
 const Employees = () => {
     const [employees, setEmployees] = useState([]);

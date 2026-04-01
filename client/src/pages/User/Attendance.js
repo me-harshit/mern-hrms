@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api'; 
+import api from '../../utils/api'; 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHistory, faClock, faFilter, faSearch } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css'; 
+import '../../styles/App.css'; 
 
 const Attendance = () => {
     // --- STATE ---

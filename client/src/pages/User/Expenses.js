@@ -6,9 +6,9 @@ import {
     faBoxOpen, faPlus, faSearch, faEdit, faFileInvoice,
     faImage, faFilter, faCheckCircle, faClock, faTimesCircle, faUndo, faWallet
 } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
-import '../styles/expenses.css';
-import api, { SERVER_URL } from '../utils/api';
+import '../../styles/App.css';
+import '../../styles/expenses.css';
+import api, { SERVER_URL } from '../../utils/api';
 
 const Expenses = () => {
     const navigate = useNavigate();

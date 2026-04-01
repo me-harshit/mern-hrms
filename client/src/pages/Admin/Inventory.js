@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import api, { SERVER_URL } from '../utils/api';
+import api, { SERVER_URL } from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faBoxes, faPlus, faSearch, faFilter, faCheckCircle, 
     faUserCheck, faExclamationTriangle, faBan, faEdit 
 } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
-import '../styles/expenses.css'; 
+import '../../styles/App.css';
+import '../../styles/expenses.css'; 
 
 const Inventory = () => {
     const navigate = useNavigate();

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import api, { SERVER_URL } from '../utils/api';
+import api, { SERVER_URL } from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faLayerGroup, faSpinner, faFileVideo, faFilePdf, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
-import '../styles/App.css';
-import '../styles/expenses.css';
+import '../../styles/App.css';
+import '../../styles/expenses.css';
 
 const EditInventory = () => {
     const { id } = useParams();

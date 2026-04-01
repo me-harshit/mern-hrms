@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import api from '../utils/api'; 
+import api from '../../utils/api'; 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRobot, faPaperPlane, faCircleNotch, faTrash, faUser } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css'; 
-import '../styles/Chat.css'; 
+import '../../styles/App.css'; 
+import '../../styles/Chat.css'; 
 
 const INITIAL_GREETING = 'Hello! I am your HR & ERP AI Assistant. You can ask me about employee leaves, attendance, inventory, or projects.';
 

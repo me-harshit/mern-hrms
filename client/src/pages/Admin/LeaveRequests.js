@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api'; 
+import api from '../../utils/api'; 
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faTimes, faSearch, faFilter } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
+import '../../styles/App.css';
 
 const LeaveRequests = () => {
     const [requests, setRequests] = useState([]);

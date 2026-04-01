@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
-import api, { SERVER_URL } from '../utils/api';
+import api, { SERVER_URL } from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWallet, faRupeeSign, faSpinner, faCheckCircle, faTimes, faListCheck, faHistory, faEye, faFileInvoice } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
-import '../styles/App.css';
+import '../../styles/App.css';
 
 const Reimbursements = () => {
     // 👇 NEW: Tab State

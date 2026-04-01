@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { faPlus, faCalendarDay, faCheckCircle, faTimesCircle, faClock, faWallet } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
+import '../../styles/App.css';
 
 const Leaves = () => {
     const [balances, setBalances] = useState({ CL: 0, EL: 0 });

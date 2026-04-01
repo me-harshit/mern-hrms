@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
-import '../styles/App.css';
-import '../styles/expenses.css'; 
+import '../../styles/App.css';
+import '../../styles/expenses.css'; 
 
 const AddInventory = () => {
     const navigate = useNavigate();

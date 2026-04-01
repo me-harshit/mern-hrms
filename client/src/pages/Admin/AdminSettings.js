@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCog, faSave, faClock, faCalendarAlt, faPlus, faTrash } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
+import '../../styles/App.css';
 
 const AdminSettings = () => {
     const [loading, setLoading] = useState(true);

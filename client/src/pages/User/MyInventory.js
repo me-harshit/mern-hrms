@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faLaptopHouse, 
@@ -8,9 +8,8 @@ import {
     faBoxOpen, 
     faStickyNote 
 } from '@fortawesome/free-solid-svg-icons';
-import '../styles/App.css';
-// 👇 IMPORT YOUR NEW CSS FILE 👇
-import '../styles/inventory.css'; 
+import '../../styles/App.css';
+import '../../styles/inventory.css'; 
 
 const MyInventory = () => {
     const [items, setItems] = useState([]);
