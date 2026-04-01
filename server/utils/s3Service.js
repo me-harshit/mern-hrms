@@ -18,11 +18,9 @@ const uploadToS3 = async (file, subFolder = 'Purchase') => {
     let mimeType = file.mimetype;
     let originalExt = path.extname(file.originalname).toLowerCase();
     
-    // Dynamic Folder Structure!
     let s3Key = `HRMS/${subFolder}/${uniqueSuffix}${originalExt}`;
 
     if (mimeType.startsWith('image/')) {
-        // For Profile Pics & Receipts, 800px is usually plenty of resolution!
         fileBuffer = await sharp(file.buffer)
             .resize({ width: 800, withoutEnlargement: true })
             .jpeg({ quality: 80 })

@@ -20,7 +20,7 @@ router.post('/upload-avatar', auth, upload.single('avatar'), async (req, res) =>
 
         // Update the user's record in the DB
         const user = await User.findById(req.user.id);
-        user.profilePic = fileUrl; // This is now an AWS URL!
+        user.profilePic = fileUrl;
         await user.save();
 
         res.json({ filePath: fileUrl });
@@ -37,12 +37,12 @@ router.post('/login', async (req, res) => {
 
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ message: 'Invalid Credentials' });
+            return res.status(400).json({ message: 'Invalid Email' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid Credentials' });
+            return res.status(400).json({ message: 'Invalid Password' });
         }
 
         const payload = {
@@ -66,7 +66,7 @@ router.post('/login', async (req, res) => {
                         name: user.name, 
                         role: user.role,
                         isPurchaser: user.isPurchaser,
-                        profilePic: user.profilePic // Good practice to send this on login too
+                        profilePic: user.profilePic
                     } 
                 });
             }
