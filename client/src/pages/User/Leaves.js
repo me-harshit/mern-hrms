@@ -80,8 +80,18 @@ const Leaves = () => {
 
         if (formValues) {
             try {
+                Swal.fire({
+                    title: 'Processing...',
+                    text: 'Submitting request and notifying HR.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
                 await api.post('/leaves/apply', formValues);
-                Swal.fire('Submitted!', 'Your leave request has been sent to HR.', 'success');
+
+                Swal.fire('Submitted!', 'Your leave request has been sent and HR has been notified.', 'success');
                 fetchLeaves();
             } catch (err) {
                 Swal.fire('Error', err.response?.data?.message || 'Failed to submit request.', 'error');

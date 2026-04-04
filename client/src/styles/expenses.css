@@ -1,9 +1,11 @@
 /* ==========================================================================
-   EXPENSE SPECIFIC STYLES
+   EXPENSE MODULE STYLES
    ========================================================================== */
 
-/* --- Layout & Container --- */
-.expense-form-card { /* 👇 Changed from purchase-form-card */
+/* --------------------------------------------------------------------------
+   1. Layout & Containers
+   -------------------------------------------------------------------------- */
+.expense-form-card {
     background: white;
     border-radius: 12px;
     padding: 20px; 
@@ -11,7 +13,7 @@
     max-width: 1000px;
 }
 
-.expense-grid { /* 👇 Changed from purchase-grid */
+.expense-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr); /* Forces 2 items per row on Desktop */
     gap: 20px;
@@ -22,7 +24,6 @@
     grid-column: span 2; /* Forces full width for specific fields like Description */
 }
 
-/* --- Form Section Cards --- */
 .expense-form-section {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
@@ -52,7 +53,10 @@
     margin-bottom: 0 !important;
 }
 
-/* --- Modern Segmented Toggle for Expense Type --- */
+/* --------------------------------------------------------------------------
+   2. Form Elements & Toggles
+   -------------------------------------------------------------------------- */
+/* Modern Segmented Toggle for Expense Type */
 .expense-type-toggle {
     display: flex;
     background-color: #e2e8f0; 
@@ -86,7 +90,6 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-/* --- Input Helpers --- */
 .custom-select {
     margin: 0 !important;
     padding: 0 10px !important;
@@ -101,7 +104,6 @@
     font-weight: 600;
 }
 
-/* Kept old class for backwards compatibility, added expense-submit-btn for future */
 .purchase-submit-btn,
 .expense-submit-btn {
     width: 100%;
@@ -111,7 +113,10 @@
     justify-content: center;
 }
 
-/* --- File Upload Drag & Drop Look --- */
+/* --------------------------------------------------------------------------
+   3. File Upload & Media Gallery
+   -------------------------------------------------------------------------- */
+/* File Upload Drag & Drop Look */
 .expense-file-area {
     background: white;
     border: 2px dashed #cbd5e1;
@@ -133,7 +138,7 @@
     font-weight: 600;
 }
 
-/* --- Upload Progress Bar --- */
+/* Upload Progress Bar */
 .upload-progress-container {
     width: 100%;
     background-color: #e2e8f0;
@@ -164,7 +169,7 @@
     mix-blend-mode: difference; 
 }
 
-/* --- Edit Page Existing File Gallery --- */
+/* Edit Page Existing File Gallery */
 .existing-file-gallery {
     display: flex;
     flex-wrap: wrap;
@@ -232,9 +237,9 @@
     font-weight: 600;
 }
 
-/* ==========================================================================
-   SIDEBAR DRAWER STYLES
-   ========================================================================== */
+/* --------------------------------------------------------------------------
+   4. Sidebar Drawer Styles
+   -------------------------------------------------------------------------- */
 .sidebar-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -343,13 +348,91 @@
     word-wrap: break-word;
 }
 
-/* --- Mobile Responsiveness --- */
+/* --------------------------------------------------------------------------
+   5. Admin Dashboard Analytics & Charts
+   -------------------------------------------------------------------------- */
+.dashboard-filter-bar {
+    background: #ffffff;
+    padding: 15px 20px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.dashboard-charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.chart-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.chart-header {
+    font-size: 15px;
+    color: #0f172a;
+    font-weight: 700;
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chart-container {
+    width: 100%;
+    height: 300px;
+    flex-grow: 1;
+    position: relative;
+}
+
+/* Force Recharts legend to be compact and bottom-right aligned */
+.recharts-default-legend {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.recharts-legend-item {
+    margin-bottom: 6px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.recharts-legend-item-text {
+    color: #475569 !important;
+    font-weight: 500;
+}
+
+/* --------------------------------------------------------------------------
+   6. Mobile Responsiveness
+   -------------------------------------------------------------------------- */
 @media screen and (max-width: 768px) {
-    .expense-form-card { /* 👇 Changed from purchase-form-card */
+    .expense-form-card {
         padding: 15px;
     }
 
-    .expense-grid { /* 👇 Changed from purchase-grid */
+    .expense-grid {
         grid-template-columns: 1fr; /* Stack everything in 1 column on mobile */
         gap: 15px;
     }
@@ -365,5 +448,9 @@
     
     .expense-type-toggle {
         flex-direction: column; /* Stack toggles on tiny screens */
+    }
+    
+    .dashboard-charts-grid {
+        grid-template-columns: 1fr; /* Stack charts vertically on mobile */
     }
 }

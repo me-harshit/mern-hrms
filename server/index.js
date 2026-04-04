@@ -5,6 +5,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 
+require('./cron/attendanceCron')
+
 dotenv.config();
 
 // --- 1. IMPORT ROUTES ---
@@ -22,6 +24,7 @@ const inventoryRoute = require('./routes/inventory');
 const expenseRoute = require('./routes/expenses');
 const reimbursementRoutes = require('./routes/reimbursements');
 const vendorRoutes = require('./routes/vendors');
+const wfh = require('./routes/wfh');
 
 const app = express();
 
@@ -47,6 +50,7 @@ app.use('/api/inventory', inventoryRoute);
 app.use('/api/expenses', expenseRoute);
 app.use('/api/reimbursements', reimbursementRoutes);
 app.use('/api/vendors', vendorRoutes);
+app.use('/api/wfh', wfh);
 
 
 app.get('/', (req, res) => res.send("GTS HRMS API is running..."));

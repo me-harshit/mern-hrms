@@ -11,7 +11,8 @@ import Profile from './pages/User/Profile';
 import Attendance from './pages/User/Attendance';
 import Employees from './pages/Admin/Employees';
 import Leaves from './pages/User/Leaves';
-import LeaveRequests from './pages/Admin/LeaveRequests';
+import EmployeeRequests from './pages/Admin/EmployeeRequests';
+import WorkFromHome from './pages/User/WorkFromHome';
 import CalendarPage from './pages/CalendarPage';
 import AdminSettings from './pages/Admin/AdminSettings';
 import AttendanceLogs from './pages/Admin/AttendanceLogs';
@@ -19,6 +20,7 @@ import AbsentEmployees from './pages/Admin/AbsentEmployees';
 import EmployeeProfile from './pages/Admin/EmployeeProfile';
 import Expenses from './pages/User/Expenses';
 import AdminExpenses from './pages/Admin/AdminExpenses';
+import AllExpenses from './pages/Admin/AllExpenses';
 import RawPunches from './pages/Admin/RawPunches';
 import AddExpense from './pages/User/AddExpense';
 import EditExpense from './pages/User/EditExpense';
@@ -90,6 +92,7 @@ function App() {
             <Route path="/absent-employees" element={<AbsentEmployees />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
+            <Route path="/wfh" element={<WorkFromHome />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/add-expense" element={<AddExpense />} />
             <Route path="/edit-expense/:id" element={<EditExpense />} />
@@ -116,8 +119,8 @@ function App() {
               element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <RawPunches /> : <Navigate to="/dashboard" />}
             />
             <Route
-              path="/leave-requests"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <LeaveRequests /> : <Navigate to="/dashboard" />}
+              path="/Employee-requests"
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <EmployeeRequests /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/projects"
@@ -132,6 +135,10 @@ function App() {
             <Route
               path="/admin-settings"
               element={userRole === 'ADMIN' ? <AdminSettings /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/all-expenses"
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AllExpenses /> : <Navigate to="/dashboard" />}
             />
 
             {/* LOCKED TO HR & ADMIN */}

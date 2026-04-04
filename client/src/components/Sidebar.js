@@ -81,6 +81,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                     <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
                 </Link>
 
+                <Link to="/wfh" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/wfh' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faLaptopHouse} className="nav-icon" /> <span>Work From Home</span>
+                </Link>
+
                 {hasInventory && (
                     <Link to="/my-inventory" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/my-inventory' ? 'active' : ''}`}>
                         <FontAwesomeIcon icon={faLaptopHouse} className="nav-icon" /> <span>My Inventory</span>
@@ -113,8 +117,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                             <FontAwesomeIcon icon={faCalendarCheck} className="nav-icon" /> <span>Attendance Logs</span>
                         </Link>
 
-                        <Link to="/leave-requests" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/leave-requests' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Requests</span>
+                        <Link to="/Employee-requests" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/Employee-requests' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Employee Requests</span>
                         </Link>
 
                         <Link to="/projects" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/projects' ? 'active' : ''}`}>

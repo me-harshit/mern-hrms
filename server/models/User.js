@@ -8,10 +8,8 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, enum: ['EMPLOYEE', 'ADMIN', 'HR', 'MANAGER'], default: 'EMPLOYEE' },
     
-    // 👇 NEW FIELDS ADDED HERE 👇
     shiftType: { type: String, enum: ['DAY', 'NIGHT'], default: 'DAY' }, 
     dateOfBirth: { type: Date }, 
-    // 👆 ======================= 👆
 
     isPurchaser: { type: Boolean, default: false },
     status: { type: String, default: 'ACTIVE' },
