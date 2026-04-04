@@ -42,8 +42,10 @@ const Attendance = () => {
     };
 
     // --- HELPER: CALCULATE WORKING HOURS ---
-    const calculateDuration = (start, end) => {
-        if (!start || !end) return <span className="text-muted italic">Ongoing</span>;
+    const calculateDuration = (start, end, status) => {
+        // 👇 Handle Absent / On Leave / Ongoing specifically
+        if (status === 'Absent' || status === 'On Leave') return "0h 0m";
+        if (!start || !end) return <span className="text-muted italic">0h 0m (Ongoing)</span>;
         
         const startTime = new Date(start);
         const endTime = new Date(end);
@@ -69,48 +71,51 @@ const Attendance = () => {
         return `${m}m`;
     };
 
-    // --- FILTER LOGIC ---
-    const filteredLogs = logs.filter(log => {
-        // 1. Search Filter (Search by Date, Status, or Note)
-        const searchLower = searchTerm.toLowerCase();
-        const matchesSearch = 
-            log.date.toLowerCase().includes(searchLower) || 
-            log.status.toLowerCase().includes(searchLower) || 
-            (log.note && log.note.toLowerCase().includes(searchLower));
-        
-        if (!matchesSearch) return false;
+    // --- FILTER & SORT LOGIC ---
+    const filteredLogs = logs
+        .filter(log => {
+            // 1. Search Filter (Search by Date, Status, or Note)
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = 
+                log.date.toLowerCase().includes(searchLower) || 
+                log.status.toLowerCase().includes(searchLower) || 
+                (log.note && log.note.toLowerCase().includes(searchLower));
+            
+            if (!matchesSearch) return false;
 
-        // 2. Date Filter
-        if (filterType === 'All') return true;
+            // 2. Date Filter
+            if (filterType === 'All') return true;
 
-        const logDate = parseDateStr(log.date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+            const logDate = parseDateStr(log.date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-        if (filterType === 'Today') {
-            return logDate.getTime() === today.getTime();
-        }
-        if (filterType === 'Week') {
-            const lastWeek = new Date(today);
-            lastWeek.setDate(today.getDate() - 7);
-            return logDate >= lastWeek && logDate <= today;
-        }
-        if (filterType === 'Month') {
-            return logDate.getMonth() === today.getMonth() && logDate.getFullYear() === today.getFullYear();
-        }
-        if (filterType === 'Custom') {
-            if (customDates.from && customDates.to) {
-                const fromDate = new Date(customDates.from);
-                fromDate.setHours(0, 0, 0, 0);
-                const toDate = new Date(customDates.to);
-                toDate.setHours(23, 59, 59, 999);
-                return logDate >= fromDate && logDate <= toDate;
+            if (filterType === 'Today') {
+                return logDate.getTime() === today.getTime();
             }
-            return true; 
-        }
+            if (filterType === 'Week') {
+                const lastWeek = new Date(today);
+                lastWeek.setDate(today.getDate() - 7);
+                return logDate >= lastWeek && logDate <= today;
+            }
+            if (filterType === 'Month') {
+                return logDate.getMonth() === today.getMonth() && logDate.getFullYear() === today.getFullYear();
+            }
+            if (filterType === 'Custom') {
+                if (customDates.from && customDates.to) {
+                    const fromDate = new Date(customDates.from);
+                    fromDate.setHours(0, 0, 0, 0);
+                    const toDate = new Date(customDates.to);
+                    toDate.setHours(23, 59, 59, 999);
+                    return logDate >= fromDate && logDate <= toDate;
+                }
+                return true; 
+            }
 
-        return true;
-    });
+            return true;
+        })
+        // 👇 Sort by Date Descending (Newest first)
+        .sort((a, b) => parseDateStr(b.date) - parseDateStr(a.date));
 
     if (loading) return <div className="main-content">Loading Attendance...</div>;
 
@@ -216,7 +221,8 @@ const Attendance = () => {
                                     </td>
                                     
                                     <td data-label="Work Hours" className="fw-bold text-primary">
-                                        {calculateDuration(log.checkIn, log.checkOut)}
+                                        {/* 👇 Pass status to logic */}
+                                        {calculateDuration(log.checkIn, log.checkOut, log.status)}
                                     </td>
 
                                     <td data-label="Break Time" className="fw-bold text-orange">
@@ -224,7 +230,13 @@ const Attendance = () => {
                                     </td>
 
                                     <td data-label="Status">
-                                        <span className={`status-badge ${log.status === 'Half Day' || log.status === 'Late' ? 'warning' : 'success'}`}>
+                                        {/* 👇 Apply red (danger) for Absent */}
+                                        <span className={`status-badge ${
+                                            log.status === 'Absent' ? 'danger' :
+                                            log.status === 'On Leave' ? 'primary' :
+                                            (log.status === 'Half Day' || log.status === 'Late') ? 'warning' : 
+                                            'success'
+                                        }`}>
                                             {log.status}
                                         </span>
                                     </td>

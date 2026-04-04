@@ -1,114 +1,105 @@
-require('dotenv').config(); // Load environment variables (MONGO_URI)
+require('dotenv').config();
 const mongoose = require('mongoose');
 
-// Import your models
 const User = require('./models/User');
 const Attendance = require('./models/Attendance');
-let Leave = null;
-try {
-    Leave = require('./models/Leave');
-} catch (e) {
-    console.log("Leave model not found. Proceeding without leave checks.");
-}
 
-// Helper: Format standard Date object into your DB format (D/M/YYYY)
-const formatToDBDate = (dateObj) => {
-    return `${dateObj.getDate()}/${dateObj.getMonth() + 1}/${dateObj.getFullYear()}`;
-};
+let Leave = null, Wfh = null;
+try { Leave = require('./models/Leave'); } catch (e) {}
+try { Wfh = require('./models/Wfh'); } catch (e) {}
+
+const formatToDBDate = (dateObj) => `${dateObj.getDate()}/${dateObj.getMonth() + 1}/${dateObj.getFullYear()}`;
 
 const runSync = async () => {
-    // 1. Get the date argument from the terminal command
-    const inputDate = process.argv[2]; // Expected format: YYYY-MM-DD
+    const inputDate = process.argv[2]; 
 
     if (!inputDate) {
-        console.error("❌ Please provide a date in YYYY-MM-DD format.");
-        console.error("👉 Example: node syncAbsentees.js 2026-04-01");
+        console.error("❌ Please provide a date. Example: node syncAbsentees.js 2026-04-01");
         process.exit(1);
     }
 
-    // Parse input date
     const targetDateObj = new Date(inputDate);
-    targetDateObj.setHours(0, 0, 0, 0); // Normalize time
+    const startOfDay = new Date(targetDateObj); startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDateObj); endOfDay.setHours(23, 59, 59, 999);
 
     if (isNaN(targetDateObj.getTime())) {
         console.error("❌ Invalid date format. Use YYYY-MM-DD.");
         process.exit(1);
     }
 
-    // 2. Skip Sundays (0 = Sunday)
     if (targetDateObj.getDay() === 0) {
-        console.log(`[INFO] ${inputDate} is a Sunday. Skipping absent marking.`);
+        console.log(`[INFO] ${inputDate} is a Sunday. Skipping.`);
         process.exit(0);
     }
 
     const targetDateStr = formatToDBDate(targetDateObj);
-    console.log(`\n🚀 [START] Syncing absentees for Date: ${targetDateStr}...`);
+    console.log(`\n🚀 [START] Syncing statuses for Date: ${targetDateStr}...`);
 
     try {
-        // Connect to the database
-        if (!process.env.MONGO_URI) {
-            throw new Error("MONGO_URI is not defined in your .env file");
-        }
+        if (!process.env.MONGO_URI) throw new Error("MONGO_URI is missing");
         await mongoose.connect(process.env.MONGO_URI);
         console.log("✅ Connected to Database.");
 
-        // 3. Get active employees (Exclude Admins)
         const employees = await User.find({ status: 'ACTIVE', role: { $ne: 'ADMIN' } }).select('_id name employeeId joiningDate');
         const employeeIds = employees.map(emp => emp._id);
 
-        console.log(`Found ${employees.length} active employees. Checking records...`);
+        const attendances = await Attendance.find({ date: targetDateStr, userId: { $in: employeeIds } });
 
-        // 4. Fetch Attendances for this exact date
-        const attendances = await Attendance.find({ 
-            date: targetDateStr, 
-            userId: { $in: employeeIds } 
-        });
-
-        // 5. Fetch Approved Leaves overlapping this date
-        let leaves = [];
+        let leaves = [], wfhs = [];
         if (Leave) {
-            // To ensure the day falls within the leave window
             leaves = await Leave.find({
-                status: 'Approved',
-                userId: { $in: employeeIds },
-                fromDate: { $lte: targetDateObj },
-                toDate: { $gte: targetDateObj }
+                status: 'Approved', userId: { $in: employeeIds },
+                fromDate: { $lte: endOfDay }, toDate: { $gte: startOfDay }
+            });
+        }
+        if (Wfh) {
+            wfhs = await Wfh.find({
+                status: 'Approved', userId: { $in: employeeIds },
+                fromDate: { $lte: endOfDay }, toDate: { $gte: startOfDay }
             });
         }
 
-        let markedCount = 0;
+        let stats = { Absent: 0, Leave: 0, WFH: 0 };
 
-        // 6. Iterate and Mark
         for (const emp of employees) {
-            // Protect against marking new hires absent before they joined
-            if (emp.joiningDate) {
-                const joinDate = new Date(emp.joiningDate);
-                joinDate.setHours(0, 0, 0, 0);
-                if (targetDateObj < joinDate) continue; 
-            }
+            if (emp.joiningDate && targetDateObj < new Date(new Date(emp.joiningDate).setHours(0,0,0,0))) continue;
 
             const hasPunched = attendances.some(a => a.userId.toString() === emp._id.toString());
-            const isOnLeave = leaves.some(l => l.userId.toString() === emp._id.toString());
+            
+            if (!hasPunched) {
+                const isOnLeave = leaves.some(l => l.userId.toString() === emp._id.toString());
+                const isOnWfh = wfhs.some(w => w.userId.toString() === emp._id.toString());
 
-            // If no attendance record AND not on leave -> Create Absent Record
-            if (!hasPunched && !isOnLeave) {
+                let finalStatus = 'Absent';
+                let finalNote = 'Manual Script Sync (No punch detected)';
+
+                if (isOnLeave) {
+                    finalStatus = 'On Leave';
+                    finalNote = 'Approved Leave';
+                    stats.Leave++;
+                } else if (isOnWfh) {
+                    finalStatus = 'WFH';
+                    finalNote = 'Approved WFH (No punch detected)';
+                    stats.WFH++;
+                } else {
+                    stats.Absent++;
+                }
+
                 await Attendance.create({
-                    userId: emp._id,
-                    date: targetDateStr,
-                    status: 'Absent',
-                    note: 'Manual Script Sync (No punch detected)',
-                    totalHours: 0
+                    userId: emp._id, date: targetDateStr, status: finalStatus,
+                    note: finalNote, totalHours: 0
                 });
-                markedCount++;
-                console.log(`   🔴 Marked Absent: ${emp.name} (${emp.employeeId || 'N/A'})`);
+                
+                let color = finalStatus === 'Absent' ? '🔴' : finalStatus === 'WFH' ? '🔵' : '🟢';
+                console.log(`   ${color} Logged ${finalStatus}: ${emp.name}`);
             }
         }
 
-        console.log(`\n🎉 [SUCCESS] Script finished. Marked ${markedCount} employees as absent on ${targetDateStr}.`);
+        console.log(`\n🎉 [SUCCESS] Finished! Added: ${stats.Absent} Absences | ${stats.WFH} WFH | ${stats.Leave} Leaves.`);
         process.exit(0);
 
     } catch (err) {
-        console.error("\n❌ [ERROR] An error occurred:", err.message);
+        console.error("\n❌ [ERROR]", err.message);
         process.exit(1);
     }
 };
