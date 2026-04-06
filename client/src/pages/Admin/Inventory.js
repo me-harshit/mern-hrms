@@ -7,58 +7,66 @@ import {
     faBoxes, faPlus, faSearch, faFilter, faCheckCircle, 
     faUserCheck, faExclamationTriangle, faBan, faEdit 
 } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; // 👇 NEW
 import '../../styles/App.css';
 import '../../styles/expenses.css'; 
 
 const Inventory = () => {
     const navigate = useNavigate();
-    const [inventory, setInventory] = useState([]);
-    const [filteredInventory, setFilteredInventory] = useState([]);
-    const [loading, setLoading] = useState(true);
     
+    // --- DATA & PAGINATION STATES ---
+    const [inventory, setInventory] = useState([]);
+    const [stats, setStats] = useState({ totalQty: 0, available: 0, assigned: 0, issues: 0 });
+    const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    // --- FILTERS STATE ---
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
 
+    // 1. Debounce Search
     useEffect(() => {
-        fetchInventory();
-    }, []);
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-    const fetchInventory = async () => {
+    // 2. Reset to Page 1 if filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [statusFilter, debouncedSearch]);
+
+    // 3. Fetch Data
+    useEffect(() => {
+        fetchInventory(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, itemsPerPage, statusFilter, debouncedSearch]);
+
+    const fetchInventory = async (pageToFetch) => {
         setLoading(true);
         try {
-            const res = await api.get('/inventory').catch(() => ({ data: [] })); 
-            setInventory(res.data);
-            setFilteredInventory(res.data);
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch,
+                status: statusFilter
+            };
+            const res = await api.get('/inventory', { params });
+            
+            setInventory(res.data.data);
+            setStats(res.data.stats);
+            setTotalPages(res.data.pagination.totalPages);
+            setTotalRecords(res.data.pagination.totalRecords);
+            setCurrentPage(res.data.pagination.currentPage);
         } catch (err) {
             Swal.fire('Error', 'Failed to load inventory', 'error');
         } finally {
             setLoading(false);
         }
     };
-
-    useEffect(() => {
-        let result = inventory;
-
-        if (statusFilter !== 'All') {
-            result = result.filter(item => item.status === statusFilter);
-        }
-
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            result = result.filter(item =>
-                item.itemName?.toLowerCase().includes(term) ||
-                item.assignedTo?.name?.toLowerCase().includes(term) ||
-                item.storageLocation?.toLowerCase().includes(term)
-            );
-        }
-
-        setFilteredInventory(result);
-    }, [inventory, statusFilter, searchTerm]);
-
-    const totalItems = inventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
-    const availableItems = inventory.filter(i => i.status === 'Available').reduce((sum, item) => sum + (item.quantity || 1), 0);
-    const assignedItems = inventory.filter(i => i.status === 'Assigned').reduce((sum, item) => sum + (item.quantity || 1), 0);
-    const issueItems = inventory.filter(i => ['Damaged', 'Lost'].includes(i.status)).reduce((sum, item) => sum + (item.quantity || 1), 0);
 
     const getStatusBadge = (status) => {
         switch(status) {
@@ -75,7 +83,6 @@ const Inventory = () => {
         return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
     };
 
-    // 👇 FIXED: Reduced popup widths and added max-height to images 👇
     const viewSingleFile = (url, title) => {
         const fullUrl = getFileUrl(url);
         const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
@@ -85,7 +92,7 @@ const Inventory = () => {
             Swal.fire({ 
                 title, 
                 html: `<video src="${fullUrl}" controls style="width:100%; border-radius:6px; max-height:350px; background:#000;"></video>`, 
-                width: '500px', // Reduced from 800px
+                width: '500px', 
                 showCloseButton: true, 
                 showConfirmButton: false 
             });
@@ -93,16 +100,15 @@ const Inventory = () => {
             Swal.fire({ 
                 title, 
                 html: `<iframe src="${fullUrl}" width="100%" height="400px" style="border: none; border-radius: 6px;"></iframe>`, 
-                width: '600px', // Reduced from 800px (PDFs need a bit more width to be readable)
+                width: '600px', 
                 showCloseButton: true, 
                 showConfirmButton: false 
             });
         } else {
             Swal.fire({ 
                 title, 
-                // Render image as HTML to strictly enforce max-height so it doesn't overflow the screen
                 html: `<img src="${fullUrl}" style="width:100%; max-height: 350px; object-fit: contain; border-radius: 6px;" alt="${title}" />`,
-                width: '450px', // Reduced significantly from 800px
+                width: '450px', 
                 showCloseButton: true, 
                 showConfirmButton: false 
             });
@@ -125,25 +131,25 @@ const Inventory = () => {
                 <div className="stat-card theme-blue">
                     <div className="stat-info">
                         <p>Total Assets</p>
-                        <h3>{totalItems}</h3>
+                        <h3>{stats.totalQty}</h3>
                     </div>
                 </div>
                 <div className="stat-card theme-green">
                     <div className="stat-info">
                         <p>Available in Stock</p>
-                        <h3>{availableItems}</h3>
+                        <h3>{stats.available}</h3>
                     </div>
                 </div>
                 <div className="stat-card theme-purple">
                     <div className="stat-info">
                         <p>Assigned to Staff</p>
-                        <h3>{assignedItems}</h3>
+                        <h3>{stats.assigned}</h3>
                     </div>
                 </div>
                 <div className="stat-card theme-red">
                     <div className="stat-info">
                         <p>Damaged / Lost</p>
-                        <h3>{issueItems}</h3>
+                        <h3>{stats.issues}</h3>
                     </div>
                 </div>
             </div>
@@ -179,10 +185,10 @@ const Inventory = () => {
                     <tbody>
                         {loading ? (
                             <tr><td colSpan="5" className="empty-table-message">Loading inventory...</td></tr>
-                        ) : filteredInventory.length === 0 ? (
+                        ) : inventory.length === 0 ? (
                             <tr><td colSpan="5" className="empty-table-message">No assets found.</td></tr>
                         ) : (
-                            filteredInventory.map(item => (
+                            inventory.map(item => (
                                 <tr key={item._id}>
                                     <td data-label="Item Name & Qty">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -190,11 +196,8 @@ const Inventory = () => {
                                                 <img 
                                                     src={getFileUrl(item.mediaUrls[0])} 
                                                     alt="asset" 
-                                                    style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid #e2e8f0', transition: 'transform 0.2s' }} 
+                                                    style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid #e2e8f0' }} 
                                                     onClick={() => viewSingleFile(item.mediaUrls[0], item.itemName)}
-                                                    title="Click to view image"
-                                                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                                 />
                                             ) : (
                                                 <div style={{ width: '40px', height: '40px', borderRadius: '6px', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -254,6 +257,21 @@ const Inventory = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* 👇 Modular Pagination Component */}
+            {!loading && (
+                <Pagination 
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalRecords={totalRecords}
+                    limit={itemsPerPage}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    onLimitChange={(newLimit) => {
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                    }}
+                />
+            )}
         </div>
     );
 };

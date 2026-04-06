@@ -4,101 +4,92 @@ import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faFilter, faArrowLeft, faFingerprint } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; // 👇 NEW: Modular Pagination
 import '../../styles/App.css';
 
 const RawPunches = () => {
     const navigate = useNavigate();
+    
+    // --- DATA & PAGINATION STATES ---
     const [rawLogs, setRawLogs] = useState([]);
-    const [filteredLogs, setFilteredLogs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(15); // Default to 15 for raw logs
 
     // --- FILTERS STATE ---
     const [filterType, setFilterType] = useState('Today');
-    const [searchTerm, setSearchTerm] = useState('');
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
+    
+    // --- SEARCH STATES ---
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
 
+    // 1. Debounce Search
     useEffect(() => {
-        fetchRawLogs();
-    }, []);
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-    const fetchRawLogs = async () => {
+    // 2. Reset to Page 1 if any filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterType, debouncedSearch, customDates]);
+
+    // 3. Fetch Data
+    useEffect(() => {
+        fetchRawLogs(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, itemsPerPage, filterType, debouncedSearch, customDates]);
+
+    const fetchRawLogs = async (pageToFetch) => {
+        if (filterType === 'Custom' && (!customDates.from || !customDates.to)) return;
+
         setLoading(true);
         try {
-            const res = await api.get('/attendance/raw-logs');
-            setRawLogs(res.data);
-            setFilteredLogs(res.data);
+            const now = new Date();
+            let start = new Date(now);
+            let end = new Date(now);
+
+            // We pass the exact timestamps to the backend instead of formatting strings,
+            // because AttendanceLog uses a strict Mongoose timestamp for sorting/filtering.
+            if (filterType === 'Today') {
+                start.setHours(0, 0, 0, 0);
+            } else if (filterType === 'Week') {
+                start.setDate(now.getDate() - 7);
+                start.setHours(0, 0, 0, 0);
+            } else if (filterType === 'Month') {
+                start.setDate(now.getDate() - 30);
+                start.setHours(0, 0, 0, 0);
+            } else if (filterType === 'Custom') {
+                start = new Date(customDates.from);
+                start.setHours(0, 0, 0, 0);
+                end = new Date(customDates.to);
+                end.setHours(23, 59, 59, 999);
+            }
+
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch,
+                // We send these as ISO strings so the backend can easily do $gte / $lte queries
+                startDate: start.toISOString(),
+                endDate: end.toISOString()
+            };
+
+            const res = await api.get('/attendance/raw-logs', { params });
+            
+            setRawLogs(res.data.data);
+            setTotalPages(res.data.pagination.totalPages);
+            setTotalRecords(res.data.pagination.totalRecords);
+            setCurrentPage(res.data.pagination.currentPage);
         } catch (err) {
             Swal.fire('Error', 'Failed to load raw biometric logs', 'error');
         } finally {
             setLoading(false);
         }
     };
-
-    // --- FILTER LOGIC ---
-    useEffect(() => {
-        let result = rawLogs;
-        const now = new Date();
-        now.setHours(23, 59, 59, 999);
-
-        // 1. Time Filtering
-        if (filterType === 'Today') {
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
-            result = result.filter(log => {
-                const logDate = new Date(log.timestamp);
-                return logDate >= startOfToday && logDate <= now;
-            });
-        }
-        else if (filterType === 'Week') {
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(now.getDate() - 7);
-            oneWeekAgo.setHours(0, 0, 0, 0);
-            result = result.filter(log => {
-                const logDate = new Date(log.timestamp);
-                return logDate >= oneWeekAgo && logDate <= now;
-            });
-        }
-        else if (filterType === 'Month') {
-            const oneMonthAgo = new Date();
-            oneMonthAgo.setDate(now.getDate() - 30);
-            oneMonthAgo.setHours(0, 0, 0, 0);
-            result = result.filter(log => {
-                const logDate = new Date(log.timestamp);
-                return logDate >= oneMonthAgo && logDate <= now;
-            });
-        }
-        else if (filterType === 'Custom') {
-            if (customDates.from && customDates.to) {
-                const start = new Date(customDates.from);
-                start.setHours(0, 0, 0, 0);
-                const end = new Date(customDates.to);
-                end.setHours(23, 59, 59, 999);
-                result = result.filter(log => {
-                    const logDate = new Date(log.timestamp);
-                    return logDate >= start && logDate <= end;
-                });
-            }
-        }
-
-        // 2. Search Filtering (Name, Biometric ID, Device ID)
-        if (searchTerm) {
-            // Split by space to allow multiple keywords (e.g., "harshit in" -> ["harshit", "in"])
-            const searchWords = searchTerm.toLowerCase().trim().split(/\s+/);
-
-            result = result.filter(log => {
-                const searchableString = `
-                    ${log.userId?.name || ''} 
-                    ${log.employeeId || ''} 
-                    ${log.deviceId || ''} 
-                    ${log.direction || ''}
-                `.toLowerCase();
-
-                return searchWords.every(word => searchableString.includes(word));
-            });
-        }
-
-        setFilteredLogs(result);
-    }, [rawLogs, filterType, searchTerm, customDates]);
 
     return (
         <div className="attendance-container fade-in">
@@ -116,7 +107,6 @@ const RawPunches = () => {
             {/* EXACT MATCH FILTER BAR */}
             <div className="filter-bar-card fade-in">
 
-                {/* 1. Filter Buttons */}
                 <div className="filter-buttons">
                     {['Today', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
@@ -130,7 +120,6 @@ const RawPunches = () => {
                     ))}
                 </div>
 
-                {/* 2. Custom Date Inputs */}
                 {filterType === 'Custom' && (
                     <div className="custom-date-filters fade-in">
                         <div className="date-input-group">
@@ -154,7 +143,6 @@ const RawPunches = () => {
                     </div>
                 )}
 
-                {/* 3. Search Bar */}
                 <div className="search-wrapper">
                     <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input
@@ -169,7 +157,7 @@ const RawPunches = () => {
 
             {/* METRIC SUMMARY */}
             <div className="table-summary-text fade-in">
-                Showing <span className="text-primary fw-bold mx-1 fs-15">{filteredLogs.length}</span> raw punches
+                Showing <span className="text-primary fw-bold mx-1 fs-15">{totalRecords}</span> total raw punches
             </div>
 
             {/* TABLE */}
@@ -187,10 +175,10 @@ const RawPunches = () => {
                     <tbody>
                         {loading ? (
                             <tr><td colSpan="5" className="empty-table-message">Loading raw punches...</td></tr>
-                        ) : filteredLogs.length === 0 ? (
+                        ) : rawLogs.length === 0 ? (
                             <tr><td colSpan="5" className="empty-table-message">No punches found matching filters.</td></tr>
                         ) : (
-                            filteredLogs.map(log => (
+                            rawLogs.map(log => (
                                 <tr key={log._id}>
                                     <td data-label="Employee" className="fw-bold text-primary">
                                         {log.userId?.name || 'Unknown'}
@@ -226,6 +214,21 @@ const RawPunches = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* 👇 Modular Pagination Component */}
+            {!loading && (
+                <Pagination 
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalRecords={totalRecords}
+                    limit={itemsPerPage}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    onLimitChange={(newLimit) => {
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                    }}
+                />
+            )}
         </div>
     );
 };

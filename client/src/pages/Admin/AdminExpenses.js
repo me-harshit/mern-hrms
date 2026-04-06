@@ -24,8 +24,11 @@ const AdminExpenses = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const res = await api.get('/expenses/all');
-                setExpenses(res.data);
+                // 👇 FIX 1: Ask the paginated backend for a massive limit so the dashboard charts get all historical data
+                const res = await api.get('/expenses/all', { params: { limit: 100000 } });
+                
+                // 👇 FIX 2: Extract the array from the new paginated object structure (.data.data)
+                setExpenses(res.data.data || res.data);
 
                 try {
                     const projRes = await api.get('/projects');
@@ -55,30 +58,33 @@ const AdminExpenses = () => {
         const vendorMap = {};
         let totalVal = 0, pendingCount = 0, approvedVal = 0;
 
-        expenses.forEach(exp => {
-            // 1. Apply Global Dashboard Filters
-            if (dashboardFilter !== 'All' && exp.expenseType !== dashboardFilter) return;
-            if (dashboardFilter === 'Project Expense' && dashboardProject && exp.projectName !== dashboardProject) return;
+        // Failsafe: Ensure expenses is an array before running forEach
+        if (Array.isArray(expenses)) {
+            expenses.forEach(exp => {
+                // 1. Apply Global Dashboard Filters
+                if (dashboardFilter !== 'All' && exp.expenseType !== dashboardFilter) return;
+                if (dashboardFilter === 'Project Expense' && dashboardProject && exp.projectName !== dashboardProject) return;
 
-            // 2. Aggregate Stats
-            if (exp.status === 'Pending') pendingCount++;
-            if (exp.status === 'Approved') approvedVal += exp.amount;
+                // 2. Aggregate Stats
+                if (exp.status === 'Pending') pendingCount++;
+                if (exp.status === 'Approved') approvedVal += exp.amount;
 
-            // 3. Populate Charts (Only chart valid/processed data)
-            if (exp.status !== 'Rejected' && exp.status !== 'Returned') {
-                totalVal += exp.amount;
-                typeMap[exp.expenseType] = (typeMap[exp.expenseType] || 0) + exp.amount;
-                categoryMap[exp.category] = (categoryMap[exp.category] || 0) + exp.amount;
+                // 3. Populate Charts (Only chart valid/processed data)
+                if (exp.status !== 'Rejected' && exp.status !== 'Returned') {
+                    totalVal += exp.amount;
+                    typeMap[exp.expenseType] = (typeMap[exp.expenseType] || 0) + exp.amount;
+                    categoryMap[exp.category] = (categoryMap[exp.category] || 0) + exp.amount;
 
-                if (exp.projectName) {
-                    projectMap[exp.projectName] = (projectMap[exp.projectName] || 0) + exp.amount;
+                    if (exp.projectName) {
+                        projectMap[exp.projectName] = (projectMap[exp.projectName] || 0) + exp.amount;
+                    }
+
+                    if (exp.category === 'Vendor Payment' && exp.vendorId?.name) {
+                        vendorMap[exp.vendorId.name] = (vendorMap[exp.vendorId.name] || 0) + exp.amount;
+                    }
                 }
-
-                if (exp.category === 'Vendor Payment' && exp.vendorId?.name) {
-                    vendorMap[exp.vendorId.name] = (vendorMap[exp.vendorId.name] || 0) + exp.amount;
-                }
-            }
-        });
+            });
+        }
 
         const sortAndSlice = (map) => Object.keys(map)
             .map(k => ({ name: k, value: map[k] }))

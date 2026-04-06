@@ -309,13 +309,68 @@ router.put('/action/:id', auth, async (req, res) => {
     }
 });
 
-// @route   GET /api/leaves/all-requests (Admin/HR Only)
+// @route   GET /api/leaves/all-requests (Admin/HR/Manager)
 router.get('/all-requests', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-        const requests = await Leave.find().populate('userId', 'name email').sort({ createdAt: -1 });
-        res.json(requests);
-    } catch (err) { res.status(500).send('Server Error'); }
+
+        // --- 1. PAGINATION SETUP ---
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        let andConditions = [];
+
+        // --- 2. STATUS FILTER ---
+        if (req.query.status) {
+            andConditions.push({ status: req.query.status });
+        }
+
+        // --- 3. MANAGER SCOPE ---
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            andConditions.push({ userId: { $in: teamIds } });
+        }
+
+        // --- 4. SEARCH FILTER ---
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
+            
+            andConditions.push({
+                $or: [
+                    { userId: { $in: matchingUsers } },
+                    { reason: searchRegex },
+                    { leaveType: searchRegex }
+                ]
+            });
+        }
+
+        let query = {};
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
+        }
+
+        // --- 5. EXECUTE QUERY ---
+        const totalRecords = await Leave.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const requests = await Leave.find(query)
+            .populate('userId', 'name email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.json({
+            data: requests,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+
+    } catch (err) { 
+        console.error("Leaves Pagination Error:", err);
+        res.status(500).send('Server Error'); 
+    }
 });
 
 // @route   POST /api/leaves/admin/update-balance (HR Only)

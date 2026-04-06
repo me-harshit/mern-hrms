@@ -4,90 +4,67 @@ import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faEdit, faUserTimes, faFilter, faFingerprint } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; // 👇 NEW: Reusable Pagination Component
 import '../../styles/App.css';
 
 const AttendanceLogs = () => {
     const navigate = useNavigate();
+    
+    // --- DATA & PAGINATION STATES ---
     const [logs, setLogs] = useState([]);
-    const [filteredLogs, setFilteredLogs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    // --- FILTER STATES ---
     const [filterType, setFilterType] = useState('Today'); // Today, Yesterday, Week, Month, All, Custom
+    const [customDates, setCustomDates] = useState({ from: '', to: '' });
+    
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
 
-    // State for Custom Date Range
-    const [customDates, setCustomDates] = useState({
-        from: '',
-        to: ''
-    });
-
+    // Debounce Search Bar
     useEffect(() => {
-        fetchLogs();
-    }, []);
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
+    // Reset to Page 1 if any filter changes
     useEffect(() => {
-        let result = logs;
+        setCurrentPage(1);
+    }, [filterType, debouncedSearch, customDates]);
 
-        // 1. Time Filtering
-        const now = new Date();
+    // Fetch Data from Server
+    useEffect(() => {
+        fetchLogs(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, itemsPerPage, filterType, debouncedSearch, customDates]);
 
-        if (filterType === 'Today') {
-            const todayBackendFormat = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
-            result = result.filter(log => log.date === todayBackendFormat);
-        }
-        else if (filterType === 'Yesterday') {
-            const yesterday = new Date();
-            yesterday.setDate(now.getDate() - 1);
-            const yesterdayBackendFormat = `${yesterday.getDate()}/${yesterday.getMonth() + 1}/${yesterday.getFullYear()}`;
-            result = result.filter(log => log.date === yesterdayBackendFormat);
-        }
-        else if (filterType === 'Week') {
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(now.getDate() - 7);
-
-            result = result.filter(log => {
-                const logDate = new Date(log.checkIn);
-                return logDate >= oneWeekAgo && logDate <= now;
-            });
-        }
-        else if (filterType === 'Month') {
-            const oneMonthAgo = new Date();
-            oneMonthAgo.setDate(now.getDate() - 30);
-
-            result = result.filter(log => {
-                const logDate = new Date(log.checkIn);
-                return logDate >= oneMonthAgo && logDate <= now;
-            });
-        }
-        else if (filterType === 'Custom') {
-            if (customDates.from && customDates.to) {
-                const start = new Date(customDates.from);
-                start.setHours(0, 0, 0, 0);
-
-                const end = new Date(customDates.to);
-                end.setHours(23, 59, 59, 999);
-
-                result = result.filter(log => {
-                    const logDate = new Date(log.checkIn);
-                    return logDate >= start && logDate <= end;
-                });
-            }
-        }
-
-        // 2. Search Filtering (Employee Name)
-        if (searchTerm) {
-            result = result.filter(log =>
-                log.userId?.name.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-        }
-
-        setFilteredLogs(result);
-    }, [logs, filterType, searchTerm, customDates]);
-
-    const fetchLogs = async () => {
+    const fetchLogs = async (pageToFetch) => {
+        setLoading(true);
         try {
-            const res = await api.get('/attendance/all-logs');
-            setLogs(res.data);
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch,
+                filterType,
+                fromDate: customDates.from,
+                toDate: customDates.to
+            };
+
+            const res = await api.get('/attendance/all-logs', { params });
+            
+            setLogs(res.data.data);
+            setTotalPages(res.data.pagination.totalPages);
+            setTotalRecords(res.data.pagination.totalRecords);
+            setCurrentPage(res.data.pagination.currentPage);
         } catch (err) {
-            console.error("Error fetching logs");
+            console.error("Error fetching logs", err);
+            Swal.fire('Error', 'Failed to fetch attendance logs', 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -139,6 +116,8 @@ const AttendanceLogs = () => {
                         <option value="Half Day" ${log.status === 'Half Day' ? 'selected' : ''}>Half Day</option>
                         <option value="Late" ${log.status === 'Late' ? 'selected' : ''}>Late</option>
                         <option value="Absent" ${log.status === 'Absent' ? 'selected' : ''}>Absent</option>
+                        <option value="WFH" ${log.status === 'WFH' ? 'selected' : ''}>WFH</option>
+                        <option value="On Leave" ${log.status === 'On Leave' ? 'selected' : ''}>On Leave</option>
                     </select>
 
                     <label class="swal-custom-label">Exception Note</label>
@@ -153,21 +132,23 @@ const AttendanceLogs = () => {
                 const statusInput = document.getElementById('swal-status').value;
                 const note = document.getElementById('swal-note').value;
 
-                if (!timeInStr) return Swal.showValidationMessage('Check In time is required');
-
-                const checkInDate = new Date(log.checkIn);
-                const [inH, inM] = timeInStr.split(':');
-                checkInDate.setHours(inH, inM, 0, 0);
+                // Removed strictly required Check-in so Absents/Leaves can be updated safely
+                let checkInDate = null;
+                if (timeInStr && log.checkIn) {
+                    checkInDate = new Date(log.checkIn);
+                    const [inH, inM] = timeInStr.split(':');
+                    checkInDate.setHours(inH, inM, 0, 0);
+                }
 
                 let checkOutDate = null;
-                if (timeOutStr) {
+                if (timeOutStr && checkInDate) {
                     checkOutDate = new Date(checkInDate);
                     const [outH, outM] = timeOutStr.split(':');
                     checkOutDate.setHours(outH, outM, 0, 0);
                 }
 
                 return {
-                    checkIn: checkInDate.toISOString(),
+                    checkIn: checkInDate ? checkInDate.toISOString() : null,
                     checkOut: checkOutDate ? checkOutDate.toISOString() : null,
                     status: statusInput,
                     note: note
@@ -179,7 +160,7 @@ const AttendanceLogs = () => {
             try {
                 await api.put(`/attendance/update/${log._id}`, formValues);
                 Swal.fire('Updated', 'Attendance record updated.', 'success');
-                fetchLogs();
+                fetchLogs(currentPage);
             } catch (err) {
                 Swal.fire('Error', 'Update failed', 'error');
             }
@@ -194,7 +175,7 @@ const AttendanceLogs = () => {
                 
                 <div className="header-actions">
                     <button className="gts-btn danger btn-small" onClick={() => navigate('/absent-employees')}>
-                        <FontAwesomeIcon icon={faUserTimes} className="btn-icon" /> View Absent Employees
+                        <FontAwesomeIcon icon={faUserTimes} className="btn-icon" /> View Absentees
                     </button>
                     <button className="action-btn-primary btn-small" onClick={() => navigate('/raw-punches')}>
                         <FontAwesomeIcon icon={faFingerprint} className="btn-icon" /> View Raw Punches
@@ -202,10 +183,8 @@ const AttendanceLogs = () => {
                 </div>
             </div>
 
-            {/* FILTERS BAR (Reusing the CSS from earlier) */}
             <div className="filter-bar-card fade-in">
                 
-                {/* 1. Filter Buttons */}
                 <div className="filter-buttons">
                     {['Today', 'Yesterday', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
@@ -219,7 +198,6 @@ const AttendanceLogs = () => {
                     ))}
                 </div>
 
-                {/* 2. Custom Date Inputs */}
                 {filterType === 'Custom' && (
                     <div className="custom-date-filters fade-in">
                         <div className="date-input-group">
@@ -243,12 +221,11 @@ const AttendanceLogs = () => {
                     </div>
                 )}
 
-                {/* 3. Search Bar */}
                 <div className="search-wrapper">
                     <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input
                         type="text"
-                        placeholder="Search Employee..."
+                        placeholder="Search Employee or Status..."
                         className="swal2-input search-input"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -256,7 +233,6 @@ const AttendanceLogs = () => {
                 </div>
             </div>
 
-            {/* TABLE */}
             <div className="employee-table-container fade-in">
                 <table className="employee-table">
                     <thead>
@@ -272,33 +248,39 @@ const AttendanceLogs = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredLogs.length === 0 ? (
+                        {loading ? (
+                            <tr><td colSpan="8" className="empty-table-message">Loading Logs...</td></tr>
+                        ) : logs.length === 0 ? (
                             <tr>
                                 <td colSpan="8" className="empty-table-message">
                                     No attendance records found for this selection.
                                 </td>
                             </tr>
                         ) : (
-                            filteredLogs.map(log => (
+                            logs.map(log => (
                                 <tr key={log._id}>
                                     <td data-label="Employee" className="fw-bold text-primary">
                                         {log.userId?.name || 'Unknown'}
                                     </td>
                                     <td data-label="Date">{log.date}</td>
                                     <td data-label="In Time">
-                                        {new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                     </td>
                                     <td data-label="Out Time">
                                         {log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                     </td>
 
                                     <td data-label="Working Hours" className="fw-bold text-dark-gray">
-                                        {calculateDuration(log.checkIn, log.checkOut)}
+                                        {(log.status === 'Absent' || log.status === 'On Leave' || log.status === 'WFH') 
+                                            ? '0h 0m' 
+                                            : calculateDuration(log.checkIn, log.checkOut)}
                                     </td>
 
                                     <td data-label="Status">
-                                        <span className={`status-badge ${log.status === 'Present' ? 'success' :
-                                            log.status === 'Half Day' ? 'warning' : 'danger'
+                                        <span className={`status-badge ${
+                                            (log.status === 'Present' || log.status === 'WFH') ? 'success' :
+                                            log.status === 'On Leave' ? 'primary' :
+                                            (log.status === 'Half Day' || log.status === 'Late') ? 'warning' : 'danger'
                                         }`}>
                                             {log.status}
                                         </span>
@@ -317,6 +299,22 @@ const AttendanceLogs = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* 👇 Modular Pagination Component */}
+            {!loading && (
+                <Pagination 
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalRecords={totalRecords}
+                    limit={itemsPerPage}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    onLimitChange={(newLimit) => {
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                    }}
+                />
+            )}
+
         </div>
     );
 };

@@ -4,32 +4,66 @@ import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faUserTie, faEdit, faCalendarAlt, faSearch, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; // 👇 NEW: Imported Pagination Component
 import '../../styles/App.css';
 
 const Employees = () => {
+    const navigate = useNavigate();
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+    const userRole = currentUser?.role || 'EMPLOYEE';
+
+    // --- DATA & PAGINATION STATES ---
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    // --- SEARCH STATES ---
     const [searchTerm, setSearchTerm] = useState('');
-    const navigate = useNavigate();
+    const [debouncedSearch, setDebouncedSearch] = useState('');
 
+    // 1. Debounce Search Bar
     useEffect(() => {
-        fetchEmployees();
-    }, []);
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-    const fetchEmployees = async () => {
+    // 2. Reset to Page 1 if search changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [debouncedSearch]);
+
+    // 3. Fetch Server-Side Paginated Data
+    useEffect(() => {
+        fetchEmployees(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, itemsPerPage, debouncedSearch]);
+
+    const fetchEmployees = async (pageToFetch) => {
         setLoading(true);
         try {
-            const res = await api.get('/employees');
-            setEmployees(res.data);
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch
+            };
+
+            const res = await api.get('/employees', { params });
+            
+            // Map the paginated response to state
+            setEmployees(res.data.data);
+            setTotalPages(res.data.pagination.totalPages);
+            setTotalRecords(res.data.pagination.totalRecords);
+            setCurrentPage(res.data.pagination.currentPage);
         } catch (err) {
             console.error(err);
+            Swal.fire('Error', 'Failed to fetch employees', 'error');
         } finally {
             setLoading(false);
         }
     };
-
-    const currentUser = JSON.parse(localStorage.getItem('user'));
-    const userRole = currentUser?.role || 'EMPLOYEE';
 
     const handleAddEmployee = async () => {
         const { value: formValues } = await Swal.fire({
@@ -100,7 +134,7 @@ const Employees = () => {
             try {
                 await api.post('/employees/add', formValues);
                 Swal.fire('Success', 'Employee added!', 'success');
-                fetchEmployees();
+                fetchEmployees(currentPage); // Refresh current page after adding
             } catch (err) {
                 Swal.fire('Error', err.response?.data?.message || 'Action Failed', 'error');
             }
@@ -111,26 +145,9 @@ const Employees = () => {
         navigate(`/employee/${emp._id}`);
     };
 
-    // --- SORTING & FILTERING LOGIC ---
-    const processedEmployees = employees
-        .sort((a, b) => {
-            const idA = a.employeeId || '';
-            const idB = b.employeeId || '';
-            return idA.localeCompare(idB);
-        })
-        .filter(emp => {
-            if (!searchTerm) return true;
-            const term = searchTerm.toLowerCase();
-            return (
-                (emp.name && emp.name.toLowerCase().includes(term)) ||
-                (emp.email && emp.email.toLowerCase().includes(term)) ||
-                (emp.employeeId && emp.employeeId.toLowerCase().includes(term))
-            );
-        });
-
     return (
         <div className="employee-page fade-in">
-            {/* HEADER (Using Isolated Classes from App.css) */}
+            {/* HEADER */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
                 <h1 className="page-title" style={{ margin: 0 }}>
                     {userRole === 'MANAGER' ? 'My Team Directory' : 'Employee Directory'}
@@ -139,7 +156,14 @@ const Employees = () => {
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ position: 'relative', minWidth: '250px' }}>
                         <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
-                        <input type="text" placeholder="Search..." className="swal2-input" style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                        <input 
+                            type="text" 
+                            placeholder="Search name, ID or email..." 
+                            className="swal2-input" 
+                            style={{ margin: 0, paddingLeft: '40px', width: '100%', height: '40px', fontSize: '14px' }} 
+                            value={searchTerm} 
+                            onChange={(e) => setSearchTerm(e.target.value)} 
+                        />
                     </div>
 
                     {/* RESTRICTED: Only ADMIN can see the Add button */}
@@ -151,85 +175,100 @@ const Employees = () => {
                 </div>
             </div>
 
-            {loading ? (
-                <div className="empty-table-message">
-                    <p>Loading employee records...</p>
-                </div>
-            ) : (
-                <div className="employee-table-container fade-in">
-                    <table className="employee-table">
-                        <thead>
+            <div className="employee-table-container fade-in">
+                <table className="employee-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Joining Date</th>
+                            <th>Role / Shift</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
                             <tr>
-                                <th>Employee</th>
-                                <th>Joining Date</th>
-                                <th>Role / Shift</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <td colSpan="5" className="empty-table-message">
+                                    Loading employee records...
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {processedEmployees.length === 0 ? (
-                                <tr>
-                                    <td colSpan="5" className="empty-table-message">
-                                        No employees found matching your search.
+                        ) : employees.length === 0 ? (
+                            <tr>
+                                <td colSpan="5" className="empty-table-message">
+                                    No employees found matching your search.
+                                </td>
+                            </tr>
+                        ) : (
+                            employees.map(emp => (
+                                <tr key={emp._id}>
+                                    <td data-label="Employee">
+                                        <div className="flex-row gap-10">
+                                            <div className="table-avatar">
+                                                <FontAwesomeIcon icon={faUserTie} />
+                                            </div>
+                                            <div>
+                                                <div className="fw-600 text-dark-blue">{emp.name}</div>
+                                                <div className="text-small text-muted">
+                                                    <span className="fw-bold text-primary">{emp.employeeId || 'No ID'}</span> • {emp.email}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td data-label="Joining Date">
+                                        <div className="fs-14 text-dark-gray">
+                                            <FontAwesomeIcon icon={faCalendarAlt} className="text-muted mr-5" />
+                                            {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-GB') : 'N/A'}
+                                        </div>
+                                    </td>
+
+                                    <td data-label="Role / Shift">
+                                        <div className="flex-col align-start gap-5">
+                                            <span className={`role-tag ${emp.role.toLowerCase()}`}>
+                                                {emp.role}
+                                            </span>
+                                            <span className="shift-badge">
+                                                {emp.shiftType === 'NIGHT' ? (
+                                                    <><FontAwesomeIcon icon={faMoon} className="text-moon mr-5" /> Night Shift</>
+                                                ) : (
+                                                    <><FontAwesomeIcon icon={faSun} className="text-sun mr-5" /> Day Shift</>
+                                                )}
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    <td data-label="Status">
+                                        <span className={emp.status === 'ACTIVE' ? 'status-active' : 'status-inactive'}>
+                                            {emp.status}
+                                        </span>
+                                    </td>
+
+                                    <td data-label="Actions">
+                                        <button className="edit-btn" onClick={() => handleEditEmployee(emp)}>
+                                            <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
+                                        </button>
                                     </td>
                                 </tr>
-                            ) : (
-                                processedEmployees.map(emp => (
-                                    <tr key={emp._id}>
-                                        <td data-label="Employee">
-                                            <div className="flex-row gap-10">
-                                                <div className="table-avatar">
-                                                    <FontAwesomeIcon icon={faUserTie} />
-                                                </div>
-                                                <div>
-                                                    <div className="fw-600 text-dark-blue">{emp.name}</div>
-                                                    <div className="text-small text-muted">
-                                                        <span className="fw-bold text-primary">{emp.employeeId || 'No ID'}</span> • {emp.email}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
-                                        <td data-label="Joining Date">
-                                            <div className="fs-14 text-dark-gray">
-                                                <FontAwesomeIcon icon={faCalendarAlt} className="text-muted mr-5" />
-                                                {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-GB') : 'N/A'}
-                                            </div>
-                                        </td>
-
-                                        <td data-label="Role / Shift">
-                                            <div className="flex-col align-start gap-5">
-                                                <span className={`role-tag ${emp.role.toLowerCase()}`}>
-                                                    {emp.role}
-                                                </span>
-                                                <span className="shift-badge">
-                                                    {emp.shiftType === 'NIGHT' ? (
-                                                        <><FontAwesomeIcon icon={faMoon} className="text-moon mr-5" /> Night Shift</>
-                                                    ) : (
-                                                        <><FontAwesomeIcon icon={faSun} className="text-sun mr-5" /> Day Shift</>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        <td data-label="Status">
-                                            <span className={emp.status === 'ACTIVE' ? 'status-active' : 'status-inactive'}>
-                                                {emp.status}
-                                            </span>
-                                        </td>
-
-                                        <td data-label="Actions">
-                                            <button className="edit-btn" onClick={() => handleEditEmployee(emp)}>
-                                                <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+            {/* 👇 Modular Pagination Component */}
+            {!loading && (
+                <Pagination 
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalRecords={totalRecords}
+                    limit={itemsPerPage}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    onLimitChange={(newLimit) => {
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                    }}
+                />
             )}
         </div>
     );

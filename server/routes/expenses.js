@@ -93,33 +93,110 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   GET /api/expenses/all
-// @desc    Get all expenses across the company (or Project Specific for Managers)
+// @desc    Get all expenses (Paginated & Filtered via Server)
 router.get('/all', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        let query = {};
+        // --- 1. PAGINATION SETUP ---
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
+        let query = {};
+        let andConditions = [];
+
+        // --- 2. ROLE BASED SCOPE ---
         if (req.user.role === 'MANAGER') {
             const myProjects = await Project.find({ projectLead: req.user.id }).select('name');
             const myProjectNames = myProjects.map(p => p.name);
-
-            query = {
-                expenseType: 'Project Expense',
-                projectName: { $in: myProjectNames }
-            };
+            andConditions.push({ expenseType: 'Project Expense', projectName: { $in: myProjectNames } });
         }
+
+        // --- 3. EXACT FILTERS ---
+        if (req.query.expenseType) andConditions.push({ expenseType: req.query.expenseType });
+        if (req.query.category) andConditions.push({ category: req.query.category });
+        if (req.query.projectName) andConditions.push({ projectName: req.query.projectName });
+        if (req.query.submittedBy) andConditions.push({ submittedBy: req.query.submittedBy });
+        if (req.query.approvedBy) andConditions.push({ approvedBy: req.query.approvedBy });
+        if (req.query.status) andConditions.push({ status: req.query.status });
+
+        // --- 4. NUMBER & DATE RANGE FILTERS ---
+        if (req.query.minAmount || req.query.maxAmount) {
+            let amountFilter = {};
+            if (req.query.minAmount) amountFilter.$gte = Number(req.query.minAmount);
+            if (req.query.maxAmount) amountFilter.$lte = Number(req.query.maxAmount);
+            andConditions.push({ amount: amountFilter });
+        }
+
+        if (req.query.fromDate && req.query.toDate) {
+            const start = new Date(req.query.fromDate); start.setHours(0, 0, 0, 0);
+            const end = new Date(req.query.toDate); end.setHours(23, 59, 59, 999);
+            andConditions.push({ expenseDate: { $gte: start, $lte: end } });
+        }
+
+        // --- 5. GST FILTER ---
+        if (req.query.hasGst === 'Yes') {
+            andConditions.push({ 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } });
+        } else if (req.query.hasGst === 'No') {
+            andConditions.push({
+                $or: [
+                    { 'expenseDetails.gstNumber': { $exists: false } },
+                    { 'expenseDetails.gstNumber': "" },
+                    { 'expenseDetails.gstNumber': null }
+                ]
+            });
+        }
+
+        // --- 6. SMART SEARCH FILTER ---
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+
+            // Find users matching search to allow searching by Submitter Name
+            const matchingUsers = await User.find({ name: searchRegex }).select('_id');
+            const userIds = matchingUsers.map(u => u._id);
+
+            let searchOr = [
+                { category: searchRegex },
+                { descriptionTags: searchRegex },
+                { projectName: searchRegex },
+                { 'expenseDetails.gstNumber': searchRegex },
+                { submittedBy: { $in: userIds } }
+            ];
+
+            // If search is a valid number, allow searching by amount
+            if (!isNaN(req.query.search)) {
+                searchOr.push({ amount: Number(req.query.search) });
+            }
+
+            andConditions.push({ $or: searchOr });
+        }
+
+        // --- 7. EXECUTE QUERY ---
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
+        }
+
+        const totalRecords = await Expense.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
 
         const expenses = await Expense.find(query)
             .populate('submittedBy', 'name email employeeId')
             .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
             .populate('vendorId', 'name gstNumber')
-            .sort({ expenseDate: -1 });
+            .sort({ expenseDate: -1 })
+            .skip(skip)
+            .limit(limit);
 
-        res.json(expenses);
+        // Return Data AND Pagination Meta
+        res.json({
+            data: expenses,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+
     } catch (err) {
-        console.error(err.message);
+        console.error("Pagination Route Error:", err.message);
         res.status(500).send('Server Error');
     }
 });

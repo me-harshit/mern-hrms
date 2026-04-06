@@ -16,17 +16,50 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   GET /api/projects/all
-// @desc    Get all projects + Auto-Calculate Total Spent
+// @desc    Get all projects + Auto-Calculate Total Spent (Paginated)
 router.get('/all', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-        
-        // 1. Fetch all projects and populate the lead's name
-        const projects = await Project.find()
-            .populate('projectLead', 'name email')
-            .sort({ createdAt: -1 });
 
-        // 2. Dynamically calculate the "Total Spent" for each project
+        // --- 1. PAGINATION SETUP ---
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        let andConditions = [];
+
+        // --- 2. SEARCH FILTERING ---
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            
+            // First find users matching the search to allow searching by Project Lead name
+            const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
+
+            andConditions.push({
+                $or: [
+                    { name: searchRegex },
+                    { description: searchRegex },
+                    { projectLead: { $in: matchingUsers } }
+                ]
+            });
+        }
+
+        let query = {};
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
+        }
+
+        // --- 3. COUNT AND FETCH ---
+        const totalRecords = await Project.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const projects = await Project.find(query)
+            .populate('projectLead', 'name email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        // --- 4. CALCULATE AGGREGATES FOR VISIBLE PROJECTS ONLY ---
         const projectsWithStats = await Promise.all(projects.map(async (proj) => {
             const spentAgg = await Purchase.aggregate([
                 { $match: { projectName: proj.name, status: 'Approved' } },
@@ -34,17 +67,21 @@ router.get('/all', auth, async (req, res) => {
             ]);
             
             const totalSpent = spentAgg.length > 0 ? spentAgg[0].total : 0;
-            // NOTE: Total Vendor Payments can be added here later when Vendor module is built.
             
-            return { 
-                ...proj.toObject(), 
+            return {
+                ...proj.toObject(),
                 totalSpent,
                 totalVendorPayments: 0 // Placeholder for next module
             };
         }));
 
-        res.json(projectsWithStats);
+        res.json({
+            data: projectsWithStats,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+
     } catch (err) {
+        console.error("Project Fetch Error:", err);
         res.status(500).send('Server Error');
     }
 });

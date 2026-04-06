@@ -3,27 +3,47 @@ import api from '../../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserTimes, faSearch, faFilter, faArrowLeft, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; // 👇 NEW: Modular Pagination
 import '../../styles/App.css';
 
 const AbsentEmployees = () => {
     const navigate = useNavigate();
-    const [missingEmployees, setMissingEmployees] = useState([]);
-    const [filteredList, setFilteredList] = useState([]);
+
+    // --- DATA & PAGINATION STATES ---
+    const [absences, setAbsences] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     // --- FILTERS STATE ---
     const [filterType, setFilterType] = useState('Today'); // Today, Yesterday, Week, Month, Custom
-    const [selectedShift, setSelectedShift] = useState('DAY'); // Dropdown default
-    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedShift, setSelectedShift] = useState('DAY');
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
 
-    // Fetch data automatically when Shift, Filter Type, or Custom Dates change
-    useEffect(() => {
-        fetchAbsentList();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filterType, selectedShift, customDates]);
+    // --- SEARCH STATES ---
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
 
-    const fetchAbsentList = async () => {
+    // 1. Debounce Search
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    // 2. Reset to Page 1 if any filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterType, selectedShift, debouncedSearch, customDates]);
+
+    // 3. Fetch Data
+    useEffect(() => {
+        fetchAbsentList(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, itemsPerPage, filterType, selectedShift, debouncedSearch, customDates]);
+
+    const fetchAbsentList = async (pageToFetch) => {
         if (filterType === 'Custom' && (!customDates.from || !customDates.to)) return;
 
         setLoading(true);
@@ -44,13 +64,23 @@ const AbsentEmployees = () => {
                 end = new Date(customDates.to);
             }
 
-            const res = await api.post('/attendance/absent-report', {
+            // 👇 Requesting the new GET route
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch,
+                shiftType: selectedShift,
                 startDate: start.toISOString(),
-                endDate: end.toISOString(),
-                shiftType: selectedShift
-            });
+                endDate: end.toISOString()
+            };
 
-            setMissingEmployees(res.data);
+            const res = await api.get('/attendance/absent-report', { params });
+
+            setAbsences(res.data.data);
+            setTotalPages(res.data.pagination.totalPages);
+            setTotalRecords(res.data.pagination.totalRecords);
+            setCurrentPage(res.data.pagination.currentPage);
+
         } catch (err) {
             console.error("Error fetching absent list:", err);
         } finally {
@@ -58,25 +88,10 @@ const AbsentEmployees = () => {
         }
     };
 
-    // Fast Client-Side Search
-    useEffect(() => {
-        if (!searchTerm) {
-            setFilteredList(missingEmployees);
-        } else {
-            const term = searchTerm.toLowerCase();
-            const filtered = missingEmployees.filter(emp =>
-                (emp.name && emp.name.toLowerCase().includes(term)) ||
-                (emp.employeeId && emp.employeeId.toLowerCase().includes(term))
-            );
-            setFilteredList(filtered);
-        }
-    }, [searchTerm, missingEmployees]);
-
     return (
         <div className="attendance-container fade-in">
             {/* HEADER */}
             <div className="absent-header-row">
-                {/* Left Side: Back Button & Page Title */}
                 <div className="header-actions-group">
                     <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/attendance-logs')}>
                         <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Back to Logs
@@ -87,7 +102,6 @@ const AbsentEmployees = () => {
                     </h1>
                 </div>
 
-                {/* Right Side: Shift Dropdown ONLY */}
                 <div className="header-actions-group">
                     <div className="shift-dropdown-wrapper">
                         <span className="shift-label">Team Shift:</span>
@@ -105,7 +119,6 @@ const AbsentEmployees = () => {
 
             {/* MAIN FILTER BAR */}
             <div className="filter-bar-card fade-in">
-                {/* 1. Date Filter Buttons */}
                 <div className="filter-buttons">
                     {['Today', 'Yesterday', 'Week', 'Month', 'Custom'].map(type => (
                         <button
@@ -119,45 +132,39 @@ const AbsentEmployees = () => {
                     ))}
                 </div>
 
-                {/* 2. Custom Date Inputs */}
                 {filterType === 'Custom' && (
                     <div className="custom-date-filters fade-in">
                         <div className="date-input-group">
                             <span className="date-label">From:</span>
-                            <input 
-                                type="date" 
-                                className="swal2-input date-picker-small" 
-                                value={customDates.from} 
-                                onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })} 
+                            <input
+                                type="date"
+                                className="swal2-input date-picker-small"
+                                value={customDates.from}
+                                onChange={(e) => setCustomDates({ ...customDates, from: e.target.value })}
                             />
                         </div>
                         <div className="date-input-group">
                             <span className="date-label">To:</span>
-                            <input 
-                                type="date" 
-                                className="swal2-input date-picker-small" 
-                                value={customDates.to} 
-                                onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })} 
+                            <input
+                                type="date"
+                                className="swal2-input date-picker-small"
+                                value={customDates.to}
+                                onChange={(e) => setCustomDates({ ...customDates, to: e.target.value })}
                             />
                         </div>
                     </div>
                 )}
 
-                {/* 3. Text Search */}
                 <div className="search-wrapper">
                     <FontAwesomeIcon icon={faSearch} className="search-icon" />
                     <input
-                        type="text" 
-                        placeholder="Search employee..." 
+                        type="text"
+                        placeholder="Search employee..."
                         className="swal2-input search-input"
-                        value={searchTerm} 
+                        value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-            </div>
-
-            <div className="absence-summary">
-                Total Absence Records: <span className="absence-summary-count">{filteredList.length}</span>
             </div>
 
             {/* DATA TABLE */}
@@ -174,39 +181,42 @@ const AbsentEmployees = () => {
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan="4" className="empty-table-message">Calculating matrix...</td>
+                                <td colSpan="4" className="empty-table-message">Fetching records...</td>
                             </tr>
-                        ) : filteredList.length === 0 ? (
+                        ) : absences.length === 0 ? (
                             <tr>
                                 <td colSpan="4" className="empty-table-message text-success fw-600">
                                     All clear! No absence records found for this selection.
                                 </td>
                             </tr>
                         ) : (
-                            filteredList.map(emp => (
-                                <tr key={emp._id}>
+                            absences.map(record => (
+                                <tr key={record._id}>
                                     <td data-label="Employee Details">
-                                        <div className="fw-bold text-primary fs-15">{emp.name}</div>
-                                        <div className="text-small text-muted">ID: {emp.employeeId || 'N/A'}</div>
+                                        <div className="fw-bold text-primary fs-15">{record.userId?.name || 'Unknown'}</div>
+                                        <div className="text-small text-muted">ID: {record.userId?.employeeId || 'N/A'}</div>
                                     </td>
-                                    
+
                                     <td data-label="Assigned Shift">
                                         <span className="shift-badge">
-                                            {emp.shiftType === 'NIGHT' ? (
+                                            {record.userId?.shiftType === 'NIGHT' ? (
                                                 <><FontAwesomeIcon icon={faMoon} className="text-moon" /> Night Shift</>
                                             ) : (
                                                 <><FontAwesomeIcon icon={faSun} className="text-sun" /> Day Shift</>
                                             )}
                                         </span>
                                     </td>
-                                    
+
                                     <td data-label="Date Missing">
-                                        <div className="fw-500 text-dark-gray fs-15">{emp.targetDate}</div>
+                                        <div className="fw-500 text-dark-gray fs-15">{record.date}</div>
                                     </td>
-                                    
+
                                     <td data-label="System Status">
-                                        <span className={`status-badge ${emp.status === 'On Leave' ? 'warning' : 'danger'}`}>
-                                            {emp.status}
+                                        <span className={`status-badge ${record.status === 'On Leave' ? 'primary' :
+                                                record.status === 'Pending' ? 'warning' :
+                                                    'danger'
+                                            }`}>
+                                            {record.status === 'Pending' ? 'Pending Punch' : record.status}
                                         </span>
                                     </td>
                                 </tr>
@@ -215,6 +225,21 @@ const AbsentEmployees = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* 👇 Modular Pagination Component */}
+            {!loading && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalRecords={totalRecords}
+                    limit={itemsPerPage}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    onLimitChange={(newLimit) => {
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                    }}
+                />
+            )}
         </div>
     );
 };

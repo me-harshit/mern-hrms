@@ -2,36 +2,63 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faTimes, faSearch, faFilter, faFileAlt, faLaptopHouse } from '@fortawesome/free-solid-svg-icons';
+import { faCheck, faTimes, faSearch, faFilter, faFileAlt, faLaptopHouse, faEye } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; // 👇 NEW: Modular Pagination
 import '../../styles/App.css';
 
 const EmployeeRequests = () => {
-    // Data States
-    const [leaveRequests, setLeaveRequests] = useState([]);
-    const [wfhRequests, setWfhRequests] = useState([]);
-    const [filteredRequests, setFilteredRequests] = useState([]);
+    // --- DATA & PAGINATION STATES ---
+    const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // UI States
+    // --- UI & FILTER STATES ---
     const [activeTab, setActiveTab] = useState('Leaves'); // 'Leaves' or 'WFH'
+    const [filterStatus, setFilterStatus] = useState('Pending');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('Pending'); // Default to Pending so it acts as a to-do list
+    const [debouncedSearch, setDebouncedSearch] = useState('');
 
+    // --- SIDEBAR STATES ---
+    const [selectedRequest, setSelectedRequest] = useState(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    // 1. Debounce Search
     useEffect(() => {
-        fetchRequests();
-    }, []);
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-    const fetchRequests = async () => {
+    // 2. Reset Page on Filter/Tab Change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, filterStatus, debouncedSearch]);
+
+    // 3. Fetch Data based on Active Tab
+    useEffect(() => {
+        fetchRequests(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, itemsPerPage, activeTab, filterStatus, debouncedSearch]);
+
+    const fetchRequests = async (pageToFetch) => {
         setLoading(true);
         try {
-            // Fetch both datasets concurrently for speed
-            const [leaveRes, wfhRes] = await Promise.all([
-                api.get('/leaves/all-requests'),
-                api.get('/wfh/all-requests')
-            ]);
+            const endpoint = activeTab === 'Leaves' ? '/leaves/all-requests' : '/wfh/all-requests';
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch,
+                status: filterStatus === 'All' ? '' : filterStatus
+            };
+
+            const res = await api.get(endpoint, { params });
             
-            setLeaveRequests(leaveRes.data);
-            setWfhRequests(wfhRes.data);
+            setRequests(res.data.data || []);
+            setTotalPages(res.data.pagination?.totalPages || 1);
+            setTotalRecords(res.data.pagination?.totalRecords || 0);
+            setCurrentPage(res.data.pagination?.currentPage || 1);
         } catch (err) {
             console.error("Error fetching requests");
             Swal.fire('Error', 'Failed to load requests from server.', 'error');
@@ -39,28 +66,6 @@ const EmployeeRequests = () => {
             setLoading(false);
         }
     };
-
-    // --- FILTERING LOGIC ---
-    useEffect(() => {
-        // Select the active dataset
-        let result = activeTab === 'Leaves' ? leaveRequests : wfhRequests;
-
-        // 1. Filter by Status
-        if (filterStatus !== 'All') {
-            result = result.filter(req => req.status === filterStatus);
-        }
-
-        // 2. Filter by Search Term (Employee Name or Reason)
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            result = result.filter(req =>
-                (req.userId?.name && req.userId.name.toLowerCase().includes(term)) ||
-                (req.reason && req.reason.toLowerCase().includes(term))
-            );
-        }
-
-        setFilteredRequests(result);
-    }, [leaveRequests, wfhRequests, activeTab, filterStatus, searchTerm]);
 
     const handleAction = async (id, status, empName) => {
         const actionType = activeTab === 'Leaves' ? 'leave' : 'WFH';
@@ -83,23 +88,32 @@ const EmployeeRequests = () => {
                     title: 'Processing...',
                     text: 'Updating status and emailing the employee.',
                     allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
+                    didOpen: () => { Swal.showLoading(); }
                 });
 
-                // Dynamically route to the correct API based on the active tab
                 await api.put(`${endpointPrefix}/action/${id}`, {
                     status,
                     adminRemark: result.value || ''
                 });
 
                 Swal.fire('Updated!', `Request has been ${status}. Employee notified.`, 'success');
-                fetchRequests(); // Refresh data
+                setIsSidebarOpen(false);
+                fetchRequests(currentPage);
             } catch (err) {
                 Swal.fire('Error', err.response?.data?.message || 'Action failed', 'error');
             }
         }
+    };
+
+    // --- SIDEBAR HANDLERS ---
+    const openSidebar = (req) => {
+        setSelectedRequest(req);
+        setIsSidebarOpen(true);
+    };
+
+    const closeSidebar = () => {
+        setIsSidebarOpen(false);
+        setTimeout(() => setSelectedRequest(null), 300);
     };
 
     return (
@@ -113,11 +127,6 @@ const EmployeeRequests = () => {
                     style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: activeTab === 'Leaves' ? '#215D7B' : '#fff', color: activeTab === 'Leaves' ? '#fff' : '#64748b', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                     <FontAwesomeIcon icon={faFileAlt} /> Paid Leaves
-                    {leaveRequests.filter(r => r.status === 'Pending').length > 0 && (
-                        <span style={{ background: activeTab === 'Leaves' ? '#fff' : '#ef4444', color: activeTab === 'Leaves' ? '#215D7B' : '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', marginLeft: '5px' }}>
-                            {leaveRequests.filter(r => r.status === 'Pending').length}
-                        </span>
-                    )}
                 </button>
                 
                 <button 
@@ -125,11 +134,6 @@ const EmployeeRequests = () => {
                     style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: activeTab === 'WFH' ? '#215D7B' : '#fff', color: activeTab === 'WFH' ? '#fff' : '#64748b', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                     <FontAwesomeIcon icon={faLaptopHouse} /> Work From Home
-                    {wfhRequests.filter(r => r.status === 'Pending').length > 0 && (
-                        <span style={{ background: activeTab === 'WFH' ? '#fff' : '#ef4444', color: activeTab === 'WFH' ? '#215D7B' : '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', marginLeft: '5px' }}>
-                            {wfhRequests.filter(r => r.status === 'Pending').length}
-                        </span>
-                    )}
                 </button>
             </div>
 
@@ -169,22 +173,21 @@ const EmployeeRequests = () => {
                             {activeTab === 'Leaves' && <th>Leave Type</th>}
                             <th>Dates</th>
                             <th>Duration</th>
-                            <th>Reason</th>
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={activeTab === 'Leaves' ? "7" : "6"} className="empty-table-message">Loading Requests...</td></tr>
-                        ) : filteredRequests.length === 0 ? (
+                            <tr><td colSpan={activeTab === 'Leaves' ? "6" : "5"} className="empty-table-message">Loading Requests...</td></tr>
+                        ) : requests.length === 0 ? (
                             <tr>
-                                <td colSpan={activeTab === 'Leaves' ? "7" : "6"} className="empty-table-message">
-                                    No {filterStatus !== 'All' ? filterStatus.toLowerCase() : ''} {activeTab === 'Leaves' ? 'leave' : 'WFH'} requests found matching "{searchTerm}".
+                                <td colSpan={activeTab === 'Leaves' ? "6" : "5"} className="empty-table-message">
+                                    No {filterStatus !== 'All' ? filterStatus.toLowerCase() : ''} {activeTab === 'Leaves' ? 'leave' : 'WFH'} requests found.
                                 </td>
                             </tr>
                         ) : (
-                            filteredRequests.map(req => (
+                            requests.map(req => (
                                 <tr key={req._id}>
                                     <td data-label="Employee" className="fw-bold text-primary">
                                         {req.userId?.name || 'Unknown'}
@@ -206,10 +209,6 @@ const EmployeeRequests = () => {
                                         {req.days} Days
                                     </td>
 
-                                    <td data-label="Reason" className="note-cell text-muted text-small">
-                                        {req.reason}
-                                    </td>
-
                                     <td data-label="Status">
                                         <span className={`status-badge ${
                                             req.status === 'Approved' ? 'success' :
@@ -220,32 +219,141 @@ const EmployeeRequests = () => {
                                     </td>
 
                                     <td data-label="Action">
-                                        {req.status === 'Pending' ? (
-                                            <div className="flex-row gap-10">
-                                                <button
-                                                    className="gts-btn primary btn-small"
-                                                    onClick={() => handleAction(req._id, 'Approved', req.userId.name)}
-                                                    title="Approve"
-                                                >
-                                                    <FontAwesomeIcon icon={faCheck} />
-                                                </button>
-                                                <button
-                                                    className="gts-btn danger btn-small"
-                                                    onClick={() => handleAction(req._id, 'Rejected', req.userId.name)}
-                                                    title="Reject"
-                                                >
-                                                    <FontAwesomeIcon icon={faTimes} />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <span className="text-muted text-small italic">Completed</span>
-                                        )}
+                                        <div className="flex-row gap-5">
+                                            {/* 👇 NEW: View Sidebar Button */}
+                                            <button
+                                                className="gts-btn doc-btn"
+                                                style={{ padding: '6px 10px', background: '#f1f5f9', color: '#215D7B' }}
+                                                onClick={() => openSidebar(req)}
+                                                title="View Details"
+                                            >
+                                                <FontAwesomeIcon icon={faEye} />
+                                            </button>
+
+                                            {req.status === 'Pending' && (
+                                                <>
+                                                    <button
+                                                        className="gts-btn primary btn-small"
+                                                        onClick={() => handleAction(req._id, 'Approved', req.userId.name)}
+                                                        title="Approve"
+                                                    >
+                                                        <FontAwesomeIcon icon={faCheck} />
+                                                    </button>
+                                                    <button
+                                                        className="gts-btn danger btn-small"
+                                                        onClick={() => handleAction(req._id, 'Rejected', req.userId.name)}
+                                                        title="Reject"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTimes} />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))
                         )}
                     </tbody>
                 </table>
+            </div>
+
+            {/* 👇 Pagination Component */}
+            {!loading && (
+                <Pagination 
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalRecords={totalRecords}
+                    limit={itemsPerPage}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    onLimitChange={(newLimit) => {
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                    }}
+                />
+            )}
+
+            {/* 👇 NEW: Sidebar Overlay and Panel */}
+            <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={closeSidebar}></div>
+            <div className={`expense-detail-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+                {selectedRequest && (
+                    <>
+                        <div className="sidebar-header">
+                            <div>
+                                <h2 className="sidebar-title">{activeTab === 'Leaves' ? 'Leave Request' : 'WFH Request'}</h2>
+                                <span className={`status-badge ${selectedRequest.status === 'Approved' ? 'success' : selectedRequest.status === 'Rejected' ? 'danger' : 'warning'}`} style={{ padding: '4px 8px', fontSize: '10px' }}>
+                                    {selectedRequest.status}
+                                </span>
+                            </div>
+                            <button className="sidebar-close-btn" onClick={closeSidebar}><FontAwesomeIcon icon={faTimes} /></button>
+                        </div>
+                        
+                        <div className="sidebar-content">
+                            <h3 className="sidebar-section-title">Request Details</h3>
+                            <div className="detail-grid-2">
+                                <div className="detail-group">
+                                    <span className="detail-label">Employee</span>
+                                    <span className="detail-value fw-bold text-primary">{selectedRequest.userId?.name || 'N/A'}</span>
+                                </div>
+                                <div className="detail-group">
+                                    <span className="detail-label">Duration</span>
+                                    <span className="detail-value">{selectedRequest.days} Days</span>
+                                </div>
+                                
+                                {activeTab === 'Leaves' && (
+                                    <div className="detail-group" style={{ gridColumn: 'span 2' }}>
+                                        <span className="detail-label">Leave Type</span>
+                                        <span className="detail-value">{selectedRequest.leaveType}</span>
+                                    </div>
+                                )}
+
+                                <div className="detail-group">
+                                    <span className="detail-label">From Date</span>
+                                    <span className="detail-value">{new Date(selectedRequest.fromDate).toLocaleDateString()}</span>
+                                </div>
+                                <div className="detail-group">
+                                    <span className="detail-label">To Date</span>
+                                    <span className="detail-value">{new Date(selectedRequest.toDate).toLocaleDateString()}</span>
+                                </div>
+
+                                <div className="detail-group" style={{ gridColumn: 'span 2' }}>
+                                    <span className="detail-label">Reason provided by employee</span>
+                                    <span className="detail-value" style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>
+                                        {selectedRequest.reason || 'No reason provided.'}
+                                    </span>
+                                </div>
+
+                                {selectedRequest.adminRemark && (
+                                    <div className="detail-group" style={{ gridColumn: 'span 2' }}>
+                                        <span className="detail-label" style={{ color: '#ea580c' }}>Admin / HR Remark</span>
+                                        <span className="detail-value" style={{ background: '#fef3c7', padding: '10px', borderRadius: '6px', fontStyle: 'italic' }}>
+                                            "{selectedRequest.adminRemark}"
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Optional Actions inside Sidebar for quick access */}
+                            {selectedRequest.status === 'Pending' && (
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
+                                    <button 
+                                        className="gts-btn primary" 
+                                        style={{ flex: 1, justifyContent: 'center' }}
+                                        onClick={() => handleAction(selectedRequest._id, 'Approved', selectedRequest.userId?.name)}
+                                    >
+                                        <FontAwesomeIcon icon={faCheck} style={{ marginRight: '5px' }} /> Approve
+                                    </button>
+                                    <button 
+                                        className="gts-btn danger" 
+                                        style={{ flex: 1, justifyContent: 'center' }}
+                                        onClick={() => handleAction(selectedRequest._id, 'Rejected', selectedRequest.userId?.name)}
+                                    >
+                                        <FontAwesomeIcon icon={faTimes} style={{ marginRight: '5px' }} /> Reject
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

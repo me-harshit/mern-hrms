@@ -44,19 +44,80 @@ router.post('/', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async (r
 });
 
 // @route   GET /api/inventory
-// @desc    Get all inventory items
+// @desc    Get all inventory items (Paginated & Filtered)
 router.get('/', auth, async (req, res) => {
     try {
-        if (!isAdminOrHR(req.user.role)) return res.status(403).json({ message: 'Access Denied' });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
-        const items = await Inventory.find()
-            .populate('assignedTo', 'name employeeId')
-            .populate('createdBy', 'name')
-            .sort({ createdAt: -1 });
+        let query = {};
+        let andConditions = [];
 
-        res.json(items);
+        // --- 1. STATUS FILTER ---
+        if (req.query.status && req.query.status !== 'All') {
+            andConditions.push({ status: req.query.status });
+        }
+
+        // --- 2. SEARCH FILTER ---
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            
+            // Find users matching search to allow searching by "Assigned To" name
+            const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
+
+            andConditions.push({
+                $or: [
+                    { itemName: searchRegex },
+                    { storageLocation: searchRegex },
+                    { notes: searchRegex },
+                    { assignedTo: { $in: matchingUsers } }
+                ]
+            });
+        }
+
+        if (andConditions.length > 0) query.$and = andConditions;
+
+        // --- 3. FETCH DATA & TOTALS ---
+        const totalRecords = await Inventory.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const items = await Inventory.find(query)
+            .populate('assignedTo', 'name email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        // --- 4. CALCULATE GLOBAL STATS (For the top cards) ---
+        // We run this once so the cards show the total company state
+        const allStats = await Inventory.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalQty: { $sum: "$quantity" },
+                    available: { 
+                        $sum: { $cond: [{ $eq: ["$status", "Available"] }, "$quantity", 0] } 
+                    },
+                    assigned: { 
+                        $sum: { $cond: [{ $eq: ["$status", "Assigned"] }, "$quantity", 0] } 
+                    },
+                    issues: { 
+                        $sum: { $cond: [{ $in: ["$status", ["Damaged", "Lost"]] }, "$quantity", 0] } 
+                    }
+                }
+            }
+        ]);
+
+        const stats = allStats[0] || { totalQty: 0, available: 0, assigned: 0, issues: 0 };
+
+        res.json({
+            data: items,
+            stats,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+
     } catch (err) {
-        console.error(err.message);
+        console.error("Inventory Fetch Error:", err);
         res.status(500).send('Server Error');
     }
 });

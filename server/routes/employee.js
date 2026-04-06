@@ -4,23 +4,65 @@ const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
 const bcrypt = require('bcryptjs');
 
-// @route   GET /api/employees
+// @route   GET /api/employees (or /api/users depending on your setup)
+// @desc    Get all employees (Paginated & Filtered)
 router.get('/', auth, async (req, res) => {
     try {
-        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access denied' });
-        
+        // --- 1. PAGINATION SETUP ---
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
         let query = {};
-        
-        // 🚀 MANAGER LOGIC: Only fetch their direct reports
+        let andConditions = [];
+
+        // --- 2. MANAGER SCOPE ---
+        // If a Manager is viewing the directory, they only see their team.
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
-            query = { reportingManagerEmail: manager.email.toLowerCase() };
+            if (manager) {
+                andConditions.push({ reportingManagerEmail: manager.email.toLowerCase() });
+            }
         }
 
-        const employees = await User.find(query).select('-password');
-        res.json(employees);
+        // --- 3. COMPREHENSIVE SEARCH FILTERING ---
+        if (req.query.search) {
+            // 'i' makes the search case-insensitive
+            const searchRegex = new RegExp(req.query.search, 'i');
+
+            andConditions.push({
+                $or: [
+                    { name: searchRegex },
+                    { email: searchRegex },
+                    { employeeId: searchRegex },
+                    { role: searchRegex },
+                    { status: searchRegex },
+                    { shiftType: searchRegex }
+                ]
+            });
+        }
+
+        // --- 4. EXECUTE QUERY ---
+        // If we have conditions (Manager rule OR Search rule), apply them via $and
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
+        }
+
+        const totalRecords = await User.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const employees = await User.find(query)
+            .sort({ employeeId: 1 }) // Sorted by ID alphabetically
+            .skip(skip)
+            .limit(limit);
+
+        res.json({
+            data: employees,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+
     } catch (err) {
-        console.error(err.message);
+        console.error("Employee Fetch Error:", err);
         res.status(500).send('Server Error');
     }
 });
@@ -43,7 +85,7 @@ router.get('/directory', auth, async (req, res) => {
 router.get('/payment-sources', auth, async (req, res) => {
     try {
         const currentUser = await User.findById(req.user.id);
-        
+
         let allowedUsers = [];
 
         // 1. Add their specific manager
@@ -54,7 +96,7 @@ router.get('/payment-sources', auth, async (req, res) => {
 
         // 2. Add all HRs and Admins
         const hrAdmins = await User.find({ role: { $in: ['HR'] } }).select('name role');
-        
+
         // Combine and filter out duplicates (in case Manager is also an Admin)
         const combined = [...allowedUsers, ...hrAdmins];
         const uniqueUsers = Array.from(new Set(combined.map(u => u._id.toString())))
@@ -74,9 +116,9 @@ router.get('/project-leads', auth, async (req, res) => {
         if (req.user.role === 'EMPLOYEE') {
             return res.status(403).json({ message: 'Access denied' });
         }
-        
+
         const leads = await User.find({ role: { $in: ['MANAGER'] } }).select('name role');
-        
+
         res.json(leads);
     } catch (err) {
         console.error(err.message);
@@ -102,8 +144,8 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/add', auth, async (req, res) => {
     try {
         const {
-            name, email, password, role, shiftType,  
-            joiningDate, dateOfBirth, aadhaar, emergencyContact, 
+            name, email, password, role, shiftType,
+            joiningDate, dateOfBirth, aadhaar, emergencyContact,
             reportingManagerName, reportingManagerEmail,
             employeeId, isPurchaser
         } = req.body;
@@ -116,12 +158,12 @@ router.post('/add', auth, async (req, res) => {
             email,
             password,
             role,
-            shiftType: shiftType || 'DAY', 
+            shiftType: shiftType || 'DAY',
             joiningDate,
             dateOfBirth,
             aadhaar,
             emergencyContact,
-            reportingManagerName, 
+            reportingManagerName,
             reportingManagerEmail,
             employeeId,
             isPurchaser: isPurchaser || false
@@ -143,7 +185,7 @@ router.put('/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Denied' });
 
-        const { 
+        const {
             name, email, role, shiftType, status, joiningDate, dateOfBirth, password,
             aadhaar, emergencyContact, phoneNumber, address,
             salary, casualLeaveBalance, earnedLeaveBalance,
@@ -155,11 +197,11 @@ router.put('/:id', auth, async (req, res) => {
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (role) updateData.role = role;
-        if (shiftType) updateData.shiftType = shiftType; 
+        if (shiftType) updateData.shiftType = shiftType;
         if (status) updateData.status = status;
         if (joiningDate) updateData.joiningDate = joiningDate;
-        if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth; 
-        
+        if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
+
         if (aadhaar !== undefined) updateData.aadhaar = aadhaar;
         if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
         if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
@@ -171,7 +213,7 @@ router.put('/:id', auth, async (req, res) => {
 
         if (reportingManagerName !== undefined) updateData.reportingManagerName = reportingManagerName;
         if (reportingManagerEmail !== undefined) updateData.reportingManagerEmail = reportingManagerEmail;
-        
+
         if (employeeId !== undefined) updateData.employeeId = employeeId;
         if (isPurchaser !== undefined) updateData.isPurchaser = isPurchaser;
 

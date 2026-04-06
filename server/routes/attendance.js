@@ -36,7 +36,7 @@ const getShiftDate = (punchTime, shiftType) => {
 };
 
 // ==========================================
-// 🚀 1. BIOMETRIC UPLOAD ROUTE & CALCULATOR
+// 🚀 1. BIOMETRIC UPLOAD ROUTE (UPDATED FOR PENDING RECORDS)
 // ==========================================
 router.post('/upload', upload.any(), async (req, res) => {
     try {
@@ -86,12 +86,8 @@ router.post('/upload', upload.any(), async (req, res) => {
         const shiftStartObj = new Date(y, m - 1, d, startHour, startMin, 0, 0);
         const shiftEndObj = new Date(y, m - 1, d, endHour, endMin, 0, 0);
 
-        if (endHour < startHour) {
-            shiftEndObj.setDate(shiftEndObj.getDate() + 1);
-        }
+        if (endHour < startHour) shiftEndObj.setDate(shiftEndObj.getDate() + 1);
 
-        let isInside = false;
-        let lastOutTime = null;
         let breakMs = 0;
         let firstIn = null;
         let lastOut = null;
@@ -125,33 +121,48 @@ router.post('/upload', upload.any(), async (req, res) => {
 
         const calculatedBreakMinutes = Math.floor(breakMs / 60000);
 
+        // --- Determine Status Based on Punch ---
+        let determinedStatus = 'Pending';
+        let determinedNote = 'Biometric Punch';
+
+        if (firstIn) {
+            const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
+            if (diffMinutes > (settings.halfDayThreshold || 30)) {
+                determinedStatus = 'Half Day';
+                determinedNote = `Late by ${formatLateTime(diffMinutes)}`;
+            } else if (diffMinutes > (settings.gracePeriod || 15)) {
+                determinedStatus = 'Late';
+                determinedNote = `Late by ${formatLateTime(diffMinutes)}`;
+            } else {
+                determinedStatus = 'Present';
+            }
+        }
+
+        // --- Database Update ---
         let record = await Attendance.findOne({ userId, date: shiftDate });
 
         if (!record) {
+            // Fallback: If cron failed to run morning setup, create the record normally
             if (firstIn) {
-                let status = 'Present';
-                let note = 'Biometric Punch';
-                const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
-
-                if (diffMinutes > (settings.halfDayThreshold || 30)) {
-                    status = 'Half Day';
-                    note = `Late by ${formatLateTime(diffMinutes)}`;
-                } else if (diffMinutes > (settings.gracePeriod || 15)) {
-                    status = 'Late';
-                    note = `Late by ${formatLateTime(diffMinutes)}`;
-                }
-
                 record = new Attendance({
                     userId, date: shiftDate, checkIn: firstIn, checkOut: lastOut,
-                    status, note, totalHours: calculatedGrossHours, breakTimeTaken: calculatedBreakMinutes
+                    status: determinedStatus, note: determinedNote,
+                    totalHours: calculatedGrossHours, breakTimeTaken: calculatedBreakMinutes
                 });
                 await record.save();
             }
         } else {
+            // Success: Update the Pre-populated Cron Record!
             record.checkIn = firstIn || record.checkIn;
             record.checkOut = lastOut || record.checkOut;
             record.totalHours = calculatedGrossHours;
             record.breakTimeTaken = calculatedBreakMinutes;
+
+            // ONLY overwrite status if it's currently Pending or Absent
+            if (record.status === 'Pending' || record.status === 'Absent') {
+                record.status = determinedStatus;
+                record.note = record.status === 'Absent' ? determinedNote + ' (Recovered from Absent)' : determinedNote;
+            }
             await record.save();
         }
 
@@ -163,234 +174,121 @@ router.post('/upload', upload.any(), async (req, res) => {
 });
 
 // ==========================================
-// 🚀 2. LIVE ABSENCE CALCULATOR (Optimized for Speed)
+// 🚀 2. LIVE ABSENCE CALCULATOR (Ultra-Fast Pending Query)
 // ==========================================
 router.get('/absent', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        // 🚀 MANAGER LOGIC
+        const now = new Date();
+        
         let userQuery = { role: 'EMPLOYEE', status: 'ACTIVE' };
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             userQuery.reportingManagerEmail = manager.email.toLowerCase();
         }
 
-        const employees = await User.find(userQuery).select('name email employeeId shiftType');
-        if (!employees.length) return res.json([]);
-
-        const now = new Date();
+        const employees = await User.find(userQuery).select('_id');
         const employeeIds = employees.map(emp => emp._id);
 
-        const neededDates = new Set();
-        const empTargetDates = new Map();
+        // Instead of math, just find who is "Pending" for today's dates
+        const todayDayStr = getShiftDate(now, 'DAY');
+        const todayNightStr = getShiftDate(now, 'NIGHT');
 
-        for (const emp of employees) {
-            const shiftType = emp.shiftType || 'DAY';
-            const targetDateStr = getShiftDate(now, shiftType);
-            neededDates.add(targetDateStr);
-            empTargetDates.set(emp._id.toString(), targetDateStr);
-        }
-
-        const attendances = await Attendance.find({
+        const liveAbsences = await Attendance.find({
             userId: { $in: employeeIds },
-            date: { $in: Array.from(neededDates) }
-        });
+            date: { $in: [todayDayStr, todayNightStr] },
+            status: 'Pending'
+        }).populate('userId', 'name email employeeId shiftType');
 
-        let leaves = [];
-        if (Leave) {
-            const startCheck = new Date(now);
-            startCheck.setDate(startCheck.getDate() - 2);
-            startCheck.setHours(0, 0, 0, 0);
+        const formattedMissing = liveAbsences.map(record => ({
+            _id: record.userId._id,
+            name: record.userId.name,
+            employeeId: record.userId.employeeId,
+            shiftType: record.userId.shiftType || 'DAY',
+            targetDate: record.date,
+            status: 'Pending Punch'
+        }));
 
-            leaves = await Leave.find({
-                userId: { $in: employeeIds },
-                status: 'Approved',
-                fromDate: { $lte: now },
-                toDate: { $gte: startCheck }
-            });
-        }
-
-        const isDateInLeave = (dateStr, leave) => {
-            const [d, m, y] = dateStr.split('/').map(Number);
-            const checkDate = new Date(y, m - 1, d);
-            const lFrom = new Date(leave.fromDate); lFrom.setHours(0, 0, 0, 0);
-            const lTo = new Date(leave.toDate); lTo.setHours(23, 59, 59, 999);
-            return checkDate >= lFrom && checkDate <= lTo;
-        };
-
-        const missingEmployees = [];
-
-        for (const emp of employees) {
-            const targetDateStr = empTargetDates.get(emp._id.toString());
-
-            // 👇 SUNDAY CHECK: Parse the date string and check if it's Sunday
-            const [d, m, y] = targetDateStr.split('/').map(Number);
-            const checkDateObj = new Date(y, m - 1, d);
-            
-            // getDay() returns 0 for Sunday. If Sunday, skip flagging this user as absent!
-            if (checkDateObj.getDay() === 0) {
-                continue; 
-            }
-            // 👆 END SUNDAY CHECK
-
-            const record = attendances.find(a =>
-                a.userId.toString() === emp._id.toString() &&
-                a.date === targetDateStr &&
-                a.status !== 'Absent'
-            );
-
-            if (!record) {
-                let currentStatus = 'Absent';
-
-                if (Leave) {
-                    const empLeaves = leaves.filter(l => l.userId.toString() === emp._id.toString());
-                    const onLeave = empLeaves.find(l => isDateInLeave(targetDateStr, l));
-                    if (onLeave) currentStatus = 'On Leave';
-                }
-
-                missingEmployees.push({
-                    _id: emp._id,
-                    name: emp.name,
-                    employeeId: emp.employeeId,
-                    shiftType: emp.shiftType || 'DAY',
-                    targetDate: targetDateStr,
-                    status: currentStatus
-                });
-            }
-        }
-
-        res.json(missingEmployees);
+        res.json(formattedMissing);
     } catch (err) {
-        console.error("Absence Check Error:", err);
+        console.error("Live Absence Check Error:", err);
         res.status(500).send('Server Error');
     }
 });
 
 // ==========================================
-// 🚀 3. LIVE & HISTORICAL ABSENCE REPORT
+// 🚀 3. ABSENCE REPORT (Fast DB Query with Pagination)
 // ==========================================
-router.post('/absent-report', auth, async (req, res) => {
+router.get('/absent-report', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        const { startDate, endDate, shiftType } = req.body;
-        const targetShift = shiftType || 'DAY';
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
-        const shiftQueryConditions = [{ shiftType: targetShift }];
-        if (targetShift === 'DAY') {
-            shiftQueryConditions.push({ shiftType: null });
-            shiftQueryConditions.push({ shiftType: '' });
-            shiftQueryConditions.push({ shiftType: { $exists: false } });
+        let userQuery = { role: 'EMPLOYEE', status: 'ACTIVE' };
+
+        if (req.query.shiftType === 'DAY') {
+            userQuery.$or = [{ shiftType: 'DAY' }, { shiftType: null }, { shiftType: { $exists: false } }];
+        } else if (req.query.shiftType === 'NIGHT') {
+            userQuery.shiftType = 'NIGHT';
         }
 
-        // 🚀 MANAGER LOGIC
-        let userQuery = { role: 'EMPLOYEE', status: 'ACTIVE', $or: shiftQueryConditions };
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             userQuery.reportingManagerEmail = manager.email.toLowerCase();
         }
 
-        const employees = await User.find(userQuery).select('name email employeeId shiftType joiningDate');
-
-        let start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        let end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-
-        const now = new Date();
-        let maxAllowedDate = new Date(now);
-        if (targetShift === 'NIGHT' && now.getHours() < 14) {
-            maxAllowedDate.setDate(maxAllowedDate.getDate() - 1);
-        }
-        maxAllowedDate.setHours(23, 59, 59, 999);
-
-        if (end > maxAllowedDate) end = new Date(maxAllowedDate);
-        if (start > end) return res.json([]);
-
-        const dateArray = [];
-        let currentDate = new Date(start);
-        while (currentDate <= end) {
-            dateArray.push(`${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`);
-            currentDate.setDate(currentDate.getDate() + 1);
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            userQuery.$and = [
+                { $or: [{ name: searchRegex }, { employeeId: searchRegex }] }
+            ];
         }
 
-        const attendances = await Attendance.find({
-            date: { $in: dateArray },
-            userId: { $in: employees.map(e => e._id) }
-        });
+        const matchingUsers = await User.find(userQuery).select('_id');
+        const userIds = matchingUsers.map(u => u._id);
 
-        let leaves = [];
-        if (Leave) {
-            leaves = await Leave.find({
-                status: 'Approved',
-                userId: { $in: employees.map(e => e._id) },
-                $or: [
-                    { fromDate: { $lte: end }, toDate: { $gte: start } }
-                ]
-            });
+        let dateArray = [];
+        if (req.query.startDate && req.query.endDate) {
+            let start = new Date(req.query.startDate);
+            let end = new Date(req.query.endDate);
+            
+            let curr = new Date(start);
+            while (curr <= end) {
+                dateArray.push(`${curr.getDate()}/${curr.getMonth() + 1}/${curr.getFullYear()}`);
+                curr.setDate(curr.getDate() + 1);
+            }
         }
 
-        const isDateInLeave = (dateStr, leave) => {
-            const [d, m, y] = dateStr.split('/').map(Number);
-            const checkDate = new Date(y, m - 1, d);
-            const lFrom = new Date(leave.fromDate); lFrom.setHours(0, 0, 0, 0);
-            const lTo = new Date(leave.toDate); lTo.setHours(23, 59, 59, 999);
-            return checkDate >= lFrom && checkDate <= lTo;
+        let attendanceQuery = {
+            userId: { $in: userIds },
+            // Included 'Pending' so HR can see people who haven't punched in today yet
+            status: { $in: ['Absent', 'On Leave', 'Pending'] } 
         };
 
-        const missingList = [];
-
-        for (const dateStr of dateArray) {
-            // 👇 SUNDAY CHECK: Parse the date string and check if it's Sunday
-            const [d, m, y] = dateStr.split('/').map(Number);
-            const checkDateObj = new Date(y, m - 1, d);
-            
-            // If it's Sunday (0), skip adding "Absent" flags for this date entirely
-            if (checkDateObj.getDay() === 0) {
-                continue;
-            }
-            // 👆 END SUNDAY CHECK
-
-            for (const emp of employees) {
-                if (emp.joiningDate) {
-                    const [d2, m2, y2] = dateStr.split('/').map(Number);
-                    const checkDateForJoin = new Date(y2, m2 - 1, d2);
-                    const joinDate = new Date(emp.joiningDate);
-                    joinDate.setHours(0, 0, 0, 0);
-                    if (checkDateForJoin < joinDate) continue;
-                }
-
-                const record = attendances.find(a => a.date === dateStr && a.userId.toString() === emp._id.toString());
-
-                if (!record || record.status === 'Absent') {
-                    let currentStatus = 'Absent';
-
-                    const empLeaves = leaves.filter(l => l.userId.toString() === emp._id.toString());
-                    const onLeave = empLeaves.find(l => isDateInLeave(dateStr, l));
-                    if (onLeave) currentStatus = 'On Leave';
-
-                    missingList.push({
-                        _id: `${emp._id}-${dateStr}`,
-                        name: emp.name,
-                        employeeId: emp.employeeId,
-                        shiftType: emp.shiftType || 'DAY',
-                        targetDate: dateStr,
-                        status: currentStatus
-                    });
-                }
-            }
+        if (dateArray.length > 0) {
+            attendanceQuery.date = { $in: dateArray };
         }
 
-        missingList.sort((a, b) => {
-            const [d1, m1, y1] = a.targetDate.split('/').map(Number);
-            const [d2, m2, y2] = b.targetDate.split('/').map(Number);
-            return new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1);
+        const totalRecords = await Attendance.countDocuments(attendanceQuery);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const absences = await Attendance.find(attendanceQuery)
+            .populate('userId', 'name employeeId shiftType')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.json({
+            data: absences,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
         });
 
-        res.json(missingList);
     } catch (err) {
-        console.error("Absent Report Error:", err);
+        console.error("Absent Report DB Error:", err);
         res.status(500).send('Server Error');
     }
 });
@@ -424,11 +322,7 @@ router.get('/my-logs', auth, async (req, res) => {
             }
 
             staleSession.checkOut = autoOutTime;
-
-            // 👇 FIXED: Removed the line that forces "Absent". 
-            // Now we just update the note to let HR know they forgot to punch out!
             staleSession.note = (staleSession.note || '') + ' [Missed Punch Out]';
-
             await staleSession.save();
         }
 
@@ -440,48 +334,170 @@ router.get('/my-logs', auth, async (req, res) => {
 });
 
 // ==========================================
-// 5. GET ALL LOGS
+// 5. GET ALL LOGS (Server-Side Paginated & Filtered)
 // ==========================================
 router.get('/all-logs', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
         let query = {};
-        // 🚀 MANAGER LOGIC
+        let andConditions = [];
+
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
-            query = { userId: { $in: teamIds } };
+            andConditions.push({ userId: { $in: teamIds } });
         }
 
-        const logs = await Attendance.find(query).populate('userId', 'name email shiftType').sort({ createdAt: -1 });
-        res.json(logs);
-    } catch (err) {
-        res.status(500).send('Server Error');
-    }
-});
+        const { filterType, fromDate, toDate } = req.query;
+        const now = new Date();
 
-router.get('/raw-logs', auth, async (req, res) => {
-    try {
-        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+        const generateDateArray = (start, end) => {
+            let arr = [];
+            let curr = new Date(start);
+            curr.setHours(0, 0, 0, 0);
+            let last = new Date(end);
+            last.setHours(23, 59, 59, 999);
+            while (curr <= last) {
+                arr.push(`${curr.getDate()}/${curr.getMonth() + 1}/${curr.getFullYear()}`);
+                curr.setDate(curr.getDate() + 1);
+            }
+            return arr;
+        };
 
-        let query = {};
-        // 🚀 MANAGER LOGIC
-        if (req.user.role === 'MANAGER') {
-            const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
-            query = { userId: { $in: teamIds } };
+        if (filterType === 'Today') {
+            andConditions.push({ date: `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}` });
+        } else if (filterType === 'Yesterday') {
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            andConditions.push({ date: `${yesterday.getDate()}/${yesterday.getMonth() + 1}/${yesterday.getFullYear()}` });
+        } else if (filterType === 'Week') {
+            const oneWeekAgo = new Date(now);
+            oneWeekAgo.setDate(now.getDate() - 7);
+            andConditions.push({ date: { $in: generateDateArray(oneWeekAgo, now) } });
+        } else if (filterType === 'Month') {
+            const oneMonthAgo = new Date(now);
+            oneMonthAgo.setDate(now.getDate() - 30);
+            andConditions.push({ date: { $in: generateDateArray(oneMonthAgo, now) } });
+        } else if (filterType === 'Custom' && fromDate && toDate) {
+            const start = new Date(fromDate);
+            const end = new Date(toDate);
+            andConditions.push({ date: { $in: generateDateArray(start, end) } });
         }
 
-        const logs = await AttendanceLog.find(query).populate('userId', 'name email shiftType').sort({ timestamp: -1 });
-        res.json(logs);
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
+            
+            andConditions.push({
+                $or: [
+                    { userId: { $in: matchingUsers } },
+                    { note: searchRegex },
+                    { status: searchRegex }
+                ]
+            });
+        }
+
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
+        }
+
+        const totalRecords = await Attendance.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const logs = await Attendance.find(query)
+            .populate('userId', 'name email shiftType')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.json({
+            data: logs,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+
     } catch (err) {
+        console.error("All Logs Pagination Error:", err);
         res.status(500).send('Server Error');
     }
 });
 
 // ==========================================
-// 6. GET LOGS BY USER ID
+// 6. RAW LOGS GETTER (For RawPunches.js)
+// ==========================================
+router.get('/raw-logs', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 15;
+        const skip = (page - 1) * limit;
+
+        let andConditions = [];
+
+        // 1. Manager Scope
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            andConditions.push({ userId: { $in: teamIds } });
+        }
+
+        // 2. Date Range Filtering
+        if (req.query.startDate && req.query.endDate) {
+            andConditions.push({
+                timestamp: {
+                    $gte: new Date(req.query.startDate),
+                    $lte: new Date(req.query.endDate)
+                }
+            });
+        }
+
+        // 3. Text Search (Employee Name, Bio ID, or Device ID)
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            const matchingUsers = await User.find({ 
+                $or: [{ name: searchRegex }, { employeeId: searchRegex }] 
+            }).distinct('_id');
+            
+            andConditions.push({
+                $or: [
+                    { userId: { $in: matchingUsers } },
+                    { deviceId: searchRegex }
+                ]
+            });
+        }
+
+        // 4. Combine all conditions safely
+        let query = {};
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
+        }
+
+        const totalRecords = await AttendanceLog.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const logs = await AttendanceLog.find(query)
+            .populate('userId', 'name email shiftType')
+            .sort({ timestamp: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.json({
+            data: logs,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+    } catch (err) {
+        console.error("Raw Logs Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 7. GET LOGS BY USER ID
 // ==========================================
 router.get('/admin/user-logs/:id', auth, async (req, res) => {
     try {
@@ -492,7 +508,7 @@ router.get('/admin/user-logs/:id', auth, async (req, res) => {
 });
 
 // ==========================================
-// 7. MANUAL UPDATE / OVERRIDE
+// 8. MANUAL UPDATE / OVERRIDE
 // ==========================================
 router.put('/update/:id', auth, async (req, res) => {
     try {
@@ -501,7 +517,6 @@ router.put('/update/:id', auth, async (req, res) => {
         const currentRecord = await Attendance.findById(req.params.id).populate('userId');
         if (!currentRecord) return res.status(404).json({ message: 'Log not found' });
 
-        // 🚀 MANAGER LOGIC: Check authorization
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             if (currentRecord.userId.reportingManagerEmail?.toLowerCase() !== manager.email.toLowerCase()) {
