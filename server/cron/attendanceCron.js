@@ -2,10 +2,11 @@ const cron = require('node-cron');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 
-let Leave = null;
-let Wfh = null;
+// Gracefully load optional models
+let Leave = null, Wfh = null, Holiday = null;
 try { Leave = require('../models/Leave'); } catch (e) {}
 try { Wfh = require('../models/Wfh'); } catch (e) {}
+try { Holiday = require('../models/Holiday'); } catch (e) {}
 
 // Helper: Calculate shift date
 const getShiftDate = (punchTime, shiftType) => {
@@ -21,18 +22,33 @@ const markAbsentees = async (shiftType) => {
     try {
         console.log(`[CRON] Starting Daily Status Check for ${shiftType} shift...`);
         const now = new Date();
+        const targetDateStr = getShiftDate(now, shiftType);
+        
+        // Parse the exact shift date to ensure Night Shifts are checked correctly
+        const [d, m, y] = targetDateStr.split('/').map(Number);
+        const shiftDateObj = new Date(y, m - 1, d);
 
-        // 1. Skip Sundays (0 = Sunday)
-        if (now.getDay() === 0) {
-            console.log('[CRON] Today is Sunday. Skipping auto-check.');
+        // 1. Skip Sundays (0 = Sunday) based on the SHIFT date, not execution date
+        if (shiftDateObj.getDay() === 0) {
+            console.log(`[CRON] Shift date ${targetDateStr} is a Sunday. Skipping auto-check.`);
             return;
         }
 
-        const targetDateStr = getShiftDate(now, shiftType);
-        const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(now); endOfDay.setHours(23, 59, 59, 999);
+        const startOfDay = new Date(shiftDateObj); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(shiftDateObj); endOfDay.setHours(23, 59, 59, 999);
 
-        // 2. Find all active employees/HR/Managers of this shift type (Exclude ADMIN)
+        // 2. Skip Official Holidays
+        if (Holiday) {
+            const todayHoliday = await Holiday.findOne({
+                date: { $gte: startOfDay, $lte: endOfDay }
+            });
+            if (todayHoliday) {
+                console.log(`[CRON] Shift date ${targetDateStr} is a Holiday (${todayHoliday.name}). Skipping auto-check.`);
+                return;
+            }
+        }
+
+        // 3. Find all active employees/HR/Managers of this shift type (Exclude ADMIN)
         const query = { status: 'ACTIVE', role: { $ne: 'ADMIN' } };
         if (shiftType === 'DAY') {
             query.$or = [{ shiftType: 'DAY' }, { shiftType: null }, { shiftType: { $exists: false } }];
@@ -43,18 +59,16 @@ const markAbsentees = async (shiftType) => {
         const users = await User.find(query).select('_id name joiningDate');
         const userIds = users.map(u => u._id);
 
-        // 3. Fetch today's Attendances, Leaves, and WFHs
+        // 4. Fetch today's Attendances, Leaves, and WFHs
         const todayAttendances = await Attendance.find({ date: targetDateStr, userId: { $in: userIds } });
         
-        let todayLeaves = [];
+        let todayLeaves = [], todayWfh = [];
         if (Leave) {
             todayLeaves = await Leave.find({
                 userId: { $in: userIds }, status: 'Approved',
                 fromDate: { $lte: endOfDay }, toDate: { $gte: startOfDay }
             });
         }
-
-        let todayWfh = [];
         if (Wfh) {
             todayWfh = await Wfh.find({
                 userId: { $in: userIds }, status: 'Approved',
@@ -64,11 +78,12 @@ const markAbsentees = async (shiftType) => {
 
         let markedLeave = 0, markedWfh = 0, markedAbsent = 0;
 
-        // 4. Check each user
+        // 5. Check each user
         for (const user of users) {
             if (user.joiningDate) {
-                const [d, m, y] = targetDateStr.split('/').map(Number);
-                if (new Date(y, m - 1, d) < new Date(new Date(user.joiningDate).setHours(0,0,0,0))) continue;
+                const joinDate = new Date(user.joiningDate);
+                joinDate.setHours(0, 0, 0, 0);
+                if (shiftDateObj < joinDate) continue;
             }
 
             const hasPunched = todayAttendances.some(a => a.userId.toString() === user._id.toString());

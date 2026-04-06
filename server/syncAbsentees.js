@@ -4,9 +4,10 @@ const mongoose = require('mongoose');
 const User = require('./models/User');
 const Attendance = require('./models/Attendance');
 
-let Leave = null, Wfh = null;
+let Leave = null, Wfh = null, Holiday = null;
 try { Leave = require('./models/Leave'); } catch (e) {}
 try { Wfh = require('./models/Wfh'); } catch (e) {}
+try { Holiday = require('./models/Holiday'); } catch (e) {}
 
 const formatToDBDate = (dateObj) => `${dateObj.getDate()}/${dateObj.getMonth() + 1}/${dateObj.getFullYear()}`;
 
@@ -39,6 +40,17 @@ const runSync = async () => {
         if (!process.env.MONGO_URI) throw new Error("MONGO_URI is missing");
         await mongoose.connect(process.env.MONGO_URI);
         console.log("✅ Connected to Database.");
+
+        // --- NEW: HOLIDAY CHECK ---
+        if (Holiday) {
+            const isHoliday = await Holiday.findOne({
+                date: { $gte: startOfDay, $lte: endOfDay }
+            });
+            if (isHoliday) {
+                console.log(`\n🎉 [INFO] ${targetDateStr} is a Holiday (${isHoliday.name}). No absentees marked.`);
+                process.exit(0);
+            }
+        }
 
         const employees = await User.find({ status: 'ACTIVE', role: { $ne: 'ADMIN' } }).select('_id name employeeId joiningDate');
         const employeeIds = employees.map(emp => emp._id);

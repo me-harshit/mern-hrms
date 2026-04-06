@@ -28,14 +28,19 @@ const CalendarPage = () => {
 
     const fetchCalendarData = async () => {
         try {
-            const [holidaysRes, attendanceRes, leavesRes] = await Promise.all([
+            // 👇 NEW: Added WFH fetch to the Promise.all array
+            const [holidaysRes, attendanceRes, leavesRes, wfhRes] = await Promise.all([
                 api.get('/holidays'),
                 api.get('/attendance/my-logs'),
-                api.get('/leaves/my-leaves')
+                api.get('/leaves/my-leaves'),
+                api.get('/wfh/my-requests').catch(() => ({ data: { history: [] } })) // Fallback if WFH API is missing
             ]);
 
             const leavesArray = leavesRes.data.history || []; 
-            processEvents(holidaysRes.data, attendanceRes.data, leavesArray);
+            const wfhArray = wfhRes.data?.history || [];
+            
+            // Pass all data into the processor
+            processEvents(holidaysRes.data, attendanceRes.data, leavesArray, wfhArray);
             setLoading(false);
         } catch (err) {
             console.error("Error fetching calendar data", err);
@@ -49,7 +54,7 @@ const CalendarPage = () => {
         return d.toISOString().split('T')[0];
     };
 
-    const processEvents = (holidaysData, attendanceLogs, leaveRequests) => {
+    const processEvents = (holidaysData, attendanceLogs, leaveRequests, wfhRequests) => {
         const eventMap = {};
         
         // 1. Holidays
@@ -76,14 +81,38 @@ const CalendarPage = () => {
             });
         }
 
-        // 3. Attendance
+        // 3. Work From Home (WFH)
+        if (Array.isArray(wfhRequests)) {
+            wfhRequests.forEach(wfh => {
+                if (wfh.status === 'Approved') {
+                    const start = new Date(wfh.fromDate);
+                    const end = new Date(wfh.toDate);
+                    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                        const dateStr = formatDateKey(d);
+                        if (dateStr && !eventMap[dateStr]) {
+                            eventMap[dateStr] = { type: 'wfh', label: 'WFH' };
+                        }
+                    }
+                }
+            });
+        }
+
+        // 4. Attendance
         if (Array.isArray(attendanceLogs)) {
             attendanceLogs.forEach(log => {
                 const [day, month, yearVal] = log.date.split('/');
                 const dateStr = `${yearVal}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                if (!eventMap[dateStr] || eventMap[dateStr].type !== 'holiday') {
-                    if (log.status === 'Half Day') eventMap[dateStr] = { type: 'half-day', label: 'Half Day' };
-                    else if (log.status === 'Absent') eventMap[dateStr] = { type: 'absent', label: 'Absent' };
+                
+                // Only override if it's not already a holiday, leave, or WFH
+                if (!eventMap[dateStr] || !['holiday', 'leave', 'wfh'].includes(eventMap[dateStr].type)) {
+                    if (log.status === 'Half Day') {
+                        eventMap[dateStr] = { type: 'half-day', label: 'Half Day' };
+                    } else if (log.status === 'Absent') {
+                        eventMap[dateStr] = { type: 'absent', label: 'Absent' };
+                    } else if (log.status === 'Present' || log.status === 'Late') {
+                        // 👇 NEW: Log Present Status
+                        eventMap[dateStr] = { type: 'present', label: 'Present' };
+                    }
                 }
             });
         }
@@ -186,10 +215,13 @@ const CalendarPage = () => {
                     </div>
                 </div>
 
-                <div className="calendar-legend">
-                    <div className="legend-item"><span className="dot holiday"></span> Holiday</div>
+                {/* 👇 NEW: Added WFH and Present to Legend */}
+                <div className="calendar-legend" style={{ flexWrap: 'wrap' }}>
+                    <div className="legend-item"><span className="dot present"></span> Present</div>
+                    <div className="legend-item"><span className="dot wfh"></span> WFH</div>
                     <div className="legend-item"><span className="dot leave"></span> On Leave</div>
                     <div className="legend-item"><span className="dot half-day"></span> Half Day</div>
+                    <div className="legend-item"><span className="dot holiday"></span> Holiday</div>
                     <div className="legend-item"><span className="dot absent"></span> Absent</div>
                     <div className="legend-item"><span className="dot sunday"></span> Sunday</div>
                 </div>

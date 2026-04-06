@@ -265,3 +265,25 @@
         font-size: 1.25rem;
     }
 }
+
+/* 👇 NEW: Colors for Present and WFH */
+
+/* Present (Green) */
+.calendar-day.status-present {
+    background-color: #dcfce7;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+}
+.dot.present {
+    background-color: #16a34a;
+}
+
+/* WFH (Blue) */
+.calendar-day.status-wfh {
+    background-color: #e0f2fe;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+}
+.dot.wfh {
+    background-color: #0284c7;
+}
