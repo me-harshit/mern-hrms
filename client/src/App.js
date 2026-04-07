@@ -18,6 +18,7 @@ import AdminSettings from './pages/Admin/AdminSettings';
 import AttendanceLogs from './pages/Admin/AttendanceLogs';
 import AbsentEmployees from './pages/Admin/AbsentEmployees';
 import EmployeeProfile from './pages/Admin/EmployeeProfile';
+import EditEmployee from './pages/Admin/EditEmployee'; // 👇 NEW: Imported EditEmployee
 import Expenses from './pages/User/Expenses';
 import AdminExpenses from './pages/Admin/AdminExpenses';
 import AllExpenses from './pages/Admin/AllExpenses';
@@ -31,6 +32,7 @@ import MyInventory from './pages/User/MyInventory';
 import AddInventory from './pages/Admin/AddInventory';
 import EditInventory from './pages/Admin/EditInventory';
 import Reimbursements from './pages/Admin/Reimbursements';
+
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -106,10 +108,19 @@ function App() {
               path="/employees"
               element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <Employees /> : <Navigate to="/dashboard" />}
             />
+            
+            {/* 👇 UPDATED: Employee Profile View Route */}
             <Route
               path="/employee/:id"
               element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <EmployeeProfile /> : <Navigate to="/dashboard" />}
             />
+            
+            {/* 👇 NEW: Employee Edit Route */}
+            <Route
+              path="/edit-employee/:id"
+              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <EditEmployee /> : <Navigate to="/dashboard" />}
+            />
+
             <Route
               path="/attendance-logs"
               element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AttendanceLogs /> : <Navigate to="/dashboard" />}

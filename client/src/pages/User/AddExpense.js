@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle, faPlus, faSearch } from '@fortawesome/free-solid-svg-icons';
+import { 
+    faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, 
+    faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle, 
+    faPlus, faSearch 
+} from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression'; 
 import '../../styles/App.css';
 import '../../styles/expenses.css';
@@ -20,6 +24,12 @@ const AddExpense = () => {
     const [allEmployeesList, setAllEmployeesList] = useState([]); 
     const [projectsList, setProjectsList] = useState([]);
     const [vendorsList, setVendorsList] = useState([]); 
+    
+    // 👇 NEW: Store System Settings for Thresholds
+    const [systemSettings, setSystemSettings] = useState({
+        inventoryCatAThreshold: 500,
+        inventoryCatBThreshold: 100
+    });
 
     // State for the custom searchable dropdowns
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
@@ -54,7 +64,7 @@ const AddExpense = () => {
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
         
         vendorName: '', billingCycle: 'Monthly', expenseDescription: '', participantName: '', 
-        gstNumber: '', // 👇 Used globally now
+        gstNumber: '', 
         paymentDate: '', 
 
         utilityType: 'Electricity', billingMonth: '', invoiceNumber: '',
@@ -79,17 +89,26 @@ const AddExpense = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const userRes = await api.get('/employees/payment-sources');
+                // 👇 Fetched Settings alongside dropdowns
+                const [userRes, allEmpRes, projRes, venRes, settingsRes] = await Promise.all([
+                    api.get('/employees/payment-sources'),
+                    api.get('/employees/directory').catch(() => ({ data: [] })),
+                    api.get('/projects'),
+                    api.get('/vendors').catch(() => ({ data: [] })),
+                    api.get('/settings').catch(() => ({ data: {} }))
+                ]);
+
                 setUsersList(userRes.data);
-
-                const allEmpRes = await api.get('/employees/directory').catch(() => ({ data: [] }));
                 setAllEmployeesList(allEmpRes.data);
-
-                const projRes = await api.get('/projects');
                 setProjectsList(projRes.data);
-
-                const venRes = await api.get('/vendors').catch(() => ({ data: [] }));
                 setVendorsList(venRes.data);
+                
+                if(settingsRes.data) {
+                    setSystemSettings({
+                        inventoryCatAThreshold: settingsRes.data.inventoryCatAThreshold || 500,
+                        inventoryCatBThreshold: settingsRes.data.inventoryCatBThreshold || 100
+                    });
+                }
             } catch (err) {
                 console.error("Could not fetch dropdown data", err);
             }
@@ -221,8 +240,26 @@ const AddExpense = () => {
             return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
         }
 
-        if (formData.category === 'Product / Item Purchase' && expenseDetails.inventoryItemStatus === 'Assigned' && !expenseDetails.inventoryAssignedTo) {
-            return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
+        if (formData.category === 'Product / Item Purchase') {
+            if (expenseDetails.inventoryItemStatus === 'Assigned' && !expenseDetails.inventoryAssignedTo) {
+                return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
+            }
+
+            // 👇 NEW: Check Inventory Image Rules based on Thresholds
+            if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus)) {
+                const unitCost = Number(expenseDetails.unitPrice);
+                
+                if (unitCost >= systemSettings.inventoryCatAThreshold) {
+                    if (!files.expenseMedia || files.expenseMedia.length === 0) {
+                        return Swal.fire({
+                            title: 'Image Required (Category A)',
+                            text: `Because this item costs ₹${systemSettings.inventoryCatAThreshold} or more, it is considered a Category A asset. You MUST upload a photo proof of the product to proceed.`,
+                            icon: 'warning',
+                            confirmButtonColor: '#215D7B'
+                        });
+                    }
+                }
+            }
         }
 
         setLoading(true);
@@ -260,7 +297,6 @@ const AddExpense = () => {
                     relevantDetails = {};
             }
 
-            // 👇 NEW: Globally append the GST Number to whatever details we collected
             if (d.gstNumber && d.gstNumber.trim() !== '') {
                 relevantDetails.gstNumber = d.gstNumber.toUpperCase().trim();
             }
@@ -304,7 +340,12 @@ const AddExpense = () => {
             case 'Food Expense': return 'Order Screenshot / Restaurant Bill';
             case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
             case 'Accommodation': return 'Hotel Receipt / Invoice';
-            case 'Product / Item Purchase': return 'Product Photo(s) / Video(s)';
+            case 'Product / Item Purchase': 
+                // 👇 NEW: Dynamically update label to show requirements
+                if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus) && Number(expenseDetails.unitPrice) >= systemSettings.inventoryCatAThreshold) {
+                    return 'Product Photo(s) / Video(s) (Required for Cat A)';
+                }
+                return 'Product Photo(s) / Video(s) (Optional)';
             case 'Utility / Bills': return 'Utility Bill / Invoice';
             case 'Maintenance & Repairs': return 'Service Receipt / Invoice';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
@@ -676,7 +717,6 @@ const AddExpense = () => {
                                 <input className="custom-input" type="number" name="amount" required placeholder="5000" value={formData.amount} onChange={handleMainChange} />
                             </div>
 
-                            {/* 👇 NEW: Global GST Field */}
                             <div className="form-group">
                                 <label className="input-label">GST Number (Optional)</label>
                                 <input className="custom-input" type="text" name="gstNumber" placeholder="e.g. 29GGGGG1314R9Z6" value={expenseDetails.gstNumber} onChange={handleDetailChange} style={{ textTransform: 'uppercase' }} />
@@ -778,7 +818,7 @@ const AddExpense = () => {
                                     accept="image/*,video/*" 
                                     capture="environment"
                                     onChange={e => handleFileChange(e, 'expenseMedia')} 
-                                    required={formData.category === 'Vendor Payment'} // Make required for Vendors
+                                    required={formData.category === 'Vendor Payment'} // Vendor Invoice is still strictly required
                                 />
 
                                 {isCompressing ? (

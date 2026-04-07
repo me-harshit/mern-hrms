@@ -53,6 +53,10 @@ const AllExpenses = () => {
         submittedBy: '', approvedBy: '', minAmount: '', maxAmount: '', status: '', hasGst: ''
     });
 
+    const handleViewProfile = (id) => {
+        navigate(`/employee/${id}`);
+    };
+
     // Handle Dropdown Outside Clicks
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -322,7 +326,14 @@ const AllExpenses = () => {
                                 return (
                                     <tr key={item._id}>
                                         <td data-label="Submitter">
-                                            <div className="fw-bold text-primary">{item.submittedBy?.name || 'Unknown'}</div>
+                                            <div
+                                                className="fw-bold text-primary"
+                                                style={{ cursor: 'pointer' }}
+                                                onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
+                                                title="View Profile"
+                                            >
+                                                {item.submittedBy?.name || 'Unknown'}
+                                            </div>
                                             <div className="text-small text-muted">{item.submittedBy?.employeeId || '-'}</div>
                                         </td>
 

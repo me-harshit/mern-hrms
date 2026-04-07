@@ -28,7 +28,8 @@ router.put('/', auth, async (req, res) => {
         const { 
             dayShiftStartTime, dayShiftEndTime, 
             nightShiftStartTime, nightShiftEndTime, 
-            gracePeriod, halfDayThreshold 
+            gracePeriod, halfDayThreshold,
+            inventoryCatAThreshold, inventoryCatBThreshold // 👇 Added
         } = req.body;
         
         let settings = await Settings.findOne();
@@ -41,6 +42,9 @@ router.put('/', auth, async (req, res) => {
         
         if (gracePeriod !== undefined) settings.gracePeriod = gracePeriod;
         if (halfDayThreshold !== undefined) settings.halfDayThreshold = halfDayThreshold;
+
+        if (inventoryCatAThreshold !== undefined) settings.inventoryCatAThreshold = inventoryCatAThreshold;
+        if (inventoryCatBThreshold !== undefined) settings.inventoryCatBThreshold = inventoryCatBThreshold;
 
         await settings.save();
         res.json(settings);

@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware'); 
+const upload = require('../middleware/uploadMiddleware');
 const { uploadToS3 } = require('../utils/s3Service');
 
 const Inventory = require('../models/Inventory');
+const User = require('../models/User');
+const Settings = require('../models/Settings');
 
 // Helper function to check permissions
 const isAdminOrHR = (role) => ['ADMIN', 'HR'].includes(role);
@@ -15,8 +17,8 @@ router.post('/', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async (r
     try {
         if (!isAdminOrHR(req.user.role)) return res.status(403).json({ message: 'Access Denied' });
 
-        const { itemName, quantity, status, storageLocation, assignedTo, notes } = req.body;
-        
+        const { itemName, quantity, price, status, storageLocation, assignedTo, notes } = req.body;
+
         let mediaUrls = [];
         if (req.files && req.files['media']) {
             const uploadPromises = req.files['media'].map(file => uploadToS3(file, 'Inventory'));
@@ -26,6 +28,7 @@ router.post('/', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async (r
         const newAsset = new Inventory({
             itemName,
             quantity: Number(quantity) || 1,
+            price: price ? Number(price) : null, // 👇 NEW: Save price safely
             status,
             storageLocation: status === 'Available' ? storageLocation : '',
             assignedTo: status === 'Assigned' && assignedTo ? assignedTo : null,
@@ -54,16 +57,12 @@ router.get('/', auth, async (req, res) => {
         let query = {};
         let andConditions = [];
 
-        // --- 1. STATUS FILTER ---
         if (req.query.status && req.query.status !== 'All') {
             andConditions.push({ status: req.query.status });
         }
 
-        // --- 2. SEARCH FILTER ---
         if (req.query.search) {
             const searchRegex = new RegExp(req.query.search, 'i');
-            
-            // Find users matching search to allow searching by "Assigned To" name
             const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
 
             andConditions.push({
@@ -75,10 +74,32 @@ router.get('/', auth, async (req, res) => {
                 ]
             });
         }
+        // --- 3. CATEGORY FILTER (A, B, C) ---
+        if (req.query.category && req.query.category !== 'All') {
+            const settings = await Settings.findOne() || { inventoryCatAThreshold: 500, inventoryCatBThreshold: 100 };
+
+            if (req.query.category === 'Cat A') {
+                andConditions.push({ price: { $gte: settings.inventoryCatAThreshold } });
+            } else if (req.query.category === 'Cat B') {
+                andConditions.push({
+                    price: {
+                        $gte: settings.inventoryCatBThreshold,
+                        $lt: settings.inventoryCatAThreshold
+                    }
+                });
+            } else if (req.query.category === 'Cat C') {
+                andConditions.push({
+                    $or: [
+                        { price: { $lt: settings.inventoryCatBThreshold } },
+                        { price: null },
+                        { price: { $exists: false } }
+                    ]
+                });
+            }
+        }
 
         if (andConditions.length > 0) query.$and = andConditions;
 
-        // --- 3. FETCH DATA & TOTALS ---
         const totalRecords = await Inventory.countDocuments(query);
         const totalPages = Math.ceil(totalRecords / limit);
 
@@ -88,22 +109,14 @@ router.get('/', auth, async (req, res) => {
             .skip(skip)
             .limit(limit);
 
-        // --- 4. CALCULATE GLOBAL STATS (For the top cards) ---
-        // We run this once so the cards show the total company state
         const allStats = await Inventory.aggregate([
             {
                 $group: {
                     _id: null,
                     totalQty: { $sum: "$quantity" },
-                    available: { 
-                        $sum: { $cond: [{ $eq: ["$status", "Available"] }, "$quantity", 0] } 
-                    },
-                    assigned: { 
-                        $sum: { $cond: [{ $eq: ["$status", "Assigned"] }, "$quantity", 0] } 
-                    },
-                    issues: { 
-                        $sum: { $cond: [{ $in: ["$status", ["Damaged", "Lost"]] }, "$quantity", 0] } 
-                    }
+                    available: { $sum: { $cond: [{ $eq: ["$status", "Available"] }, "$quantity", 0] } },
+                    assigned: { $sum: { $cond: [{ $eq: ["$status", "Assigned"] }, "$quantity", 0] } },
+                    issues: { $sum: { $cond: [{ $in: ["$status", ["Damaged", "Lost"]] }, "$quantity", 0] } }
                 }
             }
         ]);
@@ -124,9 +137,9 @@ router.get('/', auth, async (req, res) => {
 
 router.get('/my-items', auth, async (req, res) => {
     try {
-        const items = await Inventory.find({ 
-            assignedTo: req.user.id, 
-            status: 'Assigned' 
+        const items = await Inventory.find({
+            assignedTo: req.user.id,
+            status: 'Assigned'
         });
         res.json(items);
     } catch (err) {
@@ -160,7 +173,8 @@ router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async 
         let item = await Inventory.findById(req.params.id);
         if (!item) return res.status(404).json({ message: 'Asset not found' });
 
-        const { itemName, status, storageLocation, assignedTo, notes, quantityToUpdate } = req.body;
+        // 👇 NEW: Extract price
+        const { itemName, status, storageLocation, assignedTo, notes, quantityToUpdate, price } = req.body;
 
         let updateQty = parseInt(quantityToUpdate) || item.quantity;
         if (updateQty > item.quantity) {
@@ -170,7 +184,6 @@ router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async 
         let isSplitting = updateQty < item.quantity;
         let targetItem = item;
 
-        // --- 1. THE SPLIT LOGIC ---
         if (isSplitting) {
             item.quantity -= updateQty;
             await item.save();
@@ -186,6 +199,11 @@ router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async 
 
         if (itemName) targetItem.itemName = itemName;
         if (notes !== undefined) targetItem.notes = notes;
+
+        // 👇 NEW: Update price safely
+        if (price !== undefined) {
+            targetItem.price = price === '' ? null : Number(price);
+        }
 
         targetItem.status = status;
 
@@ -206,37 +224,30 @@ router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async 
             targetItem.mediaUrls = [...targetItem.mediaUrls, ...newMediaUrls];
         }
 
-        // --- 2. THE MERGE LOGIC (UPDATED) ---
         let existingPool = null;
 
-        // Check if we can merge with an Available pool
         if (status === 'Available') {
             existingPool = await Inventory.findOne({
-                _id: { $ne: targetItem._id }, 
+                _id: { $ne: targetItem._id },
                 itemName: targetItem.itemName,
                 status: 'Available',
                 storageLocation: targetItem.storageLocation
             });
-        } 
-        // 👇 Check if we can merge with an Employee's existing assigned pool
+        }
         else if (status === 'Assigned') {
             existingPool = await Inventory.findOne({
-                _id: { $ne: targetItem._id }, 
+                _id: { $ne: targetItem._id },
                 itemName: targetItem.itemName,
                 status: 'Assigned',
                 assignedTo: targetItem.assignedTo
             });
         }
 
-        // If we found a match for EITHER scenario, merge them!
         if (existingPool) {
             existingPool.quantity += targetItem.quantity;
-
-            // Merge Media safely
             const combinedMedia = new Set([...existingPool.mediaUrls, ...targetItem.mediaUrls]);
             existingPool.mediaUrls = Array.from(combinedMedia);
 
-            // Merge Notes safely so we don't lose data
             if (targetItem.notes && targetItem.notes.trim() !== '') {
                 if (existingPool.notes && !existingPool.notes.includes(targetItem.notes)) {
                     existingPool.notes = `${existingPool.notes} | ${targetItem.notes}`;
@@ -247,7 +258,6 @@ router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async 
 
             await existingPool.save();
 
-            // Clean up the old row if we moved the entire stack
             if (!isSplitting) {
                 await Inventory.findByIdAndDelete(targetItem._id);
             }
@@ -255,7 +265,6 @@ router.put('/:id', auth, upload.fields([{ name: 'media', maxCount: 5 }]), async 
             return res.json(existingPool);
         }
 
-        // If no merge happened, just save the target item normally
         await targetItem.save();
         res.json(targetItem);
 

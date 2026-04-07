@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // 👇 NEW: Imported useNavigate
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faTimes, faSearch, faFilter, faFileAlt, faLaptopHouse, faEye } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; // 👇 NEW: Modular Pagination
+import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 
 const EmployeeRequests = () => {
+    const navigate = useNavigate(); // 👇 NEW: Initialized navigate
+
     // --- DATA & PAGINATION STATES ---
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -189,8 +192,16 @@ const EmployeeRequests = () => {
                         ) : (
                             requests.map(req => (
                                 <tr key={req._id}>
-                                    <td data-label="Employee" className="fw-bold text-primary">
-                                        {req.userId?.name || 'Unknown'}
+                                    {/* 👇 UPDATED: Clickable Name */}
+                                    <td data-label="Employee">
+                                        <div 
+                                            className="fw-bold text-primary"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={() => req.userId?._id && navigate(`/employee/${req.userId._id}`)}
+                                            title="View Profile"
+                                        >
+                                            {req.userId?.name || 'Unknown'}
+                                        </div>
                                     </td>
 
                                     {activeTab === 'Leaves' && (
@@ -220,7 +231,6 @@ const EmployeeRequests = () => {
 
                                     <td data-label="Action">
                                         <div className="flex-row gap-5">
-                                            {/* 👇 NEW: View Sidebar Button */}
                                             <button
                                                 className="gts-btn doc-btn"
                                                 style={{ padding: '6px 10px', background: '#f1f5f9', color: '#215D7B' }}
@@ -257,7 +267,6 @@ const EmployeeRequests = () => {
                 </table>
             </div>
 
-            {/* 👇 Pagination Component */}
             {!loading && (
                 <Pagination 
                     currentPage={currentPage}
@@ -272,7 +281,6 @@ const EmployeeRequests = () => {
                 />
             )}
 
-            {/* 👇 NEW: Sidebar Overlay and Panel */}
             <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={closeSidebar}></div>
             <div className={`expense-detail-sidebar ${isSidebarOpen ? 'open' : ''}`}>
                 {selectedRequest && (
@@ -290,9 +298,22 @@ const EmployeeRequests = () => {
                         <div className="sidebar-content">
                             <h3 className="sidebar-section-title">Request Details</h3>
                             <div className="detail-grid-2">
+                                {/* 👇 UPDATED: Clickable Name inside Sidebar */}
                                 <div className="detail-group">
                                     <span className="detail-label">Employee</span>
-                                    <span className="detail-value fw-bold text-primary">{selectedRequest.userId?.name || 'N/A'}</span>
+                                    <span 
+                                        className="detail-value fw-bold text-primary"
+                                        style={{ cursor: 'pointer'}}
+                                        onClick={() => {
+                                            if (selectedRequest.userId?._id) {
+                                                closeSidebar();
+                                                navigate(`/employee/${selectedRequest.userId._id}`);
+                                            }
+                                        }}
+                                        title="View Profile"
+                                    >
+                                        {selectedRequest.userId?.name || 'N/A'}
+                                    </span>
                                 </div>
                                 <div className="detail-group">
                                     <span className="detail-label">Duration</span>
@@ -332,7 +353,6 @@ const EmployeeRequests = () => {
                                 )}
                             </div>
 
-                            {/* Optional Actions inside Sidebar for quick access */}
                             {selectedRequest.status === 'Pending' && (
                                 <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
                                     <button 

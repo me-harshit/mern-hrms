@@ -2,21 +2,22 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCog, faSave, faClock, faCalendarAlt, faPlus, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faCog, faSave, faClock, faCalendarAlt, faPlus, faTrash, faBoxes } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/App.css';
 
 const AdminSettings = () => {
     const [loading, setLoading] = useState(true);
     const [holidays, setHolidays] = useState([]);
     
-    // Updated state to include Day and Night shift times
     const [settings, setSettings] = useState({
         dayShiftStartTime: '09:30',
         dayShiftEndTime: '18:30',
         nightShiftStartTime: '19:00',
         nightShiftEndTime: '04:00',
         gracePeriod: 15,
-        halfDayThreshold: 30
+        halfDayThreshold: 30,
+        inventoryCatAThreshold: 500, // 👇 Default State
+        inventoryCatBThreshold: 100  // 👇 Default State
     });
 
     useEffect(() => {
@@ -37,7 +38,9 @@ const AdminSettings = () => {
                     nightShiftStartTime: settingsRes.data.nightShiftStartTime || '19:00',
                     nightShiftEndTime: settingsRes.data.nightShiftEndTime || '04:00',
                     gracePeriod: settingsRes.data.gracePeriod || 15,
-                    halfDayThreshold: settingsRes.data.halfDayThreshold || 30
+                    halfDayThreshold: settingsRes.data.halfDayThreshold || 30,
+                    inventoryCatAThreshold: settingsRes.data.inventoryCatAThreshold || 500, // 👇 Fetch
+                    inventoryCatBThreshold: settingsRes.data.inventoryCatBThreshold || 100  // 👇 Fetch
                 });
             }
             setHolidays(holidaysRes.data || []);
@@ -54,7 +57,7 @@ const AdminSettings = () => {
             await api.put('/settings', settings);
             Swal.fire({
                 title: 'Settings Saved!',
-                text: 'Attendance rules have been updated.',
+                text: 'System rules have been updated.',
                 icon: 'success',
                 confirmButtonColor: '#215D7B'
             });
@@ -122,9 +125,7 @@ const AdminSettings = () => {
             <h1 className="page-title"><FontAwesomeIcon icon={faCog} /> System Configuration</h1>
 
             {/* CARD 1: ATTENDANCE RULES */}
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'flex-start' }}>
-
-                {/* LEFT: INFO SECTION */}
+            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <div style={{ flex: '0 0 280px' }}>
                     <h3 style={{ margin: 0, color: '#215D7B', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <FontAwesomeIcon icon={faClock} /> Attendance Rules
@@ -134,97 +135,89 @@ const AdminSettings = () => {
                     </p>
                 </div>
 
-                {/* RIGHT: FORM SECTION */}
                 <div style={{ flex: '1', minWidth: '300px' }}>
                     <form onSubmit={handleSaveSettings}>
-                        
-                        {/* --- DAY SHIFT ROW --- */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '15px' }}>
                             <div className="form-group">
                                 <label className="input-label" style={{color: '#e67e22'}}><FontAwesomeIcon icon={faClock} /> Day Shift Start</label>
-                                <input
-                                    type="time"
-                                    className="swal2-input custom-input"
-                                    value={settings.dayShiftStartTime}
-                                    onChange={(e) => setSettings({ ...settings, dayShiftStartTime: e.target.value })}
-                                />
+                                <input type="time" className="swal2-input custom-input" value={settings.dayShiftStartTime} onChange={(e) => setSettings({ ...settings, dayShiftStartTime: e.target.value })} />
                             </div>
                             <div className="form-group">
                                 <label className="input-label" style={{color: '#e67e22'}}>Day Shift End</label>
-                                <input
-                                    type="time"
-                                    className="swal2-input custom-input"
-                                    value={settings.dayShiftEndTime}
-                                    onChange={(e) => setSettings({ ...settings, dayShiftEndTime: e.target.value })}
-                                />
+                                <input type="time" className="swal2-input custom-input" value={settings.dayShiftEndTime} onChange={(e) => setSettings({ ...settings, dayShiftEndTime: e.target.value })} />
                             </div>
                         </div>
 
-                        {/* --- NIGHT SHIFT ROW --- */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
                             <div className="form-group">
                                 <label className="input-label" style={{color: '#2980b9'}}><FontAwesomeIcon icon={faClock} /> Night Shift Start</label>
-                                <input
-                                    type="time"
-                                    className="swal2-input custom-input"
-                                    value={settings.nightShiftStartTime}
-                                    onChange={(e) => setSettings({ ...settings, nightShiftStartTime: e.target.value })}
-                                />
+                                <input type="time" className="swal2-input custom-input" value={settings.nightShiftStartTime} onChange={(e) => setSettings({ ...settings, nightShiftStartTime: e.target.value })} />
                             </div>
                             <div className="form-group">
                                 <label className="input-label" style={{color: '#2980b9'}}>Night Shift End</label>
-                                <input
-                                    type="time"
-                                    className="swal2-input custom-input"
-                                    value={settings.nightShiftEndTime}
-                                    onChange={(e) => setSettings({ ...settings, nightShiftEndTime: e.target.value })}
-                                />
+                                <input type="time" className="swal2-input custom-input" value={settings.nightShiftEndTime} onChange={(e) => setSettings({ ...settings, nightShiftEndTime: e.target.value })} />
                             </div>
                         </div>
 
-                        {/* --- RULES ROW --- */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                             <div className="form-group">
                                 <label className="input-label">Grace Period (Mins)</label>
-                                <input
-                                    type="number"
-                                    className="swal2-input custom-input"
-                                    value={settings.gracePeriod}
-                                    onChange={(e) => setSettings({ ...settings, gracePeriod: e.target.value })}
-                                />
+                                <input type="number" className="swal2-input custom-input" value={settings.gracePeriod} onChange={(e) => setSettings({ ...settings, gracePeriod: e.target.value })} />
                                 <small className="hint-text">Delay allowed before marking "Late"</small>
                             </div>
-
                             <div className="form-group">
                                 <label className="input-label">Half-Day Threshold (Mins)</label>
-                                <input
-                                    type="number"
-                                    className="swal2-input custom-input"
-                                    value={settings.halfDayThreshold}
-                                    onChange={(e) => setSettings({ ...settings, halfDayThreshold: e.target.value })}
-                                />
+                                <input type="number" className="swal2-input custom-input" value={settings.halfDayThreshold} onChange={(e) => setSettings({ ...settings, halfDayThreshold: e.target.value })} />
                                 <small className="hint-text">Delay triggering "Half Day"</small>
                             </div>
                         </div>
 
-                        {/* CENTERED BUTTON CONTAINER */}
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <button
-                                type="submit"
-                                className="gts-btn primary"
-                                style={{ padding: '10px 30px', fontSize: '14px', minWidth: '200px' }}
-                            >
-                                <FontAwesomeIcon icon={faSave} style={{ marginRight: '8px' }} /> Save Configuration
+                            <button type="submit" className="gts-btn primary" style={{ padding: '10px 30px', fontSize: '14px', minWidth: '200px' }}>
+                                <FontAwesomeIcon icon={faSave} style={{ marginRight: '8px' }} /> Save Rules
                             </button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            {/* CARD 2: HOLIDAY MANAGEMENT */}
-            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'center' }}>
+            {/* 👇 NEW: CARD 2 - INVENTORY CATEGORIES */}
+            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'flex-start', marginBottom: '20px' }}>
+                <div style={{ flex: '0 0 280px' }}>
+                    <h3 style={{ margin: 0, color: '#215D7B', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <FontAwesomeIcon icon={faBoxes} /> Inventory Categories
+                    </h3>
+                    <p style={{ color: '#777', fontSize: '14px', margin: '10px 0 0', lineHeight: '1.6' }}>
+                        Define the price thresholds for inventory classification. <strong style={{color: '#dc2626'}}>Category A</strong> requires image proofs when logging expenses.
+                    </p>
+                </div>
 
-                {/* LEFT: INFO & ADD BUTTON */}
+                <div style={{ flex: '1', minWidth: '300px' }}>
+                    <form onSubmit={handleSaveSettings}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+                            <div className="form-group">
+                                <label className="input-label" style={{color: '#dc2626'}}>Category A Minimum (₹)</label>
+                                <input type="number" className="swal2-input custom-input" value={settings.inventoryCatAThreshold} onChange={(e) => setSettings({ ...settings, inventoryCatAThreshold: Number(e.target.value) })} />
+                                <small className="hint-text">Value for highly expensive items (e.g., 500)</small>
+                            </div>
+                            <div className="form-group">
+                                <label className="input-label" style={{color: '#f59e0b'}}>Category B Minimum (₹)</label>
+                                <input type="number" className="swal2-input custom-input" value={settings.inventoryCatBThreshold} onChange={(e) => setSettings({ ...settings, inventoryCatBThreshold: Number(e.target.value) })} />
+                                <small className="hint-text">Mid-tier items (Cat C will be anything below this)</small>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <button type="submit" className="gts-btn primary" style={{ padding: '10px 30px', fontSize: '14px', minWidth: '200px' }}>
+                                <FontAwesomeIcon icon={faSave} style={{ marginRight: '8px' }} /> Save Thresholds
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {/* CARD 3: HOLIDAY MANAGEMENT */}
+            <div className="control-card" style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'center' }}>
                 <div style={{ flex: '0 0 280px' }}>
                     <h3 style={{ margin: 0, color: '#215D7B', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <FontAwesomeIcon icon={faCalendarAlt} /> Holiday Management
@@ -237,7 +230,6 @@ const AdminSettings = () => {
                     </button>
                 </div>
 
-                {/* RIGHT: TABLE SECTION */}
                 <div style={{ flex: '1', minWidth: '300px' }}>
                     <div className="admin-table-wrapper" style={{ maxHeight: '400px', overflowY: 'auto' }}>
                         <table className="holiday-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -259,20 +251,13 @@ const AdminSettings = () => {
                                     holidays.map(holiday => (
                                         <tr key={holiday._id} style={{ borderBottom: '1px solid #f1f1f1' }}>
                                             <td style={{ padding: '14px 12px', fontSize: '14px', color: '#333' }}>
-                                                {new Date(holiday.date).toLocaleDateString('en-GB', {
-                                                    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
-                                                })}
+                                                {new Date(holiday.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
                                             </td>
                                             <td style={{ padding: '14px 12px', fontWeight: '500', color: '#333' }}>
                                                 {holiday.name}
                                             </td>
                                             <td style={{ padding: '14px 12px', textAlign: 'right' }}>
-                                                <button
-                                                    className="gts-btn danger"
-                                                    style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                    onClick={() => handleDeleteHoliday(holiday._id)}
-                                                    title="Delete Holiday"
-                                                >
+                                                <button className="gts-btn danger" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleDeleteHoliday(holiday._id)} title="Delete Holiday">
                                                     <FontAwesomeIcon icon={faTrash} />
                                                 </button>
                                             </td>

@@ -497,14 +497,32 @@ router.get('/raw-logs', auth, async (req, res) => {
 });
 
 // ==========================================
-// 7. GET LOGS BY USER ID
+// 7. GET LOGS BY USER ID (Paginated)
 // ==========================================
 router.get('/admin/user-logs/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
-        const logs = await Attendance.find({ userId: req.params.id }).sort({ createdAt: -1 });
-        res.json(logs);
-    } catch (err) { res.status(500).send('Server Error'); }
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const totalRecords = await Attendance.countDocuments({ userId: req.params.id });
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const logs = await Attendance.find({ userId: req.params.id })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.json({
+            data: logs,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+    } catch (err) { 
+        console.error(err);
+        res.status(500).send('Server Error'); 
+    }
 });
 
 // ==========================================

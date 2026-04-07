@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faSpinner, faCheckCircle, faRupeeSign } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import '../../styles/App.css';
 import '../../styles/expenses.css'; 
@@ -22,6 +22,7 @@ const AddInventory = () => {
     const [formData, setFormData] = useState({
         itemName: '',
         quantity: 1, 
+        price: '', // 👇 NEW: Added Price Field
         status: 'Available',
         storageLocation: 'IT Closet', 
         assignedTo: '',
@@ -44,7 +45,6 @@ const AddInventory = () => {
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    // 👇 FIXED: Brought in the ultimate mobile compression logic 👇
     const handleFileChange = async (e) => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
@@ -59,12 +59,11 @@ const AddInventory = () => {
                     const options = {
                         maxSizeMB: 1,             
                         maxWidthOrHeight: 1920,   
-                        useWebWorker: false,       // Fixed for mobile stability
-                        fileType: 'image/jpeg'     // Force standard JPEG
+                        useWebWorker: false,       
+                        fileType: 'image/jpeg'     
                     };
                     
                     const compressedBlob = await imageCompression(file, options);
-                    
                     const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
 
                     const safelyNamedFile = new File([compressedBlob], safeName, {
@@ -138,7 +137,8 @@ const AddInventory = () => {
                 showConfirmButton: false 
             });
 
-            setFormData(prev => ({ ...prev, itemName: '', quantity: 1 }));
+            // 👇 Clear the form safely including price
+            setFormData(prev => ({ ...prev, itemName: '', quantity: 1, price: '' }));
             setFiles({ media: [] });
             if (fileInputRef.current) {
                 fileInputRef.current.value = ""; 
@@ -172,14 +172,19 @@ const AddInventory = () => {
                         
                         <div className="expense-grid"> 
                             
-                            <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px' }}>
-                                <div style={{ flex: '3' }}>
+                            <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                                <div style={{ flex: '2', minWidth: '200px' }}>
                                     <label className="input-label">Item / Asset Name *</label>
                                     <input className="custom-input" type="text" name="itemName" required placeholder="e.g. MacBook Pro M3, Office Chair" value={formData.itemName} onChange={handleChange} />
                                 </div>
-                                <div style={{ flex: '1' }}>
+                                <div style={{ flex: '1', minWidth: '100px' }}>
                                     <label className="input-label">Quantity *</label>
                                     <input className="custom-input" type="number" name="quantity" min="1" required value={formData.quantity} onChange={handleChange} />
+                                </div>
+                                {/* 👇 NEW: Price Input */}
+                                <div style={{ flex: '1', minWidth: '120px' }}>
+                                    <label className="input-label"><FontAwesomeIcon icon={faRupeeSign} className="text-muted mr-5"/> Price (Optional)</label>
+                                    <input className="custom-input" type="number" name="price" placeholder="e.g. 500" value={formData.price} onChange={handleChange} />
                                 </div>
                             </div>
 
@@ -237,7 +242,6 @@ const AddInventory = () => {
                                     Upload Images / Videos of Asset
                                 </label>
                                 <div className="upload-container-new">
-                                    {/* 👇 FIXED: Added capture="environment" to force the camera to open on mobile */}
                                     <input 
                                         ref={fileInputRef} 
                                         className="custom-file-input" 
@@ -273,7 +277,7 @@ const AddInventory = () => {
                             </div>
                         )}
 
-                        <button type="submit" className="save-btn expense-submit-btn" disabled={loading || isCompressing}>
+                        <button type="submit" className="save-btn purchase-submit-btn" disabled={loading || isCompressing}>
                             <FontAwesomeIcon icon={faSave} className="btn-icon" /> 
                             {loading ? 'Processing...' : isCompressing ? 'Compressing Files...' : 'Save Asset & Add Another'}
                         </button>

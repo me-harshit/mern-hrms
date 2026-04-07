@@ -4,7 +4,7 @@ import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faEdit, faUserTimes, faFilter, faFingerprint } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; // 👇 NEW: Reusable Pagination Component
+import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 
 const AttendanceLogs = () => {
@@ -68,7 +68,6 @@ const AttendanceLogs = () => {
         }
     };
 
-    // --- HELPER: CALCULATE DURATION ---
     const calculateDuration = (start, end) => {
         if (!start || !end) return <span className="text-muted italic text-small">In Progress</span>;
 
@@ -132,7 +131,6 @@ const AttendanceLogs = () => {
                 const statusInput = document.getElementById('swal-status').value;
                 const note = document.getElementById('swal-note').value;
 
-                // Removed strictly required Check-in so Absents/Leaves can be updated safely
                 let checkInDate = null;
                 if (timeInStr && log.checkIn) {
                     checkInDate = new Date(log.checkIn);
@@ -169,10 +167,8 @@ const AttendanceLogs = () => {
 
     return (
         <div className="attendance-container">
-            
             <div className="page-header-row">
                 <h1 className="page-title header-no-margin">Attendance Logs</h1>
-                
                 <div className="header-actions">
                     <button className="gts-btn danger btn-small" onClick={() => navigate('/absent-employees')}>
                         <FontAwesomeIcon icon={faUserTimes} className="btn-icon" /> View Absentees
@@ -184,7 +180,6 @@ const AttendanceLogs = () => {
             </div>
 
             <div className="filter-bar-card fade-in">
-                
                 <div className="filter-buttons">
                     {['Today', 'Yesterday', 'Week', 'Month', 'All', 'Custom'].map(type => (
                         <button
@@ -259,8 +254,16 @@ const AttendanceLogs = () => {
                         ) : (
                             logs.map(log => (
                                 <tr key={log._id}>
-                                    <td data-label="Employee" className="fw-bold text-primary">
-                                        {log.userId?.name || 'Unknown'}
+                                    {/* 👇 UPDATED: Clickable Name */}
+                                    <td data-label="Employee">
+                                        <div 
+                                            className="fw-bold text-primary"
+                                            style={{ cursor: 'pointer'}}
+                                            onClick={() => log.userId?._id && navigate(`/employee/${log.userId._id}`)}
+                                            title="View Profile"
+                                        >
+                                            {log.userId?.name || 'Unknown'}
+                                        </div>
                                     </td>
                                     <td data-label="Date">{log.date}</td>
                                     <td data-label="In Time">
@@ -300,7 +303,6 @@ const AttendanceLogs = () => {
                 </table>
             </div>
 
-            {/* 👇 Modular Pagination Component */}
             {!loading && (
                 <Pagination 
                     currentPage={currentPage}

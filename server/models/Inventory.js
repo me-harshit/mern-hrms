@@ -12,6 +12,10 @@ const inventorySchema = new mongoose.Schema({
         default: 1,
         min: 1
     },
+    price: { 
+        type: Number, 
+        default: null 
+    },
     status: { 
         type: String, 
         enum: ['Available', 'Assigned', 'Damaged', 'Lost'], 
@@ -36,7 +40,6 @@ const inventorySchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    
     linkedExpenseId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Expense',

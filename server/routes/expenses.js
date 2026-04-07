@@ -22,7 +22,7 @@ router.post('/', auth, upload.fields([
             expenseType, category, expenseDate, amount,
             paymentSourceId, projectName, descriptionTags, expenseDetails,
             vendorId,
-            isCompanyPayment // 👇 NEW: Extract payment method
+            isCompanyPayment 
         } = req.body;
 
         let parsedExpenseDetails = {};
@@ -31,7 +31,6 @@ router.post('/', auth, upload.fields([
             catch (e) { console.error("Error parsing expenseDetails", e); }
         }
 
-        // Handle FormData boolean strings
         const isCorpPayment = isCompanyPayment === 'true' || isCompanyPayment === true;
 
         let paymentScreenshotUrls = [];
@@ -52,7 +51,6 @@ router.post('/', auth, upload.fields([
             category,
             expenseDate: expenseDate || Date.now(),
             amount,
-            // 👇 NEW: If it's a company payment, force payment source to null
             paymentSourceId: isCorpPayment ? null : paymentSourceId,
             isCompanyPayment: isCorpPayment,
             projectName,
@@ -98,7 +96,6 @@ router.get('/all', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
-        // --- 1. PAGINATION SETUP ---
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
@@ -106,14 +103,12 @@ router.get('/all', auth, async (req, res) => {
         let query = {};
         let andConditions = [];
 
-        // --- 2. ROLE BASED SCOPE ---
         if (req.user.role === 'MANAGER') {
             const myProjects = await Project.find({ projectLead: req.user.id }).select('name');
             const myProjectNames = myProjects.map(p => p.name);
             andConditions.push({ expenseType: 'Project Expense', projectName: { $in: myProjectNames } });
         }
 
-        // --- 3. EXACT FILTERS ---
         if (req.query.expenseType) andConditions.push({ expenseType: req.query.expenseType });
         if (req.query.category) andConditions.push({ category: req.query.category });
         if (req.query.projectName) andConditions.push({ projectName: req.query.projectName });
@@ -121,7 +116,6 @@ router.get('/all', auth, async (req, res) => {
         if (req.query.approvedBy) andConditions.push({ approvedBy: req.query.approvedBy });
         if (req.query.status) andConditions.push({ status: req.query.status });
 
-        // --- 4. NUMBER & DATE RANGE FILTERS ---
         if (req.query.minAmount || req.query.maxAmount) {
             let amountFilter = {};
             if (req.query.minAmount) amountFilter.$gte = Number(req.query.minAmount);
@@ -135,7 +129,6 @@ router.get('/all', auth, async (req, res) => {
             andConditions.push({ expenseDate: { $gte: start, $lte: end } });
         }
 
-        // --- 5. GST FILTER ---
         if (req.query.hasGst === 'Yes') {
             andConditions.push({ 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } });
         } else if (req.query.hasGst === 'No') {
@@ -148,11 +141,9 @@ router.get('/all', auth, async (req, res) => {
             });
         }
 
-        // --- 6. SMART SEARCH FILTER ---
         if (req.query.search) {
             const searchRegex = new RegExp(req.query.search, 'i');
 
-            // Find users matching search to allow searching by Submitter Name
             const matchingUsers = await User.find({ name: searchRegex }).select('_id');
             const userIds = matchingUsers.map(u => u._id);
 
@@ -164,7 +155,6 @@ router.get('/all', auth, async (req, res) => {
                 { submittedBy: { $in: userIds } }
             ];
 
-            // If search is a valid number, allow searching by amount
             if (!isNaN(req.query.search)) {
                 searchOr.push({ amount: Number(req.query.search) });
             }
@@ -172,7 +162,6 @@ router.get('/all', auth, async (req, res) => {
             andConditions.push({ $or: searchOr });
         }
 
-        // --- 7. EXECUTE QUERY ---
         if (andConditions.length > 0) {
             query.$and = andConditions;
         }
@@ -189,7 +178,6 @@ router.get('/all', auth, async (req, res) => {
             .skip(skip)
             .limit(limit);
 
-        // Return Data AND Pagination Meta
         res.json({
             data: expenses,
             pagination: { totalRecords, totalPages, currentPage: page, limit }
@@ -253,7 +241,7 @@ router.put('/:id', auth, upload.fields([
         const {
             expenseType, category, expenseDate, amount,
             paymentSourceId, projectName, descriptionTags, expenseDetails, notes,
-            vendorId, isCompanyPayment // 👇 NEW
+            vendorId, isCompanyPayment 
         } = req.body;
 
         if (expenseType) expense.expenseType = expenseType;
@@ -265,7 +253,6 @@ router.put('/:id', auth, upload.fields([
         if (notes !== undefined) expense.notes = notes;
         if (vendorId !== undefined) expense.vendorId = vendorId === '' ? null : vendorId;
 
-        // 👇 NEW: Handle Payment Method Switch on Edit
         if (isCompanyPayment !== undefined) {
             const isCorpPayment = isCompanyPayment === 'true' || isCompanyPayment === true;
             expense.isCompanyPayment = isCorpPayment;
@@ -346,7 +333,6 @@ router.put('/:id/status', auth, async (req, res) => {
         // If Approved: Deduct Wallet & Sync Inventory
         if (status === 'Approved') {
 
-            // 1. 👇 FIXED LOGIC: Skip wallet deduction ONLY if it's a Company Payment
             if (!expense.isCompanyPayment) {
                 let wallet = await Wallet.findOne({ userId: expense.paymentSourceId });
                 if (!wallet) {
@@ -401,6 +387,8 @@ router.put('/:id/status', auth, async (req, res) => {
                         const newAsset = new Inventory({
                             itemName: details.productName,
                             quantity: qty,
+                            // 👇 NEW: Save the unit price to the inventory record!
+                            price: Number(details.unitPrice) || null,
                             status: invStatus,
                             storageLocation: invStatus === 'Available' ? details.storageLocation : '',
                             assignedTo: invStatus === 'Assigned' ? details.inventoryAssignedTo : null,

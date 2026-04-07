@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faUserTie, faEdit, faCalendarAlt, faSearch, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; // 👇 NEW: Imported Pagination Component
+import { faPlus, faUserTie, faEdit, faCalendarAlt, faSearch, faSun, faMoon, faEye } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; 
 import '../../styles/App.css';
 
 const Employees = () => {
@@ -52,7 +52,6 @@ const Employees = () => {
 
             const res = await api.get('/employees', { params });
             
-            // Map the paginated response to state
             setEmployees(res.data.data);
             setTotalPages(res.data.pagination.totalPages);
             setTotalRecords(res.data.pagination.totalRecords);
@@ -98,7 +97,8 @@ const Employees = () => {
                             <label class="swal-custom-label">System Role</label>
                             <select id="add-role" class="swal2-select" style="width: 100%; margin-top: 10px;">
                                 <option value="EMPLOYEE">Employee</option>
-                                <option value="MANAGER">Manager</option> <option value="HR">HR Manager</option>
+                                <option value="MANAGER">Manager</option> 
+                                <option value="HR">HR Manager</option>
                                 <option value="ADMIN">Administrator</option>
                             </select>
                         </div>
@@ -141,8 +141,12 @@ const Employees = () => {
         }
     };
 
-    const handleEditEmployee = (emp) => {
-        navigate(`/employee/${emp._id}`);
+    const handleViewProfile = (id) => {
+        navigate(`/employee/${id}`);
+    };
+
+    const handleEditEmployee = (id) => {
+        navigate(`/edit-employee/${id}`);
     };
 
     return (
@@ -208,7 +212,13 @@ const Employees = () => {
                                                 <FontAwesomeIcon icon={faUserTie} />
                                             </div>
                                             <div>
-                                                <div className="fw-600 text-dark-blue">{emp.name}</div>
+                                                <div 
+                                                    className="fw-600 text-dark-blue" 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => handleViewProfile(emp._id)}
+                                                >
+                                                    {emp.name}
+                                                </div>
                                                 <div className="text-small text-muted">
                                                     <span className="fw-bold text-primary">{emp.employeeId || 'No ID'}</span> • {emp.email}
                                                 </div>
@@ -245,9 +255,24 @@ const Employees = () => {
                                     </td>
 
                                     <td data-label="Actions">
-                                        <button className="edit-btn" onClick={() => handleEditEmployee(emp)}>
-                                            <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
-                                        </button>
+                                        {/* 👇 Grouped View and Edit buttons */}
+                                        <div className="flex-row gap-5">
+                                            <button 
+                                                className="gts-btn doc-btn" 
+                                                style={{ padding: '6px 10px', background: '#f1f5f9', color: '#215D7B' }} 
+                                                onClick={() => handleViewProfile(emp._id)}
+                                                title="View Profile"
+                                            >
+                                                <FontAwesomeIcon icon={faEye} /> View
+                                            </button>
+                                            <button 
+                                                className="edit-btn" 
+                                                onClick={() => handleEditEmployee(emp._id)}
+                                                title="Edit Settings"
+                                            >
+                                                <FontAwesomeIcon icon={faEdit} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))
@@ -256,7 +281,6 @@ const Employees = () => {
                 </table>
             </div>
 
-            {/* 👇 Modular Pagination Component */}
             {!loading && (
                 <Pagination 
                     currentPage={currentPage}

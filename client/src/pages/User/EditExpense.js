@@ -22,11 +22,17 @@ const EditExpense = () => {
     const [adminFeedback, setAdminFeedback] = useState('');
 
     const [usersList, setUsersList] = useState([]);
-    const [allEmployeesList, setAllEmployeesList] = useState([]); // 👇 NEW
+    const [allEmployeesList, setAllEmployeesList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
     const [vendorsList, setVendorsList] = useState([]); 
 
-    // 👇 NEW: Search states and refs
+    // 👇 NEW: Store System Settings for Thresholds
+    const [systemSettings, setSystemSettings] = useState({
+        inventoryCatAThreshold: 500,
+        inventoryCatBThreshold: 100
+    });
+
+    // Search states and refs
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
     const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -59,7 +65,7 @@ const EditExpense = () => {
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
         
         vendorName: '', billingCycle: 'Monthly', expenseDescription: '', participantName: '', 
-        gstNumber: '', // 👇 Moved to global
+        gstNumber: '', 
         paymentDate: '', 
 
         utilityType: 'Electricity', billingMonth: '', invoiceNumber: '',
@@ -69,7 +75,6 @@ const EditExpense = () => {
     const [existingFiles, setExistingFiles] = useState({ paymentScreenshotUrls: [], expenseMediaUrls: [] });
     const [newFiles, setNewFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
 
-    // 👇 NEW: Click-outside listener
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -101,6 +106,15 @@ const EditExpense = () => {
 
             const venRes = await api.get('/vendors').catch(() => ({ data: [] }));
             setVendorsList(venRes.data);
+
+            // 👇 NEW: Fetch Thresholds
+            const settingsRes = await api.get('/settings').catch(() => ({ data: {} }));
+            if (settingsRes.data) {
+                setSystemSettings({
+                    inventoryCatAThreshold: settingsRes.data.inventoryCatAThreshold || 500,
+                    inventoryCatBThreshold: settingsRes.data.inventoryCatBThreshold || 100
+                });
+            }
 
             const res = await api.get(`/expenses/${id}`);
             const data = res.data;
@@ -273,8 +287,29 @@ const EditExpense = () => {
             return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
         }
 
-        if (formData.category === 'Product / Item Purchase' && expenseDetails.inventoryItemStatus === 'Assigned' && !expenseDetails.inventoryAssignedTo) {
-            return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
+        if (formData.category === 'Product / Item Purchase') {
+            if (expenseDetails.inventoryItemStatus === 'Assigned' && !expenseDetails.inventoryAssignedTo) {
+                return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
+            }
+
+            // 👇 NEW: Check Inventory Image Rules based on Thresholds
+            if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus)) {
+                const unitCost = Number(expenseDetails.unitPrice);
+                
+                if (unitCost >= systemSettings.inventoryCatAThreshold) {
+                    const hasNewFiles = newFiles.expenseMedia && newFiles.expenseMedia.length > 0;
+                    const hasExistingFiles = existingFiles.expenseMediaUrls && existingFiles.expenseMediaUrls.length > 0;
+                    
+                    if (!hasNewFiles && !hasExistingFiles) {
+                        return Swal.fire({
+                            title: 'Image Required (Category A)',
+                            text: `Because this item costs ₹${systemSettings.inventoryCatAThreshold} or more, it is considered a Category A asset. You MUST upload a photo proof of the product to proceed.`,
+                            icon: 'warning',
+                            confirmButtonColor: '#215D7B'
+                        });
+                    }
+                }
+            }
         }
 
         setSaving(true);
@@ -312,7 +347,6 @@ const EditExpense = () => {
                     relevantDetails = {};
             }
 
-            // 👇 NEW: Globally append the GST Number
             if (d.gstNumber && d.gstNumber.trim() !== '') {
                 relevantDetails.gstNumber = d.gstNumber.toUpperCase().trim();
             }
@@ -401,7 +435,11 @@ const EditExpense = () => {
             case 'Food Expense': return 'Order Screenshot / Restaurant Bill';
             case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
             case 'Accommodation': return 'Hotel Receipt / Invoice';
-            case 'Product / Item Purchase': return 'Product Photo(s) / Video(s)';
+            case 'Product / Item Purchase': 
+                if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus) && Number(expenseDetails.unitPrice) >= systemSettings.inventoryCatAThreshold) {
+                    return 'Product Photo(s) / Video(s) (Required for Cat A)';
+                }
+                return 'Product Photo(s) / Video(s) (Optional)';
             case 'Utility / Bills': return 'Utility Bill / Invoice';
             case 'Maintenance & Repairs': return 'Service Receipt / Invoice';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
@@ -410,7 +448,6 @@ const EditExpense = () => {
         }
     };
 
-    // 👇 NEW: Filter Logic
     const filteredEmployees = allEmployeesList.filter(emp =>
         emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
         emp.role.toLowerCase().includes(employeeSearchTerm.toLowerCase())
@@ -426,7 +463,6 @@ const EditExpense = () => {
             case 'Vendor Payment':
                 return (
                     <>
-                        {/* 👇 UPDATED: Vendor Searchable Dropdown */}
                         <div className="form-group grid-span-2" ref={vendorDropdownRef}>
                             <label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Select Vendor *</label>
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
@@ -532,7 +568,6 @@ const EditExpense = () => {
                             <div className="form-group grid-span-2"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. Office Room A" required /></div>
                         )}
                         
-                        {/* 👇 UPDATED: Employee Searchable Dropdown */}
                         {expenseDetails.inventoryItemStatus === 'Assigned' && (
                             <div className="form-group grid-span-2" ref={dropdownRef}>
                                 <label className="input-label">Assign To Employee *</label>
@@ -918,6 +953,7 @@ const EditExpense = () => {
                                         accept="image/*,video/*" 
                                         capture="environment"
                                         onChange={e => handleFileChange(e, 'expenseMedia')} 
+                                        required={formData.category === 'Vendor Payment' && (!existingFiles.expenseMediaUrls || existingFiles.expenseMediaUrls.length === 0)}
                                     />
 
                                     {isCompressing ? (

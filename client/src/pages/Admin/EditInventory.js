@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api, { SERVER_URL } from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faLayerGroup, faSpinner, faFileVideo, faFilePdf, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faSave, faPaperclip, faInfoCircle, faLayerGroup, faSpinner, faFileVideo, faFilePdf, faCheckCircle, faRupeeSign } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import '../../styles/App.css';
 import '../../styles/expenses.css';
@@ -26,7 +26,8 @@ const EditInventory = () => {
         storageLocation: '',
         assignedTo: '',
         notes: '',
-        quantityToUpdate: 1
+        quantityToUpdate: 1,
+        price: '' // 👇 NEW: Added Price field
     });
 
     const [originalQuantity, setOriginalQuantity] = useState(1);
@@ -54,7 +55,8 @@ const EditInventory = () => {
                 storageLocation: data.storageLocation || '',
                 assignedTo: data.assignedTo?._id || '',
                 notes: data.notes || '',
-                quantityToUpdate: data.quantity || 1
+                quantityToUpdate: data.quantity || 1,
+                price: data.price !== null && data.price !== undefined ? data.price : '' // 👇 NEW: Populate existing price safely
             });
 
             setOriginalQuantity(data.quantity || 1);
@@ -109,7 +111,7 @@ const EditInventory = () => {
             }
         }
 
-        setNewFiles({ media: processedFiles }); // 👇 Uses setNewFiles
+        setNewFiles({ media: processedFiles });
         setIsCompressing(false);
     };
 
@@ -186,7 +188,6 @@ const EditInventory = () => {
         }
     };
 
-    // Render the beautiful gallery thumbnail
     const renderThumbnail = (url, index) => {
         const fullUrl = getFileUrl(url);
         const isPdf = url.toLowerCase().endsWith('.pdf');
@@ -237,6 +238,7 @@ const EditInventory = () => {
             <div className="expense-form-card">
                 <form onSubmit={handleSubmit} className="profile-form">
 
+                    {/* --- CORE DETAILS --- */}
                     <div className="expense-form-section">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faInfoCircle} /> Asset Details
@@ -244,12 +246,12 @@ const EditInventory = () => {
 
                         <div className="expense-grid">
 
-                            <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px' }}>
-                                <div style={{ flex: '3' }}>
+                            <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                                <div style={{ flex: '2', minWidth: '200px' }}>
                                     <label className="input-label">Item / Asset Name *</label>
                                     <input className="custom-input" type="text" name="itemName" required value={formData.itemName} onChange={handleChange} />
                                 </div>
-                                <div style={{ flex: '1' }}>
+                                <div style={{ flex: '1', minWidth: '100px' }}>
                                     <label className="input-label" style={{ color: '#0f172a', fontWeight: 'bold' }}>Qty to Modify *</label>
                                     <input
                                         className="custom-input"
@@ -266,6 +268,11 @@ const EditInventory = () => {
                                     {originalQuantity > 1 && (
                                         <div className="text-small text-muted" style={{ marginTop: '4px' }}>Max: {originalQuantity}</div>
                                     )}
+                                </div>
+                                {/* 👇 NEW: Price Input matching AddInventory */}
+                                <div style={{ flex: '1', minWidth: '120px' }}>
+                                    <label className="input-label"><FontAwesomeIcon icon={faRupeeSign} className="text-muted mr-5"/> Price (Optional)</label>
+                                    <input className="custom-input" type="number" name="price" placeholder="e.g. 500" value={formData.price} onChange={handleChange} />
                                 </div>
                             </div>
 

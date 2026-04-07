@@ -6,7 +6,10 @@ const settingsSchema = new mongoose.Schema({
     nightShiftStartTime: { type: String, default: "19:00" }, 
     nightShiftEndTime: { type: String, default: "04:00" },
     gracePeriod: { type: Number, default: 15 }, 
-    halfDayThreshold: { type: Number, default: 30 }
+    halfDayThreshold: { type: Number, default: 30 },
+    
+    inventoryCatAThreshold: { type: Number, default: 500 }, 
+    inventoryCatBThreshold: { type: Number, default: 100 }
 });
 
 module.exports = mongoose.model('Settings', settingsSchema);

@@ -3,7 +3,7 @@ import api from '../../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserTimes, faSearch, faFilter, faArrowLeft, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; // 👇 NEW: Modular Pagination
+import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 
 const AbsentEmployees = () => {
@@ -64,7 +64,6 @@ const AbsentEmployees = () => {
                 end = new Date(customDates.to);
             }
 
-            // 👇 Requesting the new GET route
             const params = {
                 page: pageToFetch,
                 limit: itemsPerPage,
@@ -192,8 +191,16 @@ const AbsentEmployees = () => {
                         ) : (
                             absences.map(record => (
                                 <tr key={record._id}>
+                                    {/* 👇 UPDATED: Clickable Name */}
                                     <td data-label="Employee Details">
-                                        <div className="fw-bold text-primary fs-15">{record.userId?.name || 'Unknown'}</div>
+                                        <div 
+                                            className="fw-bold text-primary fs-15"
+                                            style={{ cursor: 'pointer'}}
+                                            onClick={() => record.userId?._id && navigate(`/employee/${record.userId._id}`)}
+                                            title="View Profile"
+                                        >
+                                            {record.userId?.name || 'Unknown'}
+                                        </div>
                                         <div className="text-small text-muted">ID: {record.userId?.employeeId || 'N/A'}</div>
                                     </td>
 
@@ -226,7 +233,6 @@ const AbsentEmployees = () => {
                 </table>
             </div>
 
-            {/* 👇 Modular Pagination Component */}
             {!loading && (
                 <Pagination
                     currentPage={currentPage}
