@@ -27,7 +27,7 @@ const EditInventory = () => {
         assignedTo: '',
         notes: '',
         quantityToUpdate: 1,
-        price: '' // 👇 NEW: Added Price field
+        price: '' 
     });
 
     const [originalQuantity, setOriginalQuantity] = useState(1);
@@ -38,13 +38,13 @@ const EditInventory = () => {
 
     useEffect(() => {
         fetchInitialData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     const fetchInitialData = async () => {
         try {
-            const empRes = await api.get('/employees');
-            setEmployees(empRes.data);
+            const empRes = await api.get('/employees/directory');
+            const employeeArray = Array.isArray(empRes.data) ? empRes.data : (empRes.data?.data || []);
+            setEmployees(employeeArray);
 
             const assetRes = await api.get(`/inventory/${id}`);
             const data = assetRes.data;
@@ -56,7 +56,7 @@ const EditInventory = () => {
                 assignedTo: data.assignedTo?._id || '',
                 notes: data.notes || '',
                 quantityToUpdate: data.quantity || 1,
-                price: data.price !== null && data.price !== undefined ? data.price : '' // 👇 NEW: Populate existing price safely
+                price: data.price !== null && data.price !== undefined ? data.price : '' 
             });
 
             setOriginalQuantity(data.quantity || 1);
@@ -269,7 +269,6 @@ const EditInventory = () => {
                                         <div className="text-small text-muted" style={{ marginTop: '4px' }}>Max: {originalQuantity}</div>
                                     )}
                                 </div>
-                                {/* 👇 NEW: Price Input matching AddInventory */}
                                 <div style={{ flex: '1', minWidth: '120px' }}>
                                     <label className="input-label"><FontAwesomeIcon icon={faRupeeSign} className="text-muted mr-5"/> Price (Optional)</label>
                                     <input className="custom-input" type="number" name="price" placeholder="e.g. 500" value={formData.price} onChange={handleChange} />

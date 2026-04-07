@@ -34,8 +34,10 @@ const AddInventory = () => {
     useEffect(() => {
         const fetchEmployees = async () => {
             try {
-                const res = await api.get('/employees');
-                setEmployees(res.data);
+                const res = await api.get('/employees/directory');
+                
+                const employeeArray = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+                setEmployees(employeeArray);
             } catch (err) {
                 console.error("Could not fetch employees", err);
             }
