@@ -4,7 +4,7 @@ import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faUser, faArrowLeft, faClock, faPlaneDeparture, faEdit, faEnvelope, faPhone, faWallet, faHistory
+    faUser, faArrowLeft, faClock, faPlaneDeparture, faEdit, faEnvelope, faPhone, faWallet, faHistory, faUserSecret
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
@@ -91,6 +91,8 @@ const EmployeeProfile = () => {
     };
 
     const handleManageWallet = async () => {
+        const today = new Date().toISOString().split('T')[0]; // Current date for default value
+
         const { value: formValues } = await Swal.fire({
             title: 'Manage Wallet Balance',
             html: `
@@ -107,7 +109,10 @@ const EmployeeProfile = () => {
                     </select>
 
                     <label class="swal-custom-label">Amount (₹)</label>
-                    <input id="wallet-amount" type="number" class="swal2-input" placeholder="e.g. 5000" style="width: 100%;">
+                    <input id="wallet-amount" type="number" class="swal2-input" placeholder="e.g. 5000" style="width: 100%; margin-bottom: 15px;">
+
+                    <label class="swal-custom-label">Transaction Date</label>
+                    <input id="wallet-date" type="date" class="swal2-input" value="${today}" style="width: 100%;">
                 </div>
             `,
             showCancelButton: true,
@@ -116,12 +121,17 @@ const EmployeeProfile = () => {
             preConfirm: () => {
                 const action = document.getElementById('wallet-action').value;
                 const amount = Number(document.getElementById('wallet-amount').value);
+                const date = document.getElementById('wallet-date').value;
 
                 if (!amount && amount !== 0) {
                     Swal.showValidationMessage('Please enter a valid amount');
                     return false;
                 }
-                return { action, amount };
+                if (!date) {
+                    Swal.showValidationMessage('Please select a date');
+                    return false;
+                }
+                return { action, amount, date };
             }
         });
 
@@ -136,11 +146,12 @@ const EmployeeProfile = () => {
                     targetUserId: id,
                     newBalance,
                     action: formValues.action,
-                    amountChanged: formValues.amount
+                    amountChanged: formValues.amount,
+                    date: formValues.date // 👇 Pass the date to the backend
                 });
                 Swal.fire('Success', `Wallet updated to ₹${newBalance.toLocaleString('en-IN')}`, 'success');
                 setWalletBalance(newBalance);
-                fetchTransactions(); // 👇 Instantly refresh the ledger table!
+                fetchTransactions(); // Instantly refresh the ledger table
             } catch (err) {
                 Swal.fire('Error', 'Failed to update wallet', 'error');
             }
@@ -148,10 +159,7 @@ const EmployeeProfile = () => {
     };
 
     const calculateDuration = (start, end) => {
-        // If both are missing (e.g., Absent, On Leave, Pending), show a dash
         if (!start && !end) return <span className="text-muted">-</span>;
-
-        // If only checkout is missing, they are currently working
         if (!start || !end) return <span className="text-muted italic text-small">In Progress</span>;
 
         const startTime = new Date(start);
@@ -163,6 +171,31 @@ const EmployeeProfile = () => {
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
         return `${hours}h ${minutes}m`;
+    };
+
+    const handleImpersonate = async () => {
+        const confirm = await Swal.fire({
+            title: `Login as ${user.name}?`,
+            text: "Your current session will be saved. You can return to your Admin account at any time from the top banner.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#215D7B',
+            confirmButtonText: 'Yes, Login'
+        });
+
+        if (confirm.isConfirmed) {
+            try {
+                const res = await api.post(`/auth/impersonate/${id}`);
+                localStorage.setItem('admin_token_backup', localStorage.getItem('token'));
+                localStorage.setItem('admin_user_backup', localStorage.getItem('user'));
+                localStorage.setItem('is_impersonating', 'true');
+                localStorage.setItem('token', res.data.token);
+                localStorage.setItem('user', JSON.stringify(res.data.user));
+                window.location.href = '/dashboard';
+            } catch (err) {
+                Swal.fire('Error', err.response?.data?.message || 'Failed to switch accounts', 'error');
+            }
+        }
     };
 
     const filteredTransactions = transactions.filter(t => txFilter === 'All' ? true : t.type === txFilter);
@@ -179,12 +212,20 @@ const EmployeeProfile = () => {
                     </button>
                     <h1 className="page-title header-no-margin">{user.name}'s Profile</h1>
                 </div>
-                <button className="gts-btn primary m-0" onClick={() => navigate(`/edit-employee/${id}`)}>
-                    <FontAwesomeIcon icon={faEdit} className="mr-5" /> Edit Profile
-                </button>
+                
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    {currentUser?.role === 'ADMIN' && (
+                        <button className="gts-btn warning m-0" onClick={handleImpersonate}>
+                            <FontAwesomeIcon icon={faUserSecret} className="mr-5" /> Login As Employee
+                        </button>
+                    )}
+                    <button className="gts-btn primary m-0" onClick={() => navigate(`/edit-employee/${id}`)}>
+                        <FontAwesomeIcon icon={faEdit} className="mr-5" /> Edit Profile
+                    </button>
+                </div>
             </div>
 
-            {/* SUMMARY CARD (Always Visible) */}
+            {/* SUMMARY CARD */}
             <div className="control-card p-20 mb-20" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: '#f8fafc'}}>
                 <div style={{ width: '80px', height: '80px', background: '#215D7B', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' }}>
                     {user.name?.charAt(0)}
@@ -291,7 +332,9 @@ const EmployeeProfile = () => {
                                 ) : (
                                     filteredTransactions.map(tx => (
                                         <tr key={tx._id}>
-                                            <td data-label="Date">{new Date(tx.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                                            {/* 👇 UPDATED: Display tx.date as primary date, fallback to createdAt */}
+                                            <td data-label="Date">{new Date(tx.date || tx.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                                            
                                             <td data-label="Description" className="text-muted fw-500">{tx.description}</td>
                                             <td data-label="Auth By">{tx.performedBy?.name || 'System'}</td>
                                             <td data-label="Amount" style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '15px', color: tx.type === 'Credit' ? '#16a34a' : (tx.type === 'Debit' ? '#dc2626' : '#d97706') }}>
@@ -366,7 +409,6 @@ const EmployeeProfile = () => {
                                     <tr key={log._id}>
                                         <td data-label="Date" className="fw-500 text-dark-blue">{log.date}</td>
 
-                                        {/* 👇 FIXED: Added safety checks for checkIn and checkOut */}
                                         <td data-label="Check In">
                                             {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </td>

@@ -56,7 +56,7 @@ const Dashboard = () => {
                     try {
                         const [walletRes, purchaseRes] = await Promise.all([
                             api.get('/wallets/my-balance').catch(() => ({ data: { balance: 0 } })),
-                            api.get('/purchases').catch(() => ({ data: [] }))
+                            api.get('/expenses').catch(() => ({ data: [] }))
                         ]);
                         
                         setWalletBalance(walletRes.data.balance);
@@ -153,12 +153,12 @@ const Dashboard = () => {
                     {/* PURCHASER EXTRA CARDS */}
                     {isPurchaser && (
                         <>
-                            <div className="stat-card theme-purple clickable-card" onClick={() => navigate('/purchases')}>
+                            <div className="stat-card theme-purple clickable-card" onClick={() => navigate('/expenses')}>
                                 <div className="stat-icon"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
                                 <div className="stat-info"><p>Pending Expenses</p><h3>{purchaseStats.pending} Requests</h3></div>
                             </div>
 
-                            <div className={`stat-card ${walletBalance < 0 ? 'theme-red' : 'theme-green'} clickable-card`} onClick={() => navigate('/purchases')}>
+                            <div className={`stat-card ${walletBalance < 0 ? 'theme-red' : 'theme-green'} clickable-card`} onClick={() => navigate('/expenses')}>
                                 <div className="stat-icon"><FontAwesomeIcon icon={faWallet} /></div>
                                 <div className="stat-info">
                                     <p>My Wallet Balance</p>

@@ -33,7 +33,7 @@ router.get('/my-transactions', auth, async (req, res) => {
 router.get('/user/:id', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Unauthorized' });
-        
+
         let wallet = await Wallet.findOne({ userId: req.params.id });
         if (!wallet) {
             wallet = new Wallet({ userId: req.params.id, balance: 0 });
@@ -86,33 +86,36 @@ router.post('/add-funds', auth, async (req, res) => {
 });
 
 // @route   PUT /api/wallets/update
+// @desc    Update wallet balance manually (Admin/HR/Manager)
 router.put('/update', auth, async (req, res) => {
     try {
-        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Unauthorized' });
-        
-        const { targetUserId, newBalance, action, amountChanged } = req.body; // Passed from frontend
-        
+        // 👇 Extracted 'date' from req.body
+        const { targetUserId, newBalance, action, amountChanged, date } = req.body;
+
         let wallet = await Wallet.findOne({ userId: targetUserId });
-        if (!wallet) wallet = new Wallet({ userId: targetUserId, balance: Number(newBalance) });
-        else wallet.balance = Number(newBalance);
-        
+        if (!wallet) {
+            wallet = new Wallet({ userId: targetUserId, balance: 0 });
+        }
+
+        wallet.balance = newBalance;
         await wallet.save();
 
-        // 👇 NEW: LOG THE TRANSACTION 👇
         let type = 'Reset';
         if (action === 'add') type = 'Credit';
         if (action === 'deduct') type = 'Debit';
 
         await WalletTransaction.create({
             userId: targetUserId,
-            amount: Number(amountChanged),
+            amount: amountChanged,
             type: type,
-            description: `Manual Wallet Adjustment (${action})`,
-            performedBy: req.user.id
+            description: `Manual Wallet Adjustment`,
+            performedBy: req.user.id,
+            date: date ? new Date(date) : Date.now()
         });
 
-        res.json({ message: 'Balance updated', newBalance: wallet.balance });
+        res.json(wallet);
     } catch (err) {
+        console.error(err.message);
         res.status(500).send('Server Error');
     }
 });
