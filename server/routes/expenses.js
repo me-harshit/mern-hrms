@@ -73,17 +73,111 @@ router.post('/', auth, upload.fields([
 });
 
 // @route   GET /api/expenses
-// @desc    Get all expenses for the logged-in user
+// @desc    Get logged-in user's expenses with Server-Side Pagination & Stats
 router.get('/', auth, async (req, res) => {
     try {
-        const expenses = await Expense.find({ submittedBy: req.user.id })
-            .populate('submittedBy', 'name email employeeId')
+        const { page = 1, limit = 10, search, status, filterType, fromDate, toDate } = req.query;
+
+        // Base condition: only this user's expenses
+        let query = { submittedBy: req.user.id };
+
+        // 1. Status Filter
+        if (status && status !== 'All') {
+            query.status = status;
+        }
+
+        // 2. Date Filters
+        const now = new Date();
+        let startDate = null;
+        let endDate = new Date();
+
+        if (filterType === 'Today') {
+            startDate = new Date();
+            startDate.setHours(0, 0, 0, 0);
+        } else if (filterType === 'Week') {
+            startDate = new Date();
+            startDate.setDate(now.getDate() - 7);
+            startDate.setHours(0, 0, 0, 0);
+        } else if (filterType === 'Month') {
+            startDate = new Date();
+            startDate.setDate(now.getDate() - 30);
+            startDate.setHours(0, 0, 0, 0);
+        } else if (filterType === 'Custom' && fromDate && toDate) {
+            startDate = new Date(fromDate);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(toDate);
+            endDate.setHours(23, 59, 59, 999);
+        }
+
+        if (startDate) {
+            query.expenseDate = { $gte: startDate, $lte: endDate };
+        }
+
+        // 3. Search Filter
+        if (search) {
+            query.$or = [
+                { category: { $regex: search, $options: 'i' } },
+                { descriptionTags: { $regex: search, $options: 'i' } },
+                { projectName: { $regex: search, $options: 'i' } }
+            ];
+            const searchNum = parseFloat(search);
+            if (!isNaN(searchNum)) {
+                query.$or.push({ amount: searchNum });
+            }
+        }
+
+        // --- EXECUTE PAGINATED QUERY ---
+        const limitNum = parseInt(limit);
+        const skip = (parseInt(page) - 1) * limitNum;
+
+        const expenses = await Expense.find(query)
             .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
-            .populate('vendorId', 'name gstNumber')
-            .sort({ expenseDate: -1 });
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limitNum);
 
-        res.json(expenses);
+        const totalRecords = await Expense.countDocuments(query);
+
+        // --- GET STATS FOR THE SUMMARY CARDS ---
+        // We remove the status from statsQuery so the top cards always show total counts for the selected timeframe
+        const statsQuery = { ...query };
+        delete statsQuery.status; 
+
+        const allFilteredForStats = await Expense.find(statsQuery);
+
+        let stats = {
+            pendingTotal: 0, pendingCount: 0,
+            approvedTotal: 0, approvedCount: 0,
+            returnedTotal: 0, returnedCount: 0,
+            rejectedTotal: 0, rejectedCount: 0,
+            totalFilteredAmount: 0 
+        };
+
+        allFilteredForStats.forEach(e => {
+            if (e.status === 'Pending') { stats.pendingTotal += e.amount; stats.pendingCount++; }
+            if (e.status === 'Approved') { stats.approvedTotal += e.amount; stats.approvedCount++; }
+            if (e.status === 'Returned') { stats.returnedTotal += e.amount; stats.returnedCount++; }
+            if (e.status === 'Rejected') { stats.rejectedTotal += e.amount; stats.rejectedCount++; }
+        });
+
+        // Calculate the exact amount being viewed in the table right now
+        const currentTableTotal = await Expense.aggregate([
+            { $match: query },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]);
+        stats.totalFilteredAmount = currentTableTotal.length > 0 ? currentTableTotal[0].total : 0;
+
+        res.json({
+            data: expenses,
+            pagination: {
+                totalRecords,
+                totalPages: Math.ceil(totalRecords / limitNum) || 1,
+                currentPage: parseInt(page)
+            },
+            stats
+        });
+
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

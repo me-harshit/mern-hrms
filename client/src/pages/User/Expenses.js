@@ -6,38 +6,78 @@ import {
     faBoxOpen, faPlus, faSearch, faEdit, faFileInvoice,
     faImage, faFilter, faCheckCircle, faClock, faTimesCircle, faUndo, faWallet
 } from '@fortawesome/free-solid-svg-icons';
+import Pagination from '../../components/Pagination'; 
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 import api, { SERVER_URL } from '../../utils/api';
 
 const Expenses = () => {
     const navigate = useNavigate();
+    
     const [expenses, setExpenses] = useState([]);
-
-    const [baseExpenses, setBaseExpenses] = useState([]);
-    const [filteredExpenses, setFilteredExpenses] = useState([]);
-
     const [loading, setLoading] = useState(true);
     const [walletBalance, setWalletBalance] = useState(0);
 
+    // --- PAGINATION & STATS STATES ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    
+    const [stats, setStats] = useState({
+        pendingTotal: 0, pendingCount: 0,
+        approvedTotal: 0, approvedCount: 0,
+        returnedTotal: 0, returnedCount: 0,
+        rejectedTotal: 0, rejectedCount: 0,
+        totalFilteredAmount: 0
+    });
+
+    // --- FILTER STATES ---
     const [filterType, setFilterType] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
-
     const [statusFilter, setStatusFilter] = useState('All');
 
+    // Debounce Search
     useEffect(() => {
-        fetchExpenses();
-    }, []);
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-    const fetchExpenses = async () => {
+    // Reset to Page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterType, customDates, statusFilter, debouncedSearch]);
+
+    // Fetch Data
+    useEffect(() => {
+        fetchExpenses(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, itemsPerPage, filterType, customDates, statusFilter, debouncedSearch]);
+
+    const fetchExpenses = async (pageToFetch) => {
         setLoading(true);
         try {
-            const res = await api.get('/expenses');
-            setExpenses(res.data);
-            setBaseExpenses(res.data);
-            setFilteredExpenses(res.data);
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch,
+                status: statusFilter,
+                filterType: filterType,
+                fromDate: customDates.from,
+                toDate: customDates.to
+            };
 
+            const res = await api.get('/expenses', { params });
+            
+            setExpenses(res.data.data);
+            setStats(res.data.stats);
+            setTotalPages(res.data.pagination.totalPages);
+            setTotalRecords(res.data.pagination.totalRecords);
+            setCurrentPage(res.data.pagination.currentPage);
+
+            // Fetch Wallet separately
             try {
                 const walletRes = await api.get('/wallets/my-balance');
                 setWalletBalance(walletRes.data.balance);
@@ -52,46 +92,6 @@ const Expenses = () => {
             setLoading(false);
         }
     };
-
-    useEffect(() => {
-        let result = expenses;
-        const now = new Date();
-        now.setHours(23, 59, 59, 999);
-
-        if (filterType === 'Today') { const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= startOfToday && pDate <= now; }); }
-        else if (filterType === 'Week') { const oneWeekAgo = new Date(); oneWeekAgo.setDate(now.getDate() - 7); oneWeekAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= oneWeekAgo && pDate <= now; }); }
-        else if (filterType === 'Month') { const oneMonthAgo = new Date(); oneMonthAgo.setDate(now.getDate() - 30); oneMonthAgo.setHours(0, 0, 0, 0); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= oneMonthAgo && pDate <= now; }); }
-        else if (filterType === 'Custom') { if (customDates.from && customDates.to) { const start = new Date(customDates.from); start.setHours(0, 0, 0, 0); const end = new Date(customDates.to); end.setHours(23, 59, 59, 999); result = result.filter(p => { const pDate = new Date(p.expenseDate); return pDate >= start && pDate <= end; }); } }
-
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            result = result.filter(p =>
-                (p.category && p.category.toLowerCase().includes(term)) ||
-                (p.descriptionTags && p.descriptionTags.toLowerCase().includes(term)) ||
-                (p.projectName && p.projectName.toLowerCase().includes(term)) ||
-                (p.status && p.status.toLowerCase().includes(term)) ||
-                (p.amount && p.amount.toString().includes(term))
-            );
-        }
-
-        setBaseExpenses(result);
-
-        if (statusFilter !== 'All') {
-            result = result.filter(p => p.status === statusFilter);
-        }
-
-        setFilteredExpenses(result);
-    }, [expenses, filterType, searchTerm, customDates, statusFilter]);
-
-    const pendingExps = baseExpenses.filter(e => e.status === 'Pending');
-    const approvedExps = baseExpenses.filter(e => e.status === 'Approved');
-    const returnedExps = baseExpenses.filter(e => e.status === 'Returned');
-    const rejectedExps = baseExpenses.filter(e => e.status === 'Rejected');
-
-    const pendingTotal = pendingExps.reduce((sum, e) => sum + e.amount, 0);
-    const approvedTotal = approvedExps.reduce((sum, e) => sum + e.amount, 0);
-    const returnedTotal = returnedExps.reduce((sum, e) => sum + e.amount, 0);
-    const rejectedTotal = rejectedExps.reduce((sum, e) => sum + e.amount, 0);
 
     const handleCardClick = (status) => {
         setStatusFilter(prev => prev === status ? 'All' : status);
@@ -142,7 +142,6 @@ const Expenses = () => {
         return <FontAwesomeIcon icon={faClock} style={{ color: '#d97706', marginRight: '5px' }} />;
     };
 
-    // 👇 NEW: Helper function to generate clean, minimalist styles for the filter pills
     const getMinimalCardStyle = (status, colorHex) => ({
         cursor: 'pointer',
         transition: 'all 0.2s ease',
@@ -157,8 +156,6 @@ const Expenses = () => {
         minWidth: '140px',
         boxShadow: statusFilter === status ? `0 2px 8px ${colorHex}15` : 'none'
     });
-
-    const totalFilteredAmount = filteredExpenses.reduce((sum, p) => sum + p.amount, 0);
 
     return (
         <div className="settings-container fade-in">
@@ -185,40 +182,39 @@ const Expenses = () => {
                     </div>
                 </div>
 
-                {/* Vertical Divider */}
                 <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
 
-                {/* Minimalist Filter Pills */}
+                {/* Minimalist Filter Pills (Using Server Stats) */}
                 <div style={getMinimalCardStyle('Pending', '#d97706')} onClick={() => handleCardClick('Pending')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }} /> Pending
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {pendingTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{pendingExps.length} items</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.pendingTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.pendingCount} items</div>
                 </div>
 
                 <div style={getMinimalCardStyle('Approved', '#16a34a')} onClick={() => handleCardClick('Approved')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }} /> Accepted
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {approvedTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{approvedExps.length} items</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.approvedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.approvedCount} items</div>
                 </div>
 
                 <div style={getMinimalCardStyle('Returned', '#ea580c')} onClick={() => handleCardClick('Returned')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }} /> Returned
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {returnedTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{returnedExps.length} items</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.returnedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.returnedCount} items</div>
                 </div>
 
                 <div style={getMinimalCardStyle('Rejected', '#dc2626')} onClick={() => handleCardClick('Rejected')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }} /> Rejected
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {rejectedTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{rejectedExps.length} items</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.rejectedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.rejectedCount} items</div>
                 </div>
             </div>
 
@@ -245,102 +241,113 @@ const Expenses = () => {
             </div>
 
             <div className="table-summary-text fade-in" style={{ marginBottom: '20px', fontSize: '14px', fontWeight: '600', color: '#64748b', textAlign: 'right' }}>
-                Showing {filteredExpenses.length} records &nbsp;|&nbsp; View Total: <span style={{ color: '#0f172a' }}>₹ {totalFilteredAmount.toLocaleString('en-IN')}</span>
+                Showing {expenses.length} of {totalRecords} records &nbsp;|&nbsp; View Total: <span style={{ color: '#0f172a' }}>₹ {stats.totalFilteredAmount.toLocaleString('en-IN')}</span>
             </div>
 
-            {loading ? (
-                <div className="empty-table-message">Loading expenses...</div>
-            ) : (
-                <div className="employee-table-container fade-in">
-                    <table className="employee-table">
-                        <thead>
-                            <tr>
-                                <th>Expense Category</th>
-                                <th>Project / Tags</th>
-                                <th>Amount & Date</th>
-                                <th>Payment Source</th>
-                                <th>Status</th>
-                                <th>Proof</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+            <div className="employee-table-container fade-in">
+                <table className="employee-table">
+                    <thead>
+                        <tr>
+                            <th>Expense Category</th>
+                            <th>Project / Tags</th>
+                            <th>Amount & Date</th>
+                            <th>Payment Source</th>
+                            <th>Status</th>
+                            <th>Proof</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
+                            <tr><td colSpan="7" className="empty-table-message">Loading Server Data...</td></tr>
+                        ) : expenses.length === 0 ? (
+                            <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
+                        ) : (
+                            expenses.map(item => ( 
+                                <tr key={item._id}>
+                                    <td data-label="Category">
+                                        <div className="fw-600 text-primary">{item.category}</div>
+                                        <div className="text-small text-muted">{item.expenseType}</div>
+                                    </td>
 
-                            {filteredExpenses.length === 0 ? (
-                                <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
-                            ) : (
-                                filteredExpenses.map(item => (
-                                    <tr key={item._id}>
-                                        <td data-label="Category">
-                                            <div className="fw-600 text-primary">{item.category}</div>
-                                            <div className="text-small text-muted">{item.expenseType}</div>
-                                        </td>
+                                    <td data-label="Project / Tags">
+                                        <div className="fw-500 text-small">{item.projectName || 'Regular Office'}</div>
+                                        <div className="expense-tag-pill">{item.descriptionTags}</div>
+                                    </td>
 
-                                        <td data-label="Project / Tags">
-                                            <div className="fw-500 text-small">{item.projectName || 'Regular Office'}</div>
-                                            <div className="expense-tag-pill">{item.descriptionTags}</div>
-                                        </td>
+                                    <td data-label="Amount & Date">
+                                        <div className="expense-amount-large">₹ {item.amount.toLocaleString('en-IN')}</div>
+                                        <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.expenseDate).toLocaleDateString()}</div>
+                                    </td>
 
-                                        <td data-label="Amount & Date">
-                                            <div className="expense-amount-large">₹ {item.amount.toLocaleString('en-IN')}</div>
-                                            <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.expenseDate).toLocaleDateString()}</div>
-                                        </td>
+                                    <td data-label="Payment Source">
+                                        <div className="text-small">{item.isCompanyPayment ? 'Company Account' : item.paymentSourceId?.name || 'Myself'}</div>
+                                    </td>
 
-                                        <td data-label="Payment Source">
-                                            <div className="text-small">{item.isCompanyPayment ? 'Company Account' : item.paymentSourceId?.name || 'Myself'}</div>
-                                        </td>
-
-                                        <td data-label="Status">
-                                            <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : item.status === 'Returned' ? 'warning' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>
-                                                {getStatusIcon(item.status)} {item.status || 'Pending'}
-                                            </span>
-                                            {item.approvedBy && (
-                                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', fontStyle: 'italic' }}>
-                                                    By: {item.approvedBy.name}
-                                                </div>
-                                            )}
-                                            {item.status === 'Returned' && item.adminFeedback && (
-                                                <div style={{ fontSize: '11px', color: '#ea580c', marginTop: '4px', fontWeight: 'bold' }}>
-                                                    Note: "{item.adminFeedback}"
-                                                </div>
-                                            )}
-                                        </td>
-
-                                        <td data-label="Proof">
-                                            <div className="flex-row gap-5 flex-wrap">
-                                                {item.paymentScreenshotUrls && item.paymentScreenshotUrls.length > 0 ? (
-                                                    <button onClick={() => viewFile(item.paymentScreenshotUrls, `Payment Proofs (${item.paymentScreenshotUrls.length})`)} className="gts-btn doc-btn doc-proof" title="View Proofs">
-                                                        <FontAwesomeIcon icon={faFileInvoice} />
-                                                    </button>
-                                                ) : item.paymentScreenshotUrl ? (
-                                                    <button onClick={() => viewFile(item.paymentScreenshotUrl, 'Payment Proof')} className="gts-btn doc-btn doc-proof" title="View Proof">
-                                                        <FontAwesomeIcon icon={faFileInvoice} />
-                                                    </button>
-                                                ) : <span className="text-muted">-</span>}
-
-                                                {item.expenseMediaUrls && item.expenseMediaUrls.length > 0 ? (
-                                                    <button onClick={() => viewFile(item.expenseMediaUrls, `Media (${item.expenseMediaUrls.length})`)} className="gts-btn doc-btn doc-media" title="View Media">
-                                                        <FontAwesomeIcon icon={faImage} />
-                                                    </button>
-                                                ) : null}
+                                    <td data-label="Status">
+                                        <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : item.status === 'Returned' ? 'warning' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>
+                                            {getStatusIcon(item.status)} {item.status || 'Pending'}
+                                        </span>
+                                        {item.approvedBy && (
+                                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', fontStyle: 'italic' }}>
+                                                By: {item.approvedBy.name}
                                             </div>
-                                        </td>
+                                        )}
+                                        {item.status === 'Returned' && item.adminFeedback && (
+                                            <div style={{ fontSize: '11px', color: '#ea580c', marginTop: '4px', fontWeight: 'bold' }}>
+                                                Note: "{item.adminFeedback}"
+                                            </div>
+                                        )}
+                                    </td>
 
-                                        <td data-label="Actions">
-                                            {item.status === 'Pending' || item.status === 'Returned' ? (
-                                                <button className="gts-btn primary btn-small" onClick={() => navigate(`/edit-expense/${item._id}`)}>
-                                                    <FontAwesomeIcon icon={faEdit} className="btn-icon" /> {item.status === 'Returned' ? 'Fix & Resubmit' : 'Edit'}
+                                    <td data-label="Proof">
+                                        <div className="flex-row gap-5 flex-wrap">
+                                            {item.paymentScreenshotUrls && item.paymentScreenshotUrls.length > 0 ? (
+                                                <button onClick={() => viewFile(item.paymentScreenshotUrls, `Payment Proofs (${item.paymentScreenshotUrls.length})`)} className="gts-btn doc-btn doc-proof" title="View Proofs">
+                                                    <FontAwesomeIcon icon={faFileInvoice} />
                                                 </button>
-                                            ) : (
-                                                <span className="text-small text-muted">Locked</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                            ) : item.paymentScreenshotUrl ? (
+                                                <button onClick={() => viewFile(item.paymentScreenshotUrl, 'Payment Proof')} className="gts-btn doc-btn doc-proof" title="View Proof">
+                                                    <FontAwesomeIcon icon={faFileInvoice} />
+                                                </button>
+                                            ) : <span className="text-muted">-</span>}
+
+                                            {item.expenseMediaUrls && item.expenseMediaUrls.length > 0 ? (
+                                                <button onClick={() => viewFile(item.expenseMediaUrls, `Media (${item.expenseMediaUrls.length})`)} className="gts-btn doc-btn doc-media" title="View Media">
+                                                    <FontAwesomeIcon icon={faImage} />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    </td>
+
+                                    <td data-label="Actions">
+                                        {item.status === 'Pending' || item.status === 'Returned' ? (
+                                            <button className="gts-btn primary btn-small" onClick={() => navigate(`/edit-expense/${item._id}`)}>
+                                                <FontAwesomeIcon icon={faEdit} className="btn-icon" /> {item.status === 'Returned' ? 'Fix & Resubmit' : 'Edit'}
+                                            </button>
+                                        ) : (
+                                            <span className="text-small text-muted">Locked</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {!loading && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalRecords={totalRecords}
+                    limit={itemsPerPage}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    onLimitChange={(newLimit) => {
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                    }}
+                />
             )}
         </div>
     );
