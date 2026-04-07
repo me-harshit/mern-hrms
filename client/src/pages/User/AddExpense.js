@@ -25,13 +25,11 @@ const AddExpense = () => {
     const [projectsList, setProjectsList] = useState([]);
     const [vendorsList, setVendorsList] = useState([]); 
     
-    // 👇 NEW: Store System Settings for Thresholds
     const [systemSettings, setSystemSettings] = useState({
         inventoryCatAThreshold: 500,
         inventoryCatBThreshold: 100
     });
 
-    // State for the custom searchable dropdowns
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
     const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -89,7 +87,6 @@ const AddExpense = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                // 👇 Fetched Settings alongside dropdowns
                 const [userRes, allEmpRes, projRes, venRes, settingsRes] = await Promise.all([
                     api.get('/employees/payment-sources'),
                     api.get('/employees/directory').catch(() => ({ data: [] })),
@@ -245,7 +242,6 @@ const AddExpense = () => {
                 return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
             }
 
-            // 👇 NEW: Check Inventory Image Rules based on Thresholds
             if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus)) {
                 const unitCost = Number(expenseDetails.unitPrice);
                 
@@ -341,7 +337,6 @@ const AddExpense = () => {
             case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
             case 'Accommodation': return 'Hotel Receipt / Invoice';
             case 'Product / Item Purchase': 
-                // 👇 NEW: Dynamically update label to show requirements
                 if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus) && Number(expenseDetails.unitPrice) >= systemSettings.inventoryCatAThreshold) {
                     return 'Product Photo(s) / Video(s) (Required for Cat A)';
                 }
@@ -717,6 +712,7 @@ const AddExpense = () => {
                                 <input className="custom-input" type="number" name="amount" required placeholder="5000" value={formData.amount} onChange={handleMainChange} />
                             </div>
 
+                            {/* 👇 NEW: Global GST Field */}
                             <div className="form-group">
                                 <label className="input-label">GST Number (Optional)</label>
                                 <input className="custom-input" type="text" name="gstNumber" placeholder="e.g. 29GGGGG1314R9Z6" value={expenseDetails.gstNumber} onChange={handleDetailChange} style={{ textTransform: 'uppercase' }} />
@@ -792,7 +788,6 @@ const AddExpense = () => {
                                     type="file" 
                                     multiple 
                                     accept="image/*,application/pdf" 
-                                    capture="environment"
                                     onChange={e => handleFileChange(e, 'paymentScreenshots')} 
                                 />
 
@@ -811,12 +806,13 @@ const AddExpense = () => {
                                 <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
                                     {getMediaLabel()}
                                 </label>
+                                
+                                {/* 👇 FIXED: Removed capture="environment" */}
                                 <input 
                                     className="custom-file-input" 
                                     type="file" 
                                     multiple 
                                     accept="image/*,video/*" 
-                                    capture="environment"
                                     onChange={e => handleFileChange(e, 'expenseMedia')} 
                                     required={formData.category === 'Vendor Payment'} // Vendor Invoice is still strictly required
                                 />
