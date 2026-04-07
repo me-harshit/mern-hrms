@@ -116,6 +116,14 @@ router.get('/all', auth, async (req, res) => {
         if (req.query.approvedBy) andConditions.push({ approvedBy: req.query.approvedBy });
         if (req.query.status) andConditions.push({ status: req.query.status });
 
+        if (req.query.paymentSourceId) {
+            if (req.query.paymentSourceId === 'COMPANY') {
+                andConditions.push({ isCompanyPayment: true });
+            } else {
+                andConditions.push({ paymentSourceId: req.query.paymentSourceId });
+            }
+        }
+
         if (req.query.minAmount || req.query.maxAmount) {
             let amountFilter = {};
             if (req.query.minAmount) amountFilter.$gte = Number(req.query.minAmount);

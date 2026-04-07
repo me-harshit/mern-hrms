@@ -8,7 +8,7 @@ import {
     faCheckCircle, faClock, faTimesCircle, faArrowLeft,
     faEye, faTimes, faUndo, faEdit, faBuilding
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; // 👇 NEW: Imported the reusable component
+import Pagination from '../../components/Pagination'; 
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 
@@ -21,7 +21,6 @@ const AllExpenses = () => {
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Advanced Pagination States (Notice how we removed pageInput, the component handles it now!)
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalRecords, setTotalRecords] = useState(0);
@@ -36,10 +35,17 @@ const AllExpenses = () => {
     // --- FILTER STATES ---
     const submittedByDropdownRef = useRef(null);
     const approvedByDropdownRef = useRef(null);
+    const paidByDropdownRef = useRef(null); // 👇 NEW: Ref for Paid By dropdown
+
     const [submittedBySearchTerm, setSubmittedBySearchTerm] = useState('');
     const [isSubmittedByDropdownOpen, setIsSubmittedByDropdownOpen] = useState(false);
+    
     const [approvedBySearchTerm, setApprovedBySearchTerm] = useState('');
     const [isApprovedByDropdownOpen, setIsApprovedByDropdownOpen] = useState(false);
+
+    // 👇 NEW: States for Paid By dropdown
+    const [paidBySearchTerm, setPaidBySearchTerm] = useState('');
+    const [isPaidByDropdownOpen, setIsPaidByDropdownOpen] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -50,7 +56,8 @@ const AllExpenses = () => {
         category: searchParams.get('category') || '',
         projectName: searchParams.get('projectName') || '',
         vendorName: searchParams.get('vendorName') || '',
-        submittedBy: '', approvedBy: '', minAmount: '', maxAmount: '', status: '', hasGst: ''
+        submittedBy: '', approvedBy: '', paymentSourceId: '', // 👇 NEW: Added paymentSourceId
+        minAmount: '', maxAmount: '', status: '', hasGst: ''
     });
 
     const handleViewProfile = (id) => {
@@ -62,24 +69,22 @@ const AllExpenses = () => {
         const handleClickOutside = (event) => {
             if (submittedByDropdownRef.current && !submittedByDropdownRef.current.contains(event.target)) setIsSubmittedByDropdownOpen(false);
             if (approvedByDropdownRef.current && !approvedByDropdownRef.current.contains(event.target)) setIsApprovedByDropdownOpen(false);
+            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false); // 👇 Added check
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // 1. Fetch Dropdown Data ONCE
     useEffect(() => {
-        // Update this section inside your useEffect for fetchDropdowns
         const fetchDropdowns = async () => {
             try {
-                const userRes = await api.get('/employees', { params: { limit: 1000 } });
-                setUsersList(userRes.data.data || []);
+                const userRes = await api.get('/employees/directory');
+                const employeeArray = Array.isArray(userRes.data) ? userRes.data : (userRes.data?.data || []);
+                setUsersList(employeeArray);
 
                 const projRes = await api.get('/projects/all', { params: { limit: 1000 } });
-
                 const actualProjectArray = projRes.data.data || projRes.data;
                 setProjectsList(actualProjectArray);
-
             } catch (e) {
                 console.error("Dropdown fetch error", e);
                 setProjectsList([]);
@@ -88,18 +93,15 @@ const AllExpenses = () => {
         fetchDropdowns();
     }, []);
 
-    // 2. Debounce Search Bar
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // 3. Reset to Page 1 if filters or search change
     useEffect(() => {
         setCurrentPage(1);
     }, [filters, debouncedSearch]);
 
-    // 4. Fetch Server-Side Paginated Data
     useEffect(() => {
         fetchExpenses(currentPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,10 +133,15 @@ const AllExpenses = () => {
     const handleFilterChange = (e) => setFilters({ ...filters, [e.target.name]: e.target.value });
 
     const clearFilters = () => {
-        setFilters({ fromDate: '', toDate: '', expenseType: '', category: '', projectName: '', vendorName: '', submittedBy: '', approvedBy: '', minAmount: '', maxAmount: '', status: '', hasGst: '' });
+        setFilters({ 
+            fromDate: '', toDate: '', expenseType: '', category: '', projectName: '', 
+            vendorName: '', submittedBy: '', approvedBy: '', paymentSourceId: '', 
+            minAmount: '', maxAmount: '', status: '', hasGst: '' 
+        });
         setSearchTerm('');
         setSubmittedBySearchTerm('');
         setApprovedBySearchTerm('');
+        setPaidBySearchTerm(''); // 👇 Clear new search term
     };
 
     const handleStatusUpdate = async (id, newStatus) => {
@@ -203,6 +210,9 @@ const AllExpenses = () => {
     const filteredSubmittedBy = usersList.filter(u => u.name.toLowerCase().includes(submittedBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(submittedBySearchTerm.toLowerCase()));
     const approversList = usersList.filter(u => ['ADMIN', 'HR', 'MANAGER'].includes(u.role));
     const filteredApprovedBy = approversList.filter(u => u.name.toLowerCase().includes(approvedBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(approvedBySearchTerm.toLowerCase()));
+    
+    // 👇 NEW: Filter array for Paid By
+    const filteredPaidBy = usersList.filter(u => u.name.toLowerCase().includes(paidBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(paidBySearchTerm.toLowerCase()));
 
     return (
         <div className="settings-container fade-in">
@@ -272,6 +282,36 @@ const AllExpenses = () => {
                         )}
                     </div>
 
+                    {/* 👇 NEW: Paid By Dropdown Filter */}
+                    <div ref={paidByDropdownRef} style={{ position: 'relative' }}>
+                        <label className="input-label" style={{ fontSize: '11px' }}>Paid By (Source)</label>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '8px', color: '#94a3b8', fontSize: '12px' }} />
+                            <input type="text" className="custom-input" placeholder="Search payer..." style={{ paddingLeft: '28px', paddingRight: '25px', borderColor: filters.paymentSourceId ? '#16a34a' : '#cbd5e1' }} 
+                                value={filters.paymentSourceId && !isPaidByDropdownOpen ? (filters.paymentSourceId === 'COMPANY' ? 'Company Account' : usersList.find(u => u._id === filters.paymentSourceId)?.name || '') : paidBySearchTerm} 
+                                onChange={(e) => { setPaidBySearchTerm(e.target.value); setFilters({ ...filters, paymentSourceId: '' }); setIsPaidByDropdownOpen(true); }} 
+                                onFocus={() => setIsPaidByDropdownOpen(true)} 
+                            />
+                            {filters.paymentSourceId && <FontAwesomeIcon icon={faTimes} style={{ position: 'absolute', right: '8px', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }} onClick={() => { setFilters({ ...filters, paymentSourceId: '' }); setPaidBySearchTerm(''); }} />}
+                        </div>
+                        {isPaidByDropdownOpen && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: '4px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
+                                <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: '' }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>-- Anyone --</div>
+                                
+                                <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px', background: '#f0fdf4' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: 'COMPANY' }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>
+                                    <div style={{ fontWeight: '600', color: '#16a34a' }}>Company Account</div>
+                                </div>
+
+                                {filteredPaidBy.map(u => (
+                                    <div key={u._id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: u._id }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>
+                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>{u.role}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     <div ref={approvedByDropdownRef} style={{ position: 'relative' }}>
                         <label className="input-label" style={{ fontSize: '11px' }}>Approved By</label>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -301,11 +341,10 @@ const AllExpenses = () => {
                 <table className="employee-table">
                     <thead>
                         <tr>
-                            <th>Submitter</th>
+                            <th>Submitter / Payer</th>
                             <th>Details & Context</th>
                             <th>Expense Type</th>
                             <th>Amount & Date</th>
-                            <th>Payment Source</th>
                             <th>Status & Approver</th>
                             <th>Documents</th>
                             <th>Admin Action</th>
@@ -313,9 +352,9 @@ const AllExpenses = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="8" className="empty-table-message">Loading Server Data...</td></tr>
+                            <tr><td colSpan="7" className="empty-table-message">Loading Server Data...</td></tr>
                         ) : expenses.length === 0 ? (
-                            <tr><td colSpan="8" className="empty-table-message">No records found.</td></tr>
+                            <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
                         ) : (
                             expenses.map(item => {
                                 const isProject = item.expenseType === 'Project Expense';
@@ -323,18 +362,47 @@ const AllExpenses = () => {
                                 const typeBorderColor = isProject ? '#A6477F' : '#1E73BE';
                                 const typeBgColor = isProject ? '#fdf2f8' : '#eff6ff';
 
+                                const submitterId = item.submittedBy?._id;
+                                const payerId = item.paymentSourceId?._id;
+                                
+                                const isCompanyPayment = item.isCompanyPayment;
+                                const isSamePerson = submitterId === payerId;
+
                                 return (
                                     <tr key={item._id}>
-                                        <td data-label="Submitter">
-                                            <div
-                                                className="fw-bold text-primary"
-                                                style={{ cursor: 'pointer' }}
-                                                onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
-                                                title="View Profile"
-                                            >
-                                                {item.submittedBy?.name || 'Unknown'}
-                                            </div>
-                                            <div className="text-small text-muted">{item.submittedBy?.employeeId || '-'}</div>
+                                        <td data-label="Submitter / Payer">
+                                            {/* If Paid by Company OR Submitted by the person who paid */}
+                                            {isCompanyPayment || isSamePerson ? (
+                                                <div 
+                                                    className="fw-bold text-primary" 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
+                                                    title="View Profile"
+                                                >
+                                                    {item.submittedBy?.name || 'Unknown'}
+                                                    {isCompanyPayment && <div className="text-small text-success fw-600 mt-5">Company Paid</div>}
+                                                </div>
+                                            ) : (
+                                                // If Paid by someone else (Payer is large, Submitter is small)
+                                                <>
+                                                    <div 
+                                                        className="fw-bold text-primary" 
+                                                        style={{ cursor: 'pointer', fontSize: '14px' }}
+                                                        onClick={() => item.paymentSourceId?._id && handleViewProfile(item.paymentSourceId._id)}
+                                                        title="Paid By (View Profile)"
+                                                    >
+                                                        {item.paymentSourceId?.name || 'Unknown Payer'}
+                                                    </div>
+                                                    <div 
+                                                        className="text-muted mt-5" 
+                                                        style={{ fontSize: '11px', cursor: 'pointer' }}
+                                                        onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
+                                                        title="Submitted By"
+                                                    >
+                                                        <span style={{ fontWeight: '600' }}>Logged by:</span> {item.submittedBy?.name || 'Unknown'}
+                                                    </div>
+                                                </>
+                                            )}
                                         </td>
 
                                         <td data-label="Details & Context">
@@ -374,10 +442,6 @@ const AllExpenses = () => {
                                                     GST: {item.expenseDetails.gstNumber}
                                                 </span>
                                             )}
-                                        </td>
-
-                                        <td data-label="Payment Source">
-                                            <div className="text-small fw-600">{item.isCompanyPayment ? 'Company Account' : item.paymentSourceId?.name || 'Unknown'}</div>
                                         </td>
 
                                         <td data-label="Status & Approver">
@@ -436,7 +500,6 @@ const AllExpenses = () => {
                 </table>
             </div>
 
-            {/* 👇 NEW: Modular Pagination Component inserted here */}
             {!loading && (
                 <Pagination
                     currentPage={currentPage}
