@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api, { SERVER_URL } from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, faInfoCircle, faListAlt, faCheckCircle, faFilePdf, faFileVideo, faBuilding, faUser, faSpinner, faPlus, faSearch } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
+import SearchSelect from '../../components/SearchSelect'; // 👇 NEW: Imported Component
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 
@@ -12,6 +13,7 @@ const EditExpense = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
+    const userRole = currentUser?.role || 'EMPLOYEE';
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -26,20 +28,10 @@ const EditExpense = () => {
     const [projectsList, setProjectsList] = useState([]);
     const [vendorsList, setVendorsList] = useState([]); 
 
-    // 👇 NEW: Store System Settings for Thresholds
     const [systemSettings, setSystemSettings] = useState({
         inventoryCatAThreshold: 500,
         inventoryCatBThreshold: 100
     });
-
-    // Search states and refs
-    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
-    const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
-    const dropdownRef = useRef(null);
-
-    const [vendorSearchTerm, setVendorSearchTerm] = useState('');
-    const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
-    const vendorDropdownRef = useRef(null);
 
     const [formData, setFormData] = useState({
         expenseType: 'Project Expense',
@@ -76,39 +68,26 @@ const EditExpense = () => {
     const [newFiles, setNewFiles] = useState({ paymentScreenshots: [], expenseMedia: [] });
 
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsEmployeeDropdownOpen(false);
-            }
-            if (vendorDropdownRef.current && !vendorDropdownRef.current.contains(event.target)) {
-                setIsVendorDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    useEffect(() => {
         fetchInitialData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     const fetchInitialData = async () => {
         try {
-            const usersRes = await api.get('/employees/payment-sources');
-            setUsersList(usersRes.data);
+            const [userRes, allEmpRes, projRes, venRes, settingsRes] = await Promise.all([
+                api.get('/employees/payment-sources'),
+                api.get('/employees/directory').catch(() => ({ data: [] })),
+                api.get('/projects'),
+                api.get('/vendors').catch(() => ({ data: [] })),
+                api.get('/settings').catch(() => ({ data: {} }))
+            ]);
 
-            const allEmpRes = await api.get('/employees/directory').catch(() => ({ data: [] }));
-            setAllEmployeesList(allEmpRes.data);
-
-            const projRes = await api.get('/projects');
+            setUsersList(userRes.data);
+            const employeeArray = Array.isArray(allEmpRes.data) ? allEmpRes.data : (allEmpRes.data?.data || []);
+            setAllEmployeesList(employeeArray);
             setProjectsList(projRes.data);
-
-            const venRes = await api.get('/vendors').catch(() => ({ data: [] }));
             setVendorsList(venRes.data);
 
-            // 👇 NEW: Fetch Thresholds
-            const settingsRes = await api.get('/settings').catch(() => ({ data: {} }));
             if (settingsRes.data) {
                 setSystemSettings({
                     inventoryCatAThreshold: settingsRes.data.inventoryCatAThreshold || 500,
@@ -139,9 +118,7 @@ const EditExpense = () => {
             }
 
             setExistingFiles({
-                paymentScreenshotUrls: data.paymentScreenshotUrls?.length > 0
-                    ? data.paymentScreenshotUrls
-                    : (data.paymentScreenshotUrl ? [data.paymentScreenshotUrl] : []),
+                paymentScreenshotUrls: data.paymentScreenshotUrls?.length > 0 ? data.paymentScreenshotUrls : (data.paymentScreenshotUrl ? [data.paymentScreenshotUrl] : []),
                 expenseMediaUrls: data.expenseMediaUrls || []
             });
 
@@ -173,12 +150,7 @@ const EditExpense = () => {
     const handleMainChange = (e) => {
         const { name, value, type, checked } = e.target;
         let updatedData = { ...formData };
-
-        if (type === 'checkbox') {
-            updatedData[name] = checked;
-        } else {
-            updatedData[name] = value;
-        }
+        if (type === 'checkbox') { updatedData[name] = checked; } else { updatedData[name] = value; }
 
         if (name === 'expenseType') {
             if (value === 'Project Expense' && updatedData.category === 'Regular Office Expense') {
@@ -192,32 +164,27 @@ const EditExpense = () => {
 
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
+    // Helper to generate the Payer List based on roles
+    const getPaymentSourceOptions = () => {
+        const optionsPool = (userRole === 'ADMIN' || userRole === 'ACCOUNTS') ? allEmployeesList : usersList;
+        const currentUserId = currentUser.id || currentUser._id;
+        const filteredPool = optionsPool.filter(u => String(u._id) !== String(currentUserId));
+        return [ { _id: currentUserId, name: 'Myself (Reimburse Me)', role: userRole }, ...filteredPool ];
+    };
+
     const handleFileChange = async (e, fieldName) => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
-
         setIsCompressing(true);
 
         for (let file of selectedFiles) {
             const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
-
             if (isImage) {
                 try {
-                    const options = {
-                        maxSizeMB: 1,
-                        maxWidthOrHeight: 1920,
-                        useWebWorker: false,
-                        fileType: 'image/jpeg'
-                    };
-
+                    const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: false, fileType: 'image/jpeg' };
                     const compressedBlob = await imageCompression(file, options);
                     const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
-
-                    const safelyNamedFile = new File([compressedBlob], safeName, {
-                        type: 'image/jpeg',
-                        lastModified: Date.now()
-                    });
-
+                    const safelyNamedFile = new File([compressedBlob], safeName, { type: 'image/jpeg', lastModified: Date.now() });
                     processedFiles.push(safelyNamedFile);
                 } catch (error) {
                     console.error("Error compressing image:", error);
@@ -229,7 +196,6 @@ const EditExpense = () => {
                 processedFiles.push(file);
             }
         }
-
         setNewFiles(prev => ({ ...prev, [fieldName]: processedFiles }));
         setIsCompressing(false);
     };
@@ -279,27 +245,18 @@ const EditExpense = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.amount || !formData.descriptionTags) {
-            return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
-        }
-
-        if (formData.category === 'Vendor Payment' && !formData.vendorId) {
-            return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
-        }
+        if (!formData.amount || !formData.descriptionTags) return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
+        if (formData.category === 'Vendor Payment' && !formData.vendorId) return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
 
         if (formData.category === 'Product / Item Purchase') {
             if (expenseDetails.inventoryItemStatus === 'Assigned' && !expenseDetails.inventoryAssignedTo) {
                 return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
             }
-
-            // 👇 NEW: Check Inventory Image Rules based on Thresholds
             if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus)) {
                 const unitCost = Number(expenseDetails.unitPrice);
-                
                 if (unitCost >= systemSettings.inventoryCatAThreshold) {
                     const hasNewFiles = newFiles.expenseMedia && newFiles.expenseMedia.length > 0;
                     const hasExistingFiles = existingFiles.expenseMediaUrls && existingFiles.expenseMediaUrls.length > 0;
-                    
                     if (!hasNewFiles && !hasExistingFiles) {
                         return Swal.fire({
                             title: 'Image Required (Category A)',
@@ -323,46 +280,28 @@ const EditExpense = () => {
             const d = expenseDetails;
             
             switch (formData.category) {
-                case 'Vendor Payment': 
-                    relevantDetails = { paymentDate: d.paymentDate }; break;
-                case 'Participant Payment': 
-                    relevantDetails = { participantName: d.participantName }; break;
-                case 'Product / Item Purchase': 
-                    relevantDetails = { productName: d.productName, quantity: d.quantity, unitPrice: d.unitPrice, inventoryItemStatus: d.inventoryItemStatus, storageLocation: d.inventoryItemStatus === 'Available' ? d.storageLocation : '', inventoryAssignedTo: d.inventoryItemStatus === 'Assigned' ? d.inventoryAssignedTo : '', expiryDate: d.expiryDate }; break;
-                case 'Fuel Expense (Car / Bike)': 
-                    relevantDetails = { vehicleType: d.vehicleType, vehicleNumber: d.vehicleNumber, travelFrom: d.travelFrom, travelTo: d.travelTo, odometerBefore: d.odometerBefore, odometerAfter: d.odometerAfter, kmTraveled: d.kmTraveled, purpose: d.purpose }; break;
-                case 'Food Expense': 
-                    relevantDetails = { restaurantName: d.restaurantName, foodItemsOrdered: d.foodItemsOrdered, numberOfPeople: d.numberOfPeople }; break;
-                case 'Travel Expense': 
-                    relevantDetails = { travelMode: d.travelMode, distanceKm: d.distanceKm, travelFrom: d.travelFrom, travelTo: d.travelTo, bookingReference: d.bookingReference, purpose: d.purpose }; break;
-                case 'Accommodation': 
-                    relevantDetails = { hotelName: d.hotelName, city: d.city, bookingReference: d.bookingReference, checkInDate: d.checkInDate, checkOutDate: d.checkOutDate, numberOfNights: d.numberOfNights }; break;
-                case 'Regular Office Expense': 
-                    relevantDetails = { vendorName: d.vendorName, billingCycle: d.billingCycle, expenseDescription: d.expenseDescription }; break;
-                case 'Utility / Bills': 
-                    relevantDetails = { utilityType: d.utilityType, billingMonth: d.billingMonth, invoiceNumber: d.invoiceNumber }; break;
-                case 'Maintenance & Repairs': 
-                    relevantDetails = { repairType: d.repairType, serviceProvider: d.serviceProvider, warrantyIncluded: d.warrantyIncluded }; break;
-                default: 
-                    relevantDetails = {};
+                case 'Vendor Payment': relevantDetails = { paymentDate: d.paymentDate }; break;
+                case 'Participant Payment': relevantDetails = { participantName: d.participantName }; break;
+                case 'Product / Item Purchase': relevantDetails = { productName: d.productName, quantity: d.quantity, unitPrice: d.unitPrice, inventoryItemStatus: d.inventoryItemStatus, storageLocation: d.inventoryItemStatus === 'Available' ? d.storageLocation : '', inventoryAssignedTo: d.inventoryItemStatus === 'Assigned' ? d.inventoryAssignedTo : '', expiryDate: d.expiryDate }; break;
+                case 'Fuel Expense (Car / Bike)': relevantDetails = { vehicleType: d.vehicleType, vehicleNumber: d.vehicleNumber, travelFrom: d.travelFrom, travelTo: d.travelTo, odometerBefore: d.odometerBefore, odometerAfter: d.odometerAfter, kmTraveled: d.kmTraveled, purpose: d.purpose }; break;
+                case 'Food Expense': relevantDetails = { restaurantName: d.restaurantName, foodItemsOrdered: d.foodItemsOrdered, numberOfPeople: d.numberOfPeople }; break;
+                case 'Travel Expense': relevantDetails = { travelMode: d.travelMode, distanceKm: d.distanceKm, travelFrom: d.travelFrom, travelTo: d.travelTo, bookingReference: d.bookingReference, purpose: d.purpose }; break;
+                case 'Accommodation': relevantDetails = { hotelName: d.hotelName, city: d.city, bookingReference: d.bookingReference, checkInDate: d.checkInDate, checkOutDate: d.checkOutDate, numberOfNights: d.numberOfNights }; break;
+                case 'Regular Office Expense': relevantDetails = { vendorName: d.vendorName, billingCycle: d.billingCycle, expenseDescription: d.expenseDescription }; break;
+                case 'Utility / Bills': relevantDetails = { utilityType: d.utilityType, billingMonth: d.billingMonth, invoiceNumber: d.invoiceNumber }; break;
+                case 'Maintenance & Repairs': relevantDetails = { repairType: d.repairType, serviceProvider: d.serviceProvider, warrantyIncluded: d.warrantyIncluded }; break;
+                default: relevantDetails = {};
             }
 
-            if (d.gstNumber && d.gstNumber.trim() !== '') {
-                relevantDetails.gstNumber = d.gstNumber.toUpperCase().trim();
-            }
+            if (d.gstNumber && d.gstNumber.trim() !== '') relevantDetails.gstNumber = d.gstNumber.toUpperCase().trim();
 
             data.append('expenseDetails', JSON.stringify(relevantDetails));
 
             if (newFiles.paymentScreenshots && newFiles.paymentScreenshots.length > 0) {
-                for (let i = 0; i < newFiles.paymentScreenshots.length; i++) {
-                    data.append('paymentScreenshots', newFiles.paymentScreenshots[i]);
-                }
+                for (let i = 0; i < newFiles.paymentScreenshots.length; i++) data.append('paymentScreenshots', newFiles.paymentScreenshots[i]);
             }
-
             if (newFiles.expenseMedia && newFiles.expenseMedia.length > 0) {
-                for (let i = 0; i < newFiles.expenseMedia.length; i++) {
-                    data.append('expenseMedia', newFiles.expenseMedia[i]);
-                }
+                for (let i = 0; i < newFiles.expenseMedia.length; i++) data.append('expenseMedia', newFiles.expenseMedia[i]);
             }
 
             await api.put(`/expenses/${id}`, data, {
@@ -383,10 +322,7 @@ const EditExpense = () => {
         }
     };
 
-    const getFileUrl = (url) => {
-        if (!url) return '';
-        return url.startsWith('http') ? url : `${SERVER_URL}${url}`;
-    };
+    const getFileUrl = (url) => url ? (url.startsWith('http') ? url : `${SERVER_URL}${url}`) : '';
 
     const viewSingleFile = (url, title) => {
         const fullUrl = getFileUrl(url);
@@ -448,80 +384,24 @@ const EditExpense = () => {
         }
     };
 
-    const filteredEmployees = allEmployeesList.filter(emp =>
-        emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
-        emp.role.toLowerCase().includes(employeeSearchTerm.toLowerCase())
-    );
-
-    const filteredVendors = vendorsList.filter(v =>
-        v.name.toLowerCase().includes(vendorSearchTerm.toLowerCase()) ||
-        (v.gstNumber && v.gstNumber.toLowerCase().includes(vendorSearchTerm.toLowerCase()))
-    );
-
     const renderCategoryFields = () => {
         switch (formData.category) {
             case 'Vendor Payment':
                 return (
                     <>
-                        <div className="form-group grid-span-2" ref={vendorDropdownRef}>
+                        <div className="form-group grid-span-2">
                             <label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Select Vendor *</label>
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                                <div style={{ position: 'relative', flex: 1 }}>
-                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                        <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '12px', color: '#94a3b8' }} />
-                                        <input
-                                            type="text"
-                                            className="custom-input m-0"
-                                            placeholder="Search by vendor name or GST..."
-                                            style={{ paddingLeft: '35px', borderColor: formData.vendorId ? '#16a34a' : '#cbd5e1' }}
-                                            value={
-                                                formData.vendorId && !isVendorDropdownOpen
-                                                ? `${vendorsList.find(v => v._id === formData.vendorId)?.name} ${vendorsList.find(v => v._id === formData.vendorId)?.gstNumber ? `(GST: ${vendorsList.find(v => v._id === formData.vendorId)?.gstNumber})` : ''}`
-                                                : vendorSearchTerm
-                                            }
-                                            onChange={(e) => {
-                                                setVendorSearchTerm(e.target.value);
-                                                setFormData({ ...formData, vendorId: '' }); 
-                                                setIsVendorDropdownOpen(true);
-                                            }}
-                                            onFocus={() => setIsVendorDropdownOpen(true)}
-                                        />
-                                    </div>
-                                    
-                                    {isVendorDropdownOpen && (
-                                        <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: '4px',
-                                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px',
-                                            maxHeight: '220px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                                        }}>
-                                            {filteredVendors.length > 0 ? (
-                                                filteredVendors.map(v => (
-                                                    <div
-                                                        key={v._id}
-                                                        style={{ 
-                                                            padding: '10px 15px', cursor: 'pointer', 
-                                                            borderBottom: '1px solid #f8fafc', fontSize: '14px',
-                                                            transition: 'background 0.2s'
-                                                        }}
-                                                        onMouseDown={() => {
-                                                            setFormData({ ...formData, vendorId: v._id });
-                                                            setVendorSearchTerm('');
-                                                            setIsVendorDropdownOpen(false);
-                                                        }}
-                                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                                                        onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-                                                    >
-                                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{v.name}</div>
-                                                        {v.gstNumber && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>GST: {v.gstNumber}</div>}
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div style={{ padding: '15px', color: '#64748b', fontSize: '14px', textAlign: 'center' }}>No vendors match "{vendorSearchTerm}"</div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                                <button type="button" className="gts-btn success btn-small m-0" onClick={handleAddVendor} title="Add New Vendor to Database" style={{ height: '42px' }}>
+                                {/* 👇 NEW: Search Select for Vendors */}
+                                <SearchSelect 
+                                    options={vendorsList}
+                                    value={formData.vendorId}
+                                    onChange={(val) => setFormData({ ...formData, vendorId: val })}
+                                    placeholder="Search by vendor name or GST..."
+                                    secondaryKey="gstNumber"
+                                    icon={faSearch}
+                                />
+                                <button type="button" className="gts-btn success btn-small m-0" onClick={handleAddVendor} title="Add New Vendor" style={{ height: '42px', whiteSpace: 'nowrap' }}>
                                     <FontAwesomeIcon icon={faPlus} /> Add New
                                 </button>
                             </div>
@@ -569,63 +449,17 @@ const EditExpense = () => {
                         )}
                         
                         {expenseDetails.inventoryItemStatus === 'Assigned' && (
-                            <div className="form-group grid-span-2" ref={dropdownRef}>
+                            <div className="form-group grid-span-2">
                                 <label className="input-label">Assign To Employee *</label>
-                                <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                        <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '12px', color: '#94a3b8' }} />
-                                        <input
-                                            type="text"
-                                            className="custom-input"
-                                            placeholder="Search by name or role..."
-                                            style={{ paddingLeft: '35px', borderColor: expenseDetails.inventoryAssignedTo ? '#16a34a' : '#cbd5e1' }}
-                                            value={
-                                                expenseDetails.inventoryAssignedTo && !isEmployeeDropdownOpen
-                                                ? `${allEmployeesList.find(e => e._id === expenseDetails.inventoryAssignedTo)?.name} (${allEmployeesList.find(e => e._id === expenseDetails.inventoryAssignedTo)?.role})`
-                                                : employeeSearchTerm
-                                            }
-                                            onChange={(e) => {
-                                                setEmployeeSearchTerm(e.target.value);
-                                                setExpenseDetails({ ...expenseDetails, inventoryAssignedTo: '' }); 
-                                                setIsEmployeeDropdownOpen(true);
-                                            }}
-                                            onFocus={() => setIsEmployeeDropdownOpen(true)}
-                                        />
-                                    </div>
-                                    
-                                    {isEmployeeDropdownOpen && (
-                                        <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: '4px',
-                                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px',
-                                            maxHeight: '220px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                                        }}>
-                                            {filteredEmployees.length > 0 ? (
-                                                filteredEmployees.map(u => (
-                                                    <div
-                                                        key={u._id}
-                                                        style={{ 
-                                                            padding: '10px 15px', cursor: 'pointer', 
-                                                            borderBottom: '1px solid #f8fafc', fontSize: '14px',
-                                                            transition: 'background 0.2s'
-                                                        }}
-                                                        onMouseDown={() => {
-                                                            setExpenseDetails({ ...expenseDetails, inventoryAssignedTo: u._id });
-                                                            setEmployeeSearchTerm('');
-                                                            setIsEmployeeDropdownOpen(false);
-                                                        }}
-                                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                                                        onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-                                                    >
-                                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
-                                                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{u.role}</div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div style={{ padding: '15px', color: '#64748b', fontSize: '14px', textAlign: 'center' }}>No employees match "{employeeSearchTerm}"</div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
+                                {/* 👇 NEW: Search Select for Employee */}
+                                <SearchSelect 
+                                    options={allEmployeesList}
+                                    value={expenseDetails.inventoryAssignedTo}
+                                    onChange={(val) => handleDetailChange({ target: { name: 'inventoryAssignedTo', value: val } })}
+                                    placeholder="Search by name or role..."
+                                    secondaryKey="role"
+                                    icon={faUser}
+                                />
                             </div>
                         )}
 
@@ -748,7 +582,6 @@ const EditExpense = () => {
 
                 <form onSubmit={handleSubmit} className="profile-form">
 
-                    {/* --- SECTION 1: CORE DETAILS --- */}
                     <div className="expense-form-section">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faInfoCircle} /> General Information
@@ -771,24 +604,20 @@ const EditExpense = () => {
                             {formData.expenseType === 'Project Expense' && (
                                 <div className="form-group">
                                     <label className="input-label">Project Name *</label>
-                                    <select className="swal2-select custom-select" name="projectName" required value={formData.projectName} onChange={handleMainChange}>
-                                        <option value="">-- Select Project --</option>
-                                        {projectsList.map(proj => (
-                                            <option key={proj._id} value={proj.name}>{proj.name}</option>
-                                        ))}
-                                    </select>
+                                    {/* 👇 NEW: Search Select for Project */}
+                                    <SearchSelect 
+                                        options={projectsList}
+                                        value={formData.projectName}
+                                        onChange={(val) => setFormData({ ...formData, projectName: val })}
+                                        placeholder="Search Project..."
+                                        valueKey="name" 
+                                    />
                                 </div>
                             )}
 
                             <div className="form-group">
                                 <label className="input-label">Expense Category *</label>
-                                <select
-                                    className="swal2-select custom-select"
-                                    name="category"
-                                    value={formData.category}
-                                    onChange={handleMainChange}
-                                    style={{ borderColor: '#215D7B' }}
-                                >
+                                <select className="swal2-select custom-select" name="category" value={formData.category} onChange={handleMainChange} style={{ borderColor: '#215D7B' }}>
                                     <option value="Product / Item Purchase">Product / Item Purchase</option>
                                     <option value="Utility / Bills">Utility / Bills</option>
                                     <option value="Maintenance & Repairs">Maintenance & Repairs</option>
@@ -796,16 +625,9 @@ const EditExpense = () => {
                                     <option value="Food Expense">Food Expense</option>
                                     <option value="Travel Expense">Travel Expense</option>
                                     <option value="Accommodation">Accommodation</option>
-
-                                    {formData.expenseType === 'Project Expense' && (
-                                        <>
-                                            <option value="Participant Payment">Participant Payment</option>
-                                        </>
-                                    )}
+                                    {formData.expenseType === 'Project Expense' && <option value="Participant Payment">Participant Payment</option>}
                                     <option value="Vendor Payment">Vendor Payment</option>
-                                    {formData.expenseType === 'Regular Office Expense' && (
-                                        <option value="Regular Office Expense">Regular Office Expense</option>
-                                    )}
+                                    {formData.expenseType === 'Regular Office Expense' && <option value="Regular Office Expense">Regular Office Expense</option>}
                                 </select>
                             </div>
 
@@ -821,7 +643,6 @@ const EditExpense = () => {
                                 <input className="custom-input" type="number" name="amount" required placeholder="5000" value={formData.amount} onChange={handleMainChange} />
                             </div>
 
-                            {/* 👇 NEW: Global GST Field */}
                             <div className="form-group">
                                 <label className="input-label">GST Number (Optional)</label>
                                 <input className="custom-input" type="text" name="gstNumber" placeholder="e.g. 29GGGGG1314R9Z6" value={expenseDetails.gstNumber} onChange={handleDetailChange} style={{ textTransform: 'uppercase' }} />
@@ -829,37 +650,26 @@ const EditExpense = () => {
 
                             <div className="form-group grid-span-2" style={{ marginTop: '5px', marginBottom: '5px' }}>
                                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', cursor: 'pointer', userSelect: 'none' }}>
-                                    <div style={{
-                                        position: 'relative', width: '44px', height: '24px', 
-                                        background: formData.isCompanyPayment ? '#16a34a' : '#cbd5e1', 
-                                        borderRadius: '24px', transition: 'background 0.3s ease'
-                                    }}>
-                                        <div style={{
-                                            position: 'absolute', top: '2px', left: formData.isCompanyPayment ? '22px' : '2px',
-                                            width: '20px', height: '20px', background: 'white', borderRadius: '50%',
-                                            transition: 'left 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                                        }} />
+                                    <div style={{ position: 'relative', width: '44px', height: '24px', background: formData.isCompanyPayment ? '#16a34a' : '#cbd5e1', borderRadius: '24px', transition: 'background 0.3s ease' }}>
+                                        <div style={{ position: 'absolute', top: '2px', left: formData.isCompanyPayment ? '22px' : '2px', width: '20px', height: '20px', background: 'white', borderRadius: '50%', transition: 'left 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
                                     </div>
                                     <span style={{ fontWeight: '600', color: '#334155', fontSize: '14px' }}>Is company Account ?</span>
-                                    <input 
-                                        type="checkbox" 
-                                        name="isCompanyPayment" 
-                                        checked={formData.isCompanyPayment} 
-                                        onChange={handleMainChange} 
-                                        style={{ display: 'none' }} 
-                                    />
+                                    <input type="checkbox" name="isCompanyPayment" checked={formData.isCompanyPayment} onChange={handleMainChange} style={{ display: 'none' }} />
                                 </label>
                             </div>
 
                             {!formData.isCompanyPayment && (
                                 <div className="form-group">
                                     <label className="input-label"><FontAwesomeIcon icon={faCreditCard} /> Payment Source (Who paid?) *</label>
-                                    <select className="swal2-select custom-select" name="paymentSourceId" value={formData.paymentSourceId} onChange={handleMainChange} required>
-                                        <option value={currentUser?.id || currentUser?._id || ''}>Myself (Reimburse Me)</option>
-                                        {usersList.map(u => (
-                                            <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
-                                        ))}
-                                    </select>
+                                    {/* 👇 NEW: Search Select for Employee */}
+                                    <SearchSelect 
+                                        options={getPaymentSourceOptions()}
+                                        value={formData.paymentSourceId}
+                                        onChange={(val) => setFormData({ ...formData, paymentSourceId: val })}
+                                        placeholder="Search by name..."
+                                        secondaryKey="role"
+                                        icon={faCreditCard}
+                                    />
                                 </div>
                             )}
 
@@ -870,7 +680,6 @@ const EditExpense = () => {
                         </div>
                     </div>
 
-                    {/* --- SECTION 2: DYNAMIC FIELDS --- */}
                     <div className="expense-form-section">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faListAlt} /> {formData.category} Details
@@ -880,7 +689,6 @@ const EditExpense = () => {
                         </div>
                     </div>
 
-                    {/* --- SECTION 3: ATTACHMENTS --- */}
                     <div className="expense-form-section mb-0">
                         <div className="expense-section-title">
                             <FontAwesomeIcon icon={faPaperclip} /> Attachments & Proof
@@ -914,7 +722,6 @@ const EditExpense = () => {
                                         type="file" 
                                         multiple 
                                         accept="image/*,application/pdf" 
-                                        capture="environment"
                                         onChange={e => handleFileChange(e, 'paymentScreenshots')} 
                                     />
 
@@ -951,7 +758,6 @@ const EditExpense = () => {
                                         type="file" 
                                         multiple 
                                         accept="image/*,video/*" 
-                                        capture="environment"
                                         onChange={e => handleFileChange(e, 'expenseMedia')} 
                                         required={formData.category === 'Vendor Payment' && (!existingFiles.expenseMediaUrls || existingFiles.expenseMediaUrls.length === 0)}
                                     />

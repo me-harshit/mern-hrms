@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ['EMPLOYEE', 'ADMIN', 'HR', 'MANAGER'], default: 'EMPLOYEE' },
+    role: { type: String, enum: ['EMPLOYEE', 'ADMIN', 'HR', 'MANAGER', 'ACCOUNTS'], default: 'EMPLOYEE' },
     
     shiftType: { type: String, enum: ['DAY', 'NIGHT'], default: 'DAY' }, 
     dateOfBirth: { type: Date }, 

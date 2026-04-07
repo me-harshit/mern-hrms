@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/User/Profile';
 import Attendance from './pages/User/Attendance';
 import Employees from './pages/Admin/Employees';
+import AddEmployee from './pages/Admin/AddEmployee';
 import Leaves from './pages/User/Leaves';
 import EmployeeRequests from './pages/Admin/EmployeeRequests';
 import WorkFromHome from './pages/User/WorkFromHome';
@@ -18,7 +19,7 @@ import AdminSettings from './pages/Admin/AdminSettings';
 import AttendanceLogs from './pages/Admin/AttendanceLogs';
 import AbsentEmployees from './pages/Admin/AbsentEmployees';
 import EmployeeProfile from './pages/Admin/EmployeeProfile';
-import EditEmployee from './pages/Admin/EditEmployee'; 
+import EditEmployee from './pages/Admin/EditEmployee';
 import Expenses from './pages/User/Expenses';
 import AdminExpenses from './pages/Admin/AdminExpenses';
 import AllExpenses from './pages/Admin/AllExpenses';
@@ -66,7 +67,7 @@ const ImpersonationBanner = () => {
 
   return (
     <div style={{
-      background: '#dc2626', 
+      background: '#dc2626',
       color: 'white',
       padding: '10px 20px',
       textAlign: 'center',
@@ -81,11 +82,11 @@ const ImpersonationBanner = () => {
       <span style={{ fontSize: '14px' }}>
         ⚠️ You are currently viewing the system as <strong>{currentUser?.name}</strong>.
       </span>
-      <button 
-        onClick={handleReturnToAdmin} 
+      <button
+        onClick={handleReturnToAdmin}
         style={{
-          padding: '6px 12px', background: 'white', color: '#dc2626', 
-          border: 'none', borderRadius: '4px', cursor: 'pointer', 
+          padding: '6px 12px', background: 'white', color: '#dc2626',
+          border: 'none', borderRadius: '4px', cursor: 'pointer',
           fontWeight: 'bold', fontSize: '13px', transition: '0.2s'
         }}
       >
@@ -104,7 +105,7 @@ const DashboardLayout = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
-      
+
       <ImpersonationBanner />
 
       <div className="app-container" style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
@@ -116,11 +117,9 @@ const DashboardLayout = () => {
 
         <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
 
-        {/* 👇 FIXED: Made the wrapper a flex column that hides overflow */}
         <div className="content-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Topbar onToggleSidebar={toggleSidebar} />
-          
-          {/* 👇 FIXED: Forced the main content area to handle the vertical scrolling */}
+
           <div className="main-content" style={{ flex: 1, overflowY: 'auto', paddingBottom: '30px' }}>
             <Outlet />
           </div>
@@ -141,6 +140,9 @@ function App() {
   }
   const userRole = user?.role;
 
+  // Helper to check management roles (Now includes ACCOUNTS)
+  const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS'].includes(userRole);
+
   return (
     <Router>
       <Routes>
@@ -151,74 +153,42 @@ function App() {
 
           {/* ALL PAGES INSIDE HERE GET THE TOPBAR & SIDEBAR */}
           <Route element={<DashboardLayout />}>
+            {/* Standard Employee Routes */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/my-inventory" element={<MyInventory />} />
-            <Route path="/absent-employees" element={<AbsentEmployees />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
             <Route path="/wfh" element={<WorkFromHome />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/add-expense" element={<AddExpense />} />
             <Route path="/edit-expense/:id" element={<EditExpense />} />
-            <Route path="/inventory" element={<Inventory />} />
             <Route path="/reimbursements" element={<Reimbursements />} />
-            <Route path="/add-inventory" element={<AddInventory />} />
-            <Route path="/edit-inventory/:id" element={<EditInventory />} />
 
-            {/* ADDED MANAGER TO THE ALLOWED ROLES BELOW */}
-            <Route
-              path="/employees"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <Employees /> : <Navigate to="/dashboard" />}
-            />
+            {/* 👇 Management Routes (Admin, HR, Manager, Accounts) */}
+            <Route path="/employees" element={isManagement ? <Employees /> : <Navigate to="/dashboard" />} />
+            <Route path="/add-employee" element={isManagement ? <AddEmployee /> : <Navigate to="/dashboard" />} />
+            <Route path="/employee/:id" element={isManagement ? <EmployeeProfile /> : <Navigate to="/dashboard" />} />
+            <Route path="/edit-employee/:id" element={isManagement ? <EditEmployee /> : <Navigate to="/dashboard" />} />
+            <Route path="/attendance-logs" element={isManagement ? <AttendanceLogs /> : <Navigate to="/dashboard" />} />
+            <Route path="/raw-punches" element={isManagement ? <RawPunches /> : <Navigate to="/dashboard" />} />
+            <Route path="/absent-employees" element={isManagement ? <AbsentEmployees /> : <Navigate to="/dashboard" />} />
+            <Route path="/Employee-requests" element={isManagement ? <EmployeeRequests /> : <Navigate to="/dashboard" />} />
+            <Route path="/projects" element={isManagement ? <Projects /> : <Navigate to="/dashboard" />} />
             
-            <Route
-              path="/employee/:id"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <EmployeeProfile /> : <Navigate to="/dashboard" />}
-            />
-            
-            <Route
-              path="/edit-employee/:id"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <EditEmployee /> : <Navigate to="/dashboard" />}
-            />
-
-            <Route
-              path="/attendance-logs"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AttendanceLogs /> : <Navigate to="/dashboard" />}
-            />
-            <Route
-              path="/raw-punches"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <RawPunches /> : <Navigate to="/dashboard" />}
-            />
-            <Route
-              path="/Employee-requests"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <EmployeeRequests /> : <Navigate to="/dashboard" />}
-            />
-            <Route
-              path="/projects"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <Projects /> : <Navigate to="/dashboard" />}
-            />
-            <Route
-              path="/admin-expenses"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AdminExpenses /> : <Navigate to="/dashboard" />}
-            />
+            {/* Expense & Inventory Management */}
+            <Route path="/admin-expenses" element={isManagement ? <AdminExpenses /> : <Navigate to="/dashboard" />} />
+            <Route path="/all-expenses" element={isManagement ? <AllExpenses /> : <Navigate to="/dashboard" />} />
+            <Route path="/inventory" element={isManagement ? <Inventory /> : <Navigate to="/dashboard" />} />
+            <Route path="/add-inventory" element={isManagement ? <AddInventory /> : <Navigate to="/dashboard" />} />
+            <Route path="/edit-inventory/:id" element={isManagement ? <EditInventory /> : <Navigate to="/dashboard" />} />
 
             {/* LOCKED TO ADMIN ONLY */}
-            <Route
-              path="/admin-settings"
-              element={userRole === 'ADMIN' ? <AdminSettings /> : <Navigate to="/dashboard" />}
-            />
-            <Route
-              path="/all-expenses"
-              element={(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') ? <AllExpenses /> : <Navigate to="/dashboard" />}
-            />
+            <Route path="/admin-settings" element={userRole === 'ADMIN' ? <AdminSettings /> : <Navigate to="/dashboard" />} />
 
             {/* LOCKED TO HR & ADMIN */}
-            <Route
-              path="/admin-chat"
-              element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminChat /> : <Navigate to="/dashboard" />}
-            />
+            <Route path="/admin-chat" element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminChat /> : <Navigate to="/dashboard" />} />
 
           </Route>
         </Route>

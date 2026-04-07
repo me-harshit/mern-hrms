@@ -7,7 +7,7 @@ import {
     faUser, faSave, faArrowLeft, faClock, faPlaneDeparture, 
     faEdit, faWallet, faHistory, faTimes, faUserEdit, faCog, faMoneyBillWave 
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; // 👇 NEW: Imported Pagination
+import Pagination from '../../components/Pagination'; 
 import '../../styles/App.css';
 import '../../styles/expenses.css'; 
 
@@ -35,13 +35,11 @@ const EditEmployee = () => {
     const [attTotalRecords, setAttTotalRecords] = useState(0);
     const [attLimit, setAttLimit] = useState(10);
 
-    // Initial Profile Load
     useEffect(() => {
         fetchEmployeeData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    // Independent Attendance Load
     useEffect(() => {
         fetchAttendanceLogs(attPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,7 +47,6 @@ const EditEmployee = () => {
 
     const fetchEmployeeData = async () => {
         try {
-            // Notice we removed attendance from this Promise.all!
             const [userRes, leaveRes, walletRes] = await Promise.all([
                 api.get(`/employees/${id}`),
                 api.get(`/leaves/admin/user-leaves/${id}`),
@@ -110,7 +107,6 @@ const EditEmployee = () => {
         }
     };
 
-    // 👇 FIXED: Handles completely missing times (Absent/Pending) safely
     const calculateDuration = (start, end) => {
         if (!start && !end) return <span className="text-muted">-</span>;
         if (!start || !end) return <span className="text-muted italic text-small">In Progress</span>;
@@ -127,6 +123,8 @@ const EditEmployee = () => {
     };
 
     const handleManageWallet = async () => {
+        const today = new Date().toISOString().split('T')[0];
+
         const { value: formValues } = await Swal.fire({
             title: 'Manage Wallet Balance',
             html: `
@@ -140,8 +138,12 @@ const EditEmployee = () => {
                         <option value="deduct">Deduct Funds (-)</option>
                         <option value="set">Set Exact Balance (=)</option>
                     </select>
+                    
                     <label class="swal-custom-label">Amount (₹)</label>
-                    <input id="wallet-amount" type="number" class="swal2-input" placeholder="e.g. 5000" style="width:100%;">
+                    <input id="wallet-amount" type="number" class="swal2-input" placeholder="e.g. 5000" style="width:100%; margin-bottom: 15px;">
+
+                    <label class="swal-custom-label">Transaction Date</label>
+                    <input id="wallet-date" type="date" class="swal2-input" value="${today}" style="width: 100%;">
                 </div>
             `,
             showCancelButton: true,
@@ -149,11 +151,17 @@ const EditEmployee = () => {
             preConfirm: () => {
                 const action = document.getElementById('wallet-action').value;
                 const amount = Number(document.getElementById('wallet-amount').value);
+                const date = document.getElementById('wallet-date').value;
+
                 if (!amount && amount !== 0) {
                     Swal.showValidationMessage('Please enter a valid amount');
                     return false;
                 }
-                return { action, amount };
+                if (!date) {
+                    Swal.showValidationMessage('Please select a date');
+                    return false;
+                }
+                return { action, amount, date };
             }
         });
 
@@ -165,7 +173,11 @@ const EditEmployee = () => {
 
             try {
                 await api.put('/wallets/update', { 
-                    targetUserId: id, newBalance, action: formValues.action, amountChanged: formValues.amount 
+                    targetUserId: id, 
+                    newBalance, 
+                    action: formValues.action, 
+                    amountChanged: formValues.amount,
+                    date: formValues.date // 👇 Passes custom date
                 });
                 Swal.fire('Success', `Updated to ₹${newBalance.toLocaleString('en-IN')}`, 'success');
                 setWalletBalance(newBalance);
@@ -252,7 +264,6 @@ const EditEmployee = () => {
             try {
                 await api.put(`/attendance/update/${log._id}`, formValues);
                 Swal.fire('Updated', 'Attendance record updated.', 'success');
-                // 👇 Call the paginated fetcher, NOT the full profile fetcher!
                 fetchAttendanceLogs(attPage);
             } catch (err) {
                 Swal.fire('Error', 'Update failed', 'error');
@@ -311,7 +322,17 @@ const EditEmployee = () => {
 
                         <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted"/> System Configuration</h3>
                         <div className="form-grid mt-15 mb-30" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-                            <div className="form-group"><label className="input-label">System Role</label><select className="swal2-select custom-input" value={user.role || 'EMPLOYEE'} onChange={e => setUser({ ...user, role: e.target.value })} disabled={currentUser?.role !== 'ADMIN'} style={{ opacity: currentUser?.role !== 'ADMIN' ? 0.6 : 1 }}><option value="EMPLOYEE">Employee</option><option value="MANAGER">Manager</option><option value="HR">HR</option><option value="ADMIN">Admin</option></select></div>
+                            <div className="form-group">
+                                <label className="input-label">System Role</label>
+                                {/* 👇 NEW: Added ACCOUNTS Role */}
+                                <select className="swal2-select custom-input" value={user.role || 'EMPLOYEE'} onChange={e => setUser({ ...user, role: e.target.value })} disabled={currentUser?.role !== 'ADMIN'} style={{ opacity: currentUser?.role !== 'ADMIN' ? 0.6 : 1 }}>
+                                    <option value="EMPLOYEE">Employee</option>
+                                    <option value="MANAGER">Manager</option>
+                                    <option value="ACCOUNTS">Accounts</option>
+                                    <option value="HR">HR</option>
+                                    <option value="ADMIN">Admin</option>
+                                </select>
+                            </div>
                             <div className="form-group"><label className="input-label">Shift Timing</label><select className="swal2-select custom-input" value={user.shiftType || 'DAY'} onChange={e => setUser({ ...user, shiftType: e.target.value })}><option value="DAY">Day Shift</option><option value="NIGHT">Night Shift</option></select></div>
                             <div className="form-group"><label className="input-label">Account Status</label><select className="swal2-select custom-input" value={user.status || 'ACTIVE'} onChange={e => setUser({ ...user, status: e.target.value })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
                             <div className="form-group"><label className="input-label">Reporting Manager Name</label><input className="custom-input" placeholder="Manager's Full Name" value={user.reportingManagerName || ''} onChange={e => setUser({ ...user, reportingManagerName: e.target.value })} /></div>
@@ -399,7 +420,6 @@ const EditEmployee = () => {
                                     <tr key={log._id}>
                                         <td data-label="Date" className="fw-500 text-dark-blue">{log.date}</td>
                                         
-                                        {/* 👇 FIXED: Safe rendering of missing punches */}
                                         <td data-label="Check In">
                                             {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </td>
@@ -467,7 +487,8 @@ const EditEmployee = () => {
                                     ) : (
                                         filteredTransactions.map(tx => (
                                             <tr key={tx._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '12px 15px', fontSize: '13px' }}>{new Date(tx.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                                                {/* 👇 UPDATED: Showing backdated `tx.date` */}
+                                                <td style={{ padding: '12px 15px', fontSize: '13px' }}>{new Date(tx.date || tx.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                                                 <td style={{ padding: '12px 15px', fontSize: '13px', color: '#475569' }}>{tx.description}</td>
                                                 <td style={{ padding: '12px 15px', fontSize: '13px' }}>{tx.performedBy?.name || 'System'}</td>
                                                 <td style={{ padding: '12px 15px', textAlign: 'right', fontWeight: 'bold', fontSize: '14px', color: tx.type === 'Credit' ? '#16a34a' : (tx.type === 'Debit' ? '#dc2626' : '#d97706') }}>{tx.type === 'Debit' ? '-' : (tx.type === 'Credit' ? '+' : '=')} ₹{tx.amount.toLocaleString('en-IN')}</td>
@@ -485,7 +506,6 @@ const EditEmployee = () => {
 };
 
 export default EditEmployee;
-
 
 // import React, { useState, useEffect } from 'react';
 // import { useParams, useNavigate } from 'react-router-dom';
