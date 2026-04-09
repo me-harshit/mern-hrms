@@ -126,11 +126,12 @@ const sweepEveningAbsentees = async (shiftType) => {
 
 // --- SCHEDULES ---
 // DAY SHIFT (Starts ~9:30 AM | Ends ~6:00 PM)
-cron.schedule('0 7 * * 1-6', () => setupMorningRecords('DAY'));    // 7:00 AM
+cron.schedule('0 7 * * 1-6', () => setupMorningRecords('DAY'));    
 cron.schedule('0 20 * * 1-6', () => sweepEveningAbsentees('DAY')); // 8:00 PM
 
 // NIGHT SHIFT (Starts ~7:30 PM | Ends ~4:00 AM next day)
 cron.schedule('0 17 * * 1-6', () => setupMorningRecords('NIGHT')); // 5:00 PM
 cron.schedule('0 8 * * 1-6', () => sweepEveningAbsentees('NIGHT'));// 8:00 AM (Runs the next morning to sweep)
+// setupMorningRecords('DAY');   // TEMP: Force run this once right now to populate today's missing data
 
 module.exports = { setupMorningRecords, sweepEveningAbsentees };

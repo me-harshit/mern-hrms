@@ -36,7 +36,7 @@ const getShiftDate = (punchTime, shiftType) => {
 };
 
 // ==========================================
-// 🚀 1. BIOMETRIC UPLOAD ROUTE (UPDATED FOR PENDING RECORDS)
+// 🚀 1. BIOMETRIC UPLOAD ROUTE 
 // ==========================================
 router.post('/upload', upload.any(), async (req, res) => {
     try {
@@ -142,7 +142,6 @@ router.post('/upload', upload.any(), async (req, res) => {
         let record = await Attendance.findOne({ userId, date: shiftDate });
 
         if (!record) {
-            // Fallback: If cron failed to run morning setup, create the record normally
             if (firstIn) {
                 record = new Attendance({
                     userId, date: shiftDate, checkIn: firstIn, checkOut: lastOut,
@@ -152,13 +151,11 @@ router.post('/upload', upload.any(), async (req, res) => {
                 await record.save();
             }
         } else {
-            // Success: Update the Pre-populated Cron Record!
             record.checkIn = firstIn || record.checkIn;
             record.checkOut = lastOut || record.checkOut;
             record.totalHours = calculatedGrossHours;
             record.breakTimeTaken = calculatedBreakMinutes;
 
-            // ONLY overwrite status if it's currently Pending or Absent
             if (record.status === 'Pending' || record.status === 'Absent') {
                 record.status = determinedStatus;
                 record.note = record.status === 'Absent' ? determinedNote + ' (Recovered from Absent)' : determinedNote;
@@ -174,7 +171,7 @@ router.post('/upload', upload.any(), async (req, res) => {
 });
 
 // ==========================================
-// 🚀 2. LIVE ABSENCE CALCULATOR (Ultra-Fast Pending Query)
+// 🚀 2. LIVE ABSENCE CALCULATOR
 // ==========================================
 router.get('/absent', auth, async (req, res) => {
     try {
@@ -182,7 +179,9 @@ router.get('/absent', auth, async (req, res) => {
 
         const now = new Date();
         
-        let userQuery = { role: 'EMPLOYEE', status: 'ACTIVE' };
+        // 👇 FIXED: Includes HR/Managers/Accounts, excludes Admin
+        let userQuery = { role: { $ne: 'ADMIN' }, status: 'ACTIVE' }; 
+        
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             userQuery.reportingManagerEmail = manager.email.toLowerCase();
@@ -191,7 +190,6 @@ router.get('/absent', auth, async (req, res) => {
         const employees = await User.find(userQuery).select('_id');
         const employeeIds = employees.map(emp => emp._id);
 
-        // Instead of math, just find who is "Pending" for today's dates
         const todayDayStr = getShiftDate(now, 'DAY');
         const todayNightStr = getShiftDate(now, 'NIGHT');
 
@@ -228,7 +226,8 @@ router.get('/absent-report', auth, async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
 
-        let userQuery = { role: 'EMPLOYEE', status: 'ACTIVE' };
+        // 👇 FIXED: Includes everyone except ADMIN
+        let userQuery = { role: { $ne: 'ADMIN' }, status: 'ACTIVE' };
 
         if (req.query.shiftType === 'DAY') {
             userQuery.$or = [{ shiftType: 'DAY' }, { shiftType: null }, { shiftType: { $exists: false } }];
@@ -265,7 +264,6 @@ router.get('/absent-report', auth, async (req, res) => {
 
         let attendanceQuery = {
             userId: { $in: userIds },
-            // Included 'Pending' so HR can see people who haven't punched in today yet
             status: { $in: ['Absent', 'On Leave', 'Pending'] } 
         };
 
@@ -345,7 +343,11 @@ router.get('/all-logs', auth, async (req, res) => {
         const skip = (page - 1) * limit;
 
         let query = {};
-        let andConditions = [];
+        
+        // 👇 FIXED: Explicitly filter OUT Absent and Pending records
+        let andConditions = [
+            { status: { $nin: ['Absent', 'Pending'] } }
+        ];
 
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
@@ -439,14 +441,12 @@ router.get('/raw-logs', auth, async (req, res) => {
 
         let andConditions = [];
 
-        // 1. Manager Scope
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
             andConditions.push({ userId: { $in: teamIds } });
         }
 
-        // 2. Date Range Filtering
         if (req.query.startDate && req.query.endDate) {
             andConditions.push({
                 timestamp: {
@@ -456,7 +456,6 @@ router.get('/raw-logs', auth, async (req, res) => {
             });
         }
 
-        // 3. Text Search (Employee Name, Bio ID, or Device ID)
         if (req.query.search) {
             const searchRegex = new RegExp(req.query.search, 'i');
             const matchingUsers = await User.find({ 
@@ -471,7 +470,6 @@ router.get('/raw-logs', auth, async (req, res) => {
             });
         }
 
-        // 4. Combine all conditions safely
         let query = {};
         if (andConditions.length > 0) {
             query.$and = andConditions;

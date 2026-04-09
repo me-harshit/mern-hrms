@@ -95,7 +95,7 @@ const AttendanceLogs = () => {
         const outTime = toTimeStr(log.checkOut);
 
         const { value: formValues } = await Swal.fire({
-            title: `Edit Log: ${log.userId.name}`,
+            title: `Edit Log: ${log.userId?.name || 'Employee'}`,
             html: `
                 <div style="text-align:left">
                     <p class="text-small text-muted" style="margin-bottom:10px;">
@@ -254,7 +254,6 @@ const AttendanceLogs = () => {
                         ) : (
                             logs.map(log => (
                                 <tr key={log._id}>
-                                    {/* 👇 UPDATED: Clickable Name */}
                                     <td data-label="Employee">
                                         <div 
                                             className="fw-bold text-primary"

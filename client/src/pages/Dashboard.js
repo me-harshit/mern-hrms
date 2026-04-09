@@ -120,12 +120,14 @@ const Dashboard = () => {
                         <div className="stat-info"><p>Live Absence</p><h3 className="text-danger">{stats.absentToday}</h3></div>
                     </div>
 
-                    <div className="stat-card theme-yellow clickable-card" onClick={() => navigate('/leave-requests')} title="View Leave Requests">
+                    {/* 👇 FIXED: Pointing to /Employee-requests */}
+                    <div className="stat-card theme-yellow clickable-card" onClick={() => navigate('/Employee-requests')} title="View Pending Requests">
                         <div className="stat-icon"><FontAwesomeIcon icon={faClipboardList} /></div>
                         <div className="stat-info"><p>Pending Actions</p><h3>{stats.pendingLeaves}</h3></div>
                     </div>
                     
-                    <div className="stat-card theme-purple clickable-card" onClick={() => navigate('/leave-requests')} title="View Leave Requests">
+                    {/* 👇 FIXED: Pointing to /Employee-requests */}
+                    <div className="stat-card theme-purple clickable-card" onClick={() => navigate('/Employee-requests')} title="View Approved Leaves">
                         <div className="stat-icon"><FontAwesomeIcon icon={faPlaneDeparture} /></div>
                         <div className="stat-info"><p>On Leave</p><h3>{stats.onLeaveToday}</h3></div>
                     </div>
@@ -188,7 +190,7 @@ const Dashboard = () => {
                     {/* New Purchaser Quick Actions */}
                     {isPurchaser && (
                         <>
-                            <button className="gts-btn" style={{ background: '#215D7B', color: 'white' }} onClick={() => navigate('/add-purchase')}>
+                            <button className="gts-btn" style={{ background: '#215D7B', color: 'white' }} onClick={() => navigate('/add-expense')}>
                                 <FontAwesomeIcon icon={faPlus} className="btn-icon" /> Log New Expense
                             </button>
                             <button className="gts-btn" style={{ background: '#0284c7', color: 'white' }} onClick={fetchMyLedger}>
@@ -198,7 +200,7 @@ const Dashboard = () => {
                     )}
 
                     {!isEmployee && (
-                        <button className="gts-btn danger" onClick={() => navigate('/leave-requests')}>
+                        <button className="gts-btn danger" onClick={() => navigate('/Employee-requests')}>
                             <FontAwesomeIcon icon={faClipboardList} className="btn-icon" /> Review Requests
                         </button>
                     )}

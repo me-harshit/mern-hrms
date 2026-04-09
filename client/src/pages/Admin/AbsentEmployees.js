@@ -49,8 +49,14 @@ const AbsentEmployees = () => {
         setLoading(true);
         try {
             const now = new Date();
+            
+            // 👇 FIXED: Force start of the day (Midnight)
             let start = new Date(now);
+            start.setHours(0, 0, 0, 0);
+            
+            // 👇 FIXED: Force end of the day (11:59:59 PM)
             let end = new Date(now);
+            end.setHours(23, 59, 59, 999);
 
             if (filterType === 'Yesterday') {
                 start.setDate(now.getDate() - 1);
@@ -61,7 +67,9 @@ const AbsentEmployees = () => {
                 start.setDate(now.getDate() - 29);
             } else if (filterType === 'Custom') {
                 start = new Date(customDates.from);
+                start.setHours(0, 0, 0, 0); // Force midnight for custom start
                 end = new Date(customDates.to);
+                end.setHours(23, 59, 59, 999); // Force end of day for custom end
             }
 
             const params = {
@@ -191,7 +199,6 @@ const AbsentEmployees = () => {
                         ) : (
                             absences.map(record => (
                                 <tr key={record._id}>
-                                    {/* 👇 UPDATED: Clickable Name */}
                                     <td data-label="Employee Details">
                                         <div 
                                             className="fw-bold text-primary fs-15"

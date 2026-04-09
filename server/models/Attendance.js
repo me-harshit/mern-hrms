@@ -13,7 +13,7 @@ const attendanceSchema = new mongoose.Schema({
     checkIn: {
         type: Date,
         required: function () {
-            return this.status !== 'Absent' && this.status !== 'On Leave';
+            return !['Absent', 'On Leave', 'Pending'].includes(this.status);
         }
     },
     checkOut: {
@@ -38,7 +38,6 @@ const attendanceSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Prevent duplicate attendance records for the same user on the same day
 attendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);
