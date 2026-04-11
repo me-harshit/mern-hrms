@@ -47,6 +47,9 @@ const Sidebar = ({ isOpen, onClose }) => {
         }
     };
 
+    // Helper for Management Roles
+    const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS'].includes(userRole);
+
     return (
         <div className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
             {/* Close button visible only on mobile drawer */}
@@ -65,25 +68,30 @@ const Sidebar = ({ isOpen, onClose }) => {
                     <FontAwesomeIcon icon={faThLarge} className="nav-icon" /> <span>Dashboard</span>
                 </Link>
 
-                <Link to="/attendance" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/attendance' ? 'active' : ''}`}>
-                    <FontAwesomeIcon icon={faCalendarCheck} className="nav-icon" /> <span>Attendance</span>
-                </Link>
+                {/* 👇 FIXED: Hidden personal employee links for the ADMIN role */}
+                {userRole !== 'ADMIN' && (
+                    <>
+                        <Link to="/attendance" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/attendance' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faCalendarCheck} className="nav-icon" /> <span>Attendance</span>
+                        </Link>
 
-                <Link to="/profile" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/profile' ? 'active' : ''}`}>
-                    <FontAwesomeIcon icon={faUser} className="nav-icon" /> <span>My Profile</span>
-                </Link>
+                        <Link to="/profile" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/profile' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faUser} className="nav-icon" /> <span>My Profile</span>
+                        </Link>
 
-                <Link to="/calendar" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/calendar' ? 'active' : ''}`}>
-                    <FontAwesomeIcon icon={faCalendarAlt} className="nav-icon" /> <span>Yearly Calendar</span>
-                </Link>
+                        <Link to="/calendar" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/calendar' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faCalendarAlt} className="nav-icon" /> <span>Yearly Calendar</span>
+                        </Link>
 
-                <Link to="/leaves" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/leaves' ? 'active' : ''}`}>
-                    <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
-                </Link>
+                        <Link to="/leaves" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/leaves' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
+                        </Link>
 
-                <Link to="/wfh" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/wfh' ? 'active' : ''}`}>
-                    <FontAwesomeIcon icon={faLaptopHouse} className="nav-icon" /> <span>Work From Home</span>
-                </Link>
+                        <Link to="/wfh" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/wfh' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faLaptopHouse} className="nav-icon" /> <span>Work From Home</span>
+                        </Link>
+                    </>
+                )}
 
                 {hasInventory && (
                     <Link to="/my-inventory" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/my-inventory' ? 'active' : ''}`}>
@@ -91,21 +99,24 @@ const Sidebar = ({ isOpen, onClose }) => {
                     </Link>
                 )}
 
-                {(user?.isPurchaser || userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') && (
+                {(user?.isPurchaser || isManagement) && (
                     <Link to="/expenses" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/expenses' ? 'active' : ''}`}>
                         <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" /> <span>My Expenses</span>
                     </Link>
                 )}
-                {(userRole === 'HR' || userRole === 'ADMIN') && (
+                
+                {/* 👇 NEW: ACCOUNTS added to Reimbursements */}
+                {(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'ACCOUNTS') && (
                     <Link to="/reimbursements" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/reimbursements' ? 'active' : ''}`}>
                         <FontAwesomeIcon icon={faWallet} className="nav-icon" /> <span>Reimbursements</span>
                     </Link>
                 )}
 
-                {(userRole === 'HR' || userRole === 'ADMIN' || userRole === 'MANAGER') && (
+                {/* 👇 NEW: Unified Management Block with ACCOUNTS integrated */}
+                {isManagement && (
                     <>
                         <div className="sidebar-section-label">
-                            {userRole === 'MANAGER' ? 'Team Management' : 'HR Management'}
+                            {userRole === 'MANAGER' ? 'Team Management' : userRole === 'ACCOUNTS' ? 'Finance & Ops' : 'HR Management'}
                         </div>
 
                         <Link to="/employees" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/employees' ? 'active' : ''}`}>
@@ -136,17 +147,18 @@ const Sidebar = ({ isOpen, onClose }) => {
                     </>
                 )}
 
-                {(userRole === 'ADMIN' || userRole === 'HR') && (
+                {(userRole === 'ADMIN' || userRole === 'HR' || userRole === 'ACCOUNTS') && (
                     <>
                         <Link to="/inventory" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/inventory' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faBoxes} className="nav-icon" /> <span>Global Inventory</span>
                         </Link>
-
-
-                        <Link to="/admin-chat" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-chat' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faRobot} className="nav-icon" /> <span>AI Assistant</span>
-                        </Link>
                     </>
+                )}
+
+                {(userRole === 'HR' || userRole === 'ADMIN') && (
+                    <Link to="/admin-chat" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-chat' ? 'active' : ''}`}>
+                        <FontAwesomeIcon icon={faRobot} className="nav-icon" /> <span>AI Assistant</span>
+                    </Link>
                 )}
 
                 {/* Visible to Admins ONLY */}
