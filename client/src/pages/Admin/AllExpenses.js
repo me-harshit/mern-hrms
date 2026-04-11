@@ -26,6 +26,9 @@ const AllExpenses = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    // 👇 NEW: Bulk Selection State
+    const [selectedExpenses, setSelectedExpenses] = useState([]);
+
     // --- DROPDOWN DATA STATES ---
     const [usersList, setUsersList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
@@ -35,7 +38,7 @@ const AllExpenses = () => {
     // --- FILTER STATES ---
     const submittedByDropdownRef = useRef(null);
     const approvedByDropdownRef = useRef(null);
-    const paidByDropdownRef = useRef(null); // 👇 NEW: Ref for Paid By dropdown
+    const paidByDropdownRef = useRef(null); 
 
     const [submittedBySearchTerm, setSubmittedBySearchTerm] = useState('');
     const [isSubmittedByDropdownOpen, setIsSubmittedByDropdownOpen] = useState(false);
@@ -43,7 +46,6 @@ const AllExpenses = () => {
     const [approvedBySearchTerm, setApprovedBySearchTerm] = useState('');
     const [isApprovedByDropdownOpen, setIsApprovedByDropdownOpen] = useState(false);
 
-    // 👇 NEW: States for Paid By dropdown
     const [paidBySearchTerm, setPaidBySearchTerm] = useState('');
     const [isPaidByDropdownOpen, setIsPaidByDropdownOpen] = useState(false);
 
@@ -56,7 +58,7 @@ const AllExpenses = () => {
         category: searchParams.get('category') || '',
         projectName: searchParams.get('projectName') || '',
         vendorName: searchParams.get('vendorName') || '',
-        submittedBy: '', approvedBy: '', paymentSourceId: '', // 👇 NEW: Added paymentSourceId
+        submittedBy: '', approvedBy: '', paymentSourceId: '', 
         minAmount: '', maxAmount: '', status: '', hasGst: ''
     });
 
@@ -69,7 +71,7 @@ const AllExpenses = () => {
         const handleClickOutside = (event) => {
             if (submittedByDropdownRef.current && !submittedByDropdownRef.current.contains(event.target)) setIsSubmittedByDropdownOpen(false);
             if (approvedByDropdownRef.current && !approvedByDropdownRef.current.contains(event.target)) setIsApprovedByDropdownOpen(false);
-            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false); // 👇 Added check
+            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false); 
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -101,6 +103,11 @@ const AllExpenses = () => {
     useEffect(() => {
         setCurrentPage(1);
     }, [filters, debouncedSearch]);
+
+    // 👇 NEW: Clear selections when page or filters change to prevent accidental invisible approvals
+    useEffect(() => {
+        setSelectedExpenses([]);
+    }, [currentPage, filters, debouncedSearch, itemsPerPage]);
 
     useEffect(() => {
         fetchExpenses(currentPage);
@@ -141,7 +148,8 @@ const AllExpenses = () => {
         setSearchTerm('');
         setSubmittedBySearchTerm('');
         setApprovedBySearchTerm('');
-        setPaidBySearchTerm(''); // 👇 Clear new search term
+        setPaidBySearchTerm('');
+        setSelectedExpenses([]); // Clear selections on reset
     };
 
     const handleStatusUpdate = async (id, newStatus) => {
@@ -161,6 +169,55 @@ const AllExpenses = () => {
         if (result.isConfirmed) {
             try { await api.put(`/expenses/${id}/status`, { status: newStatus }); fetchExpenses(currentPage); setIsSidebarOpen(false); } catch (err) { Swal.fire('Error', 'Failed', 'error'); }
         }
+    };
+
+    // 👇 NEW: Bulk Approval Logic
+    const handleBulkApprove = async () => {
+        if (selectedExpenses.length === 0) return;
+        
+        const result = await Swal.fire({
+            title: 'Approve Selected?',
+            text: `You are about to approve ${selectedExpenses.length} expenses at once. This action will process funds and sync inventory.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#16a34a',
+            confirmButtonText: 'Yes, approve all!'
+        });
+
+        if (result.isConfirmed) {
+            setLoading(true);
+            try {
+                // Fire off concurrent requests for all selected IDs
+                await Promise.all(
+                    selectedExpenses.map(id => api.put(`/expenses/${id}/status`, { status: 'Approved' }))
+                );
+                
+                Swal.fire('Success', `${selectedExpenses.length} expenses approved successfully!`, 'success');
+                setSelectedExpenses([]);
+                fetchExpenses(currentPage);
+            } catch (err) {
+                Swal.fire('Error', 'Some approvals failed. Please review the remaining pending items.', 'error');
+                fetchExpenses(currentPage);
+            }
+        }
+    };
+
+    // 👇 NEW: Selection Checkbox Logic
+    const pendingOnPage = expenses.filter(e => e.status === 'Pending');
+    const isAllSelected = pendingOnPage.length > 0 && pendingOnPage.every(e => selectedExpenses.includes(e._id));
+
+    const handleSelectAll = () => {
+        if (isAllSelected) {
+            const idsToRemove = pendingOnPage.map(e => e._id);
+            setSelectedExpenses(prev => prev.filter(id => !idsToRemove.includes(id)));
+        } else {
+            const idsToAdd = pendingOnPage.map(e => e._id).filter(id => !selectedExpenses.includes(id));
+            setSelectedExpenses(prev => [...prev, ...idsToAdd]);
+        }
+    };
+
+    const handleSelectOne = (id) => {
+        setSelectedExpenses(prev => prev.includes(id) ? prev.filter(eId => eId !== id) : [...prev, id]);
     };
 
     const openSidebar = (expense) => { setSelectedExpense(expense); setIsSidebarOpen(true); };
@@ -210,17 +267,24 @@ const AllExpenses = () => {
     const filteredSubmittedBy = usersList.filter(u => u.name.toLowerCase().includes(submittedBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(submittedBySearchTerm.toLowerCase()));
     const approversList = usersList.filter(u => ['ADMIN', 'HR', 'MANAGER'].includes(u.role));
     const filteredApprovedBy = approversList.filter(u => u.name.toLowerCase().includes(approvedBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(approvedBySearchTerm.toLowerCase()));
-    
-    // 👇 NEW: Filter array for Paid By
     const filteredPaidBy = usersList.filter(u => u.name.toLowerCase().includes(paidBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(paidBySearchTerm.toLowerCase()));
 
     return (
         <div className="settings-container fade-in">
-            <div className="page-header-row mb-20" style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '15px' }}>
-                <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/admin-expenses')}>
-                    <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Dashboard
-                </button>
-                <h1 className="page-title header-no-margin">All Expense Records</h1>
+            <div className="page-header-row mb-20" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <button className="gts-btn warning btn-small m-0" onClick={() => navigate('/admin-expenses')}>
+                        <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Dashboard
+                    </button>
+                    <h1 className="page-title header-no-margin">All Expense Records</h1>
+                </div>
+
+                {/* 👇 NEW: Bulk Approve Button */}
+                {selectedExpenses.length > 0 && (
+                    <button className="gts-btn success btn-small m-0 fade-in" onClick={handleBulkApprove} style={{ background: '#16a34a', color: 'white', fontWeight: 'bold' }}>
+                        <FontAwesomeIcon icon={faCheckCircle} className="btn-icon" /> Approve Selected ({selectedExpenses.length})
+                    </button>
+                )}
             </div>
 
             <div className="expense-form-section">
@@ -282,7 +346,6 @@ const AllExpenses = () => {
                         )}
                     </div>
 
-                    {/* 👇 NEW: Paid By Dropdown Filter */}
                     <div ref={paidByDropdownRef} style={{ position: 'relative' }}>
                         <label className="input-label" style={{ fontSize: '11px' }}>Paid By (Source)</label>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -341,6 +404,16 @@ const AllExpenses = () => {
                 <table className="employee-table">
                     <thead>
                         <tr>
+                            {/* 👇 NEW: Header Checkbox */}
+                            <th style={{ width: '40px', textAlign: 'center' }}>
+                                <input 
+                                    type="checkbox" 
+                                    style={{ cursor: pendingOnPage.length === 0 ? 'not-allowed' : 'pointer' }}
+                                    checked={isAllSelected}
+                                    onChange={handleSelectAll}
+                                    disabled={pendingOnPage.length === 0}
+                                />
+                            </th>
                             <th>Submitter / Payer</th>
                             <th>Details & Context</th>
                             <th>Expense Type</th>
@@ -352,9 +425,9 @@ const AllExpenses = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="7" className="empty-table-message">Loading Server Data...</td></tr>
+                            <tr><td colSpan="8" className="empty-table-message">Loading Server Data...</td></tr>
                         ) : expenses.length === 0 ? (
-                            <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
+                            <tr><td colSpan="8" className="empty-table-message">No records found.</td></tr>
                         ) : (
                             expenses.map(item => {
                                 const isProject = item.expenseType === 'Project Expense';
@@ -369,9 +442,20 @@ const AllExpenses = () => {
                                 const isSamePerson = submitterId === payerId;
 
                                 return (
-                                    <tr key={item._id}>
+                                    <tr key={item._id} style={{ background: selectedExpenses.includes(item._id) ? '#f0fdf4' : 'transparent' }}>
+                                        {/* 👇 NEW: Row Checkbox */}
+                                        <td style={{ textAlign: 'center' }}>
+                                            {item.status === 'Pending' ? (
+                                                <input 
+                                                    type="checkbox" 
+                                                    style={{ cursor: 'pointer' }}
+                                                    checked={selectedExpenses.includes(item._id)}
+                                                    onChange={() => handleSelectOne(item._id)}
+                                                />
+                                            ) : null}
+                                        </td>
+                                        
                                         <td data-label="Submitter / Payer">
-                                            {/* If Paid by Company OR Submitted by the person who paid */}
                                             {isCompanyPayment || isSamePerson ? (
                                                 <div 
                                                     className="fw-bold text-primary" 
@@ -383,7 +467,6 @@ const AllExpenses = () => {
                                                     {isCompanyPayment && <div className="text-small text-success fw-600 mt-5">Company Paid</div>}
                                                 </div>
                                             ) : (
-                                                // If Paid by someone else (Payer is large, Submitter is small)
                                                 <>
                                                     <div 
                                                         className="fw-bold text-primary" 

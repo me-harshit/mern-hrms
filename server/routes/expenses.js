@@ -73,17 +73,24 @@ router.post('/', auth, upload.fields([
 });
 
 // @route   GET /api/expenses
-// @desc    Get logged-in user's expenses with Server-Side Pagination & Stats
+// @desc    Get logged-in user's expenses (Submitted by OR Paid by) with Server-Side Pagination & Stats
 router.get('/', auth, async (req, res) => {
     try {
         const { page = 1, limit = 10, search, status, filterType, fromDate, toDate } = req.query;
 
-        // Base condition: only this user's expenses
-        let query = { submittedBy: req.user.id };
+        // 👇 FIXED: Base condition includes items they submitted OR items they paid for
+        let andConditions = [
+            { 
+                $or: [
+                    { submittedBy: req.user.id }, 
+                    { paymentSourceId: req.user.id }
+                ] 
+            }
+        ];
 
         // 1. Status Filter
         if (status && status !== 'All') {
-            query.status = status;
+            andConditions.push({ status });
         }
 
         // 2. Date Filters
@@ -110,27 +117,31 @@ router.get('/', auth, async (req, res) => {
         }
 
         if (startDate) {
-            query.expenseDate = { $gte: startDate, $lte: endDate };
+            andConditions.push({ expenseDate: { $gte: startDate, $lte: endDate } });
         }
 
         // 3. Search Filter
         if (search) {
-            query.$or = [
+            let searchOr = [
                 { category: { $regex: search, $options: 'i' } },
                 { descriptionTags: { $regex: search, $options: 'i' } },
                 { projectName: { $regex: search, $options: 'i' } }
             ];
             const searchNum = parseFloat(search);
             if (!isNaN(searchNum)) {
-                query.$or.push({ amount: searchNum });
+                searchOr.push({ amount: searchNum });
             }
+            andConditions.push({ $or: searchOr });
         }
+
+        let query = { $and: andConditions };
 
         // --- EXECUTE PAGINATED QUERY ---
         const limitNum = parseInt(limit);
         const skip = (parseInt(page) - 1) * limitNum;
 
         const expenses = await Expense.find(query)
+            .populate('submittedBy', 'name email') // 👇 FIXED: Make sure we fetch the submitter's name
             .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
             .sort({ createdAt: -1 })
@@ -140,9 +151,8 @@ router.get('/', auth, async (req, res) => {
         const totalRecords = await Expense.countDocuments(query);
 
         // --- GET STATS FOR THE SUMMARY CARDS ---
-        // We remove the status from statsQuery so the top cards always show total counts for the selected timeframe
-        const statsQuery = { ...query };
-        delete statsQuery.status; 
+        let statsConditions = andConditions.filter(cond => !cond.status);
+        const statsQuery = statsConditions.length > 0 ? { $and: statsConditions } : {};
 
         const allFilteredForStats = await Expense.find(statsQuery);
 
@@ -161,7 +171,6 @@ router.get('/', auth, async (req, res) => {
             if (e.status === 'Rejected') { stats.rejectedTotal += e.amount; stats.rejectedCount++; }
         });
 
-        // Calculate the exact amount being viewed in the table right now
         const currentTableTotal = await Expense.aggregate([
             { $match: query },
             { $group: { _id: null, total: { $sum: "$amount" } } }

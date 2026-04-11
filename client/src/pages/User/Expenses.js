@@ -13,6 +13,7 @@ import api, { SERVER_URL } from '../../utils/api';
 
 const Expenses = () => {
     const navigate = useNavigate();
+    const currentUser = JSON.parse(localStorage.getItem('user')); // 👇 ADDED THIS
     
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -280,8 +281,20 @@ const Expenses = () => {
                                         <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.expenseDate).toLocaleDateString()}</div>
                                     </td>
 
+                                    {/* 👇 UPDATED: Clears up who actually logged the expense if not the current user */}
                                     <td data-label="Payment Source">
-                                        <div className="text-small">{item.isCompanyPayment ? 'Company Account' : item.paymentSourceId?.name || 'Myself'}</div>
+                                        {item.submittedBy?._id && item.submittedBy._id !== currentUser.id && (
+                                            <div className="text-small text-muted" style={{ marginBottom: '4px' }}>
+                                                <span className="fw-600">Logged by:</span> {item.submittedBy.name}
+                                            </div>
+                                        )}
+                                        <div className="text-small">
+                                            <span className="fw-600 text-dark">Paid by:</span> {
+                                                item.isCompanyPayment ? 'Company Account' : 
+                                                item.paymentSourceId?._id === currentUser.id ? 'Me' : 
+                                                item.paymentSourceId?.name || 'Me'
+                                            }
+                                        </div>
                                     </td>
 
                                     <td data-label="Status">
