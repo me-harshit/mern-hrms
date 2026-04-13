@@ -413,7 +413,7 @@ router.get('/all-logs', auth, async (req, res) => {
 
         const logs = await Attendance.find(query)
             .populate('userId', 'name email shiftType')
-            .sort({ createdAt: -1 })
+            .sort({ checkIn: -1 })
             .skip(skip)
             .limit(limit);
 
