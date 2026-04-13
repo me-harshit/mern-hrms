@@ -78,7 +78,6 @@ router.get('/', auth, async (req, res) => {
     try {
         const { page = 1, limit = 10, search, status, filterType, fromDate, toDate } = req.query;
 
-        // 👇 FIXED: Base condition includes items they submitted OR items they paid for
         let andConditions = [
             { 
                 $or: [
@@ -88,12 +87,10 @@ router.get('/', auth, async (req, res) => {
             }
         ];
 
-        // 1. Status Filter
         if (status && status !== 'All') {
             andConditions.push({ status });
         }
 
-        // 2. Date Filters
         const now = new Date();
         let startDate = null;
         let endDate = new Date();
@@ -120,7 +117,6 @@ router.get('/', auth, async (req, res) => {
             andConditions.push({ expenseDate: { $gte: startDate, $lte: endDate } });
         }
 
-        // 3. Search Filter
         if (search) {
             let searchOr = [
                 { category: { $regex: search, $options: 'i' } },
@@ -136,12 +132,11 @@ router.get('/', auth, async (req, res) => {
 
         let query = { $and: andConditions };
 
-        // --- EXECUTE PAGINATED QUERY ---
         const limitNum = parseInt(limit);
         const skip = (parseInt(page) - 1) * limitNum;
 
         const expenses = await Expense.find(query)
-            .populate('submittedBy', 'name email') // 👇 FIXED: Make sure we fetch the submitter's name
+            .populate('submittedBy', 'name email') 
             .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
             .sort({ createdAt: -1 })
@@ -150,7 +145,6 @@ router.get('/', auth, async (req, res) => {
 
         const totalRecords = await Expense.countDocuments(query);
 
-        // --- GET STATS FOR THE SUMMARY CARDS ---
         let statsConditions = andConditions.filter(cond => !cond.status);
         const statsQuery = statsConditions.length > 0 ? { $and: statsConditions } : {};
 
@@ -207,9 +201,25 @@ router.get('/all', auth, async (req, res) => {
         let andConditions = [];
 
         if (req.user.role === 'MANAGER') {
-            const myProjects = await Project.find({ projectLead: req.user.id }).select('name');
-            const myProjectNames = myProjects.map(p => p.name);
-            andConditions.push({ expenseType: 'Project Expense', projectName: { $in: myProjectNames } });
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+
+            const myProjects = await Project.find({
+                $or: [
+                    { leadEmail: manager.email.toLowerCase() },
+                    { managerEmail: manager.email.toLowerCase() },
+                    { projectManager: manager._id },
+                    { lead: manager._id }
+                ]
+            }).distinct('name');
+
+            andConditions.push({
+                $or: [
+                    { submittedBy: { $in: teamIds } },
+                    { paymentSourceId: { $in: teamIds } },
+                    { projectName: { $in: myProjects } }
+                ]
+            });
         }
 
         if (req.query.expenseType) andConditions.push({ expenseType: req.query.expenseType });
@@ -428,7 +438,7 @@ router.put('/:id/status', auth, async (req, res) => {
         }
 
         let isAuthorized = false;
-        if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
+        if (req.user.role === 'ADMIN' || req.user.role === 'HR' || req.user.role === 'ACCOUNTS') {
             isAuthorized = true;
         } else if (req.user.role === 'MANAGER') {
             if (expense.expenseType === 'Project Expense' && expense.projectName) {
@@ -461,60 +471,63 @@ router.put('/:id/status', auth, async (req, res) => {
                 });
             }
 
-            // 2. Auto-Sync to Inventory
+            // 👇 NEW: Iterating through MULTIPLE items to sync Inventory
             if (expense.category === 'Product / Item Purchase' && !expense.inventorySynced) {
-                const details = expense.expenseDetails;
+                const items = expense.expenseDetails?.items || [];
+                let linkedIds = [];
 
-                if (details && details.inventoryItemStatus && details.inventoryItemStatus !== 'Do Not Track') {
-                    const invStatus = details.inventoryItemStatus;
-                    const qty = Number(details.quantity) || 1;
+                for (const prod of items) {
+                    if (prod && prod.inventoryItemStatus && prod.inventoryItemStatus !== 'Do Not Track') {
+                        const invStatus = prod.inventoryItemStatus;
+                        const qty = Number(prod.quantity) || 1;
 
-                    let existingPool = null;
-                    if (invStatus === 'Available') {
-                        existingPool = await Inventory.findOne({
-                            itemName: details.productName,
-                            status: 'Available',
-                            storageLocation: details.storageLocation
-                        });
-                    } else if (invStatus === 'Assigned') {
-                        existingPool = await Inventory.findOne({
-                            itemName: details.productName,
-                            status: 'Assigned',
-                            assignedTo: details.inventoryAssignedTo
-                        });
-                    }
-
-                    let linkedInvId;
-
-                    if (existingPool) {
-                        existingPool.quantity += qty;
-                        if (expense.expenseMediaUrls && expense.expenseMediaUrls.length > 0) {
-                            const combined = new Set([...existingPool.mediaUrls, ...expense.expenseMediaUrls]);
-                            existingPool.mediaUrls = Array.from(combined);
+                        let existingPool = null;
+                        if (invStatus === 'Available') {
+                            existingPool = await Inventory.findOne({
+                                itemName: prod.productName,
+                                status: 'Available',
+                                storageLocation: prod.storageLocation
+                            });
+                        } else if (invStatus === 'Assigned') {
+                            existingPool = await Inventory.findOne({
+                                itemName: prod.productName,
+                                status: 'Assigned',
+                                assignedTo: prod.inventoryAssignedTo
+                            });
                         }
-                        await existingPool.save();
-                        linkedInvId = existingPool._id;
-                    } else {
-                        const newAsset = new Inventory({
-                            itemName: details.productName,
-                            quantity: qty,
-                            // 👇 NEW: Save the unit price to the inventory record!
-                            price: Number(details.unitPrice) || null,
-                            status: invStatus,
-                            storageLocation: invStatus === 'Available' ? details.storageLocation : '',
-                            assignedTo: invStatus === 'Assigned' ? details.inventoryAssignedTo : null,
-                            mediaUrls: expense.expenseMediaUrls || [],
-                            createdBy: req.user.id,
-                            linkedExpenseId: expense._id
-                        });
-                        await newAsset.save();
-                        linkedInvId = newAsset._id;
-                    }
 
-                    expense.inventorySynced = true;
-                    expense.linkedInventoryId = linkedInvId;
-                } else if (details && details.inventoryItemStatus === 'Do Not Track') {
-                    expense.inventorySynced = true;
+                        if (existingPool) {
+                            // Item already exists, just top up quantity and merge photos
+                            existingPool.quantity += qty;
+                            if (expense.expenseMediaUrls && expense.expenseMediaUrls.length > 0) {
+                                const combined = new Set([...existingPool.mediaUrls, ...expense.expenseMediaUrls]);
+                                existingPool.mediaUrls = Array.from(combined);
+                            }
+                            await existingPool.save();
+                            linkedIds.push(existingPool._id);
+                        } else {
+                            // Brand new item, create fresh record
+                            const newAsset = new Inventory({
+                                itemName: prod.productName,
+                                quantity: qty,
+                                price: Number(prod.unitPrice) || null,
+                                status: invStatus,
+                                storageLocation: invStatus === 'Available' ? prod.storageLocation : '',
+                                assignedTo: invStatus === 'Assigned' ? prod.inventoryAssignedTo : null,
+                                mediaUrls: expense.expenseMediaUrls || [],
+                                createdBy: req.user.id,
+                                linkedExpenseId: expense._id
+                            });
+                            await newAsset.save();
+                            linkedIds.push(newAsset._id);
+                        }
+                    }
+                }
+
+                expense.inventorySynced = true;
+                // Optional: Store the generated IDs on the expense model if your schema supports it
+                if (linkedIds.length > 0) {
+                    expense.linkedInventoryIds = linkedIds;
                 }
             }
         }

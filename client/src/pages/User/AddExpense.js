@@ -6,10 +6,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
     faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, 
     faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle, 
-    faPlus, faSearch 
+    faPlus, faSearch, faTrash, faChevronDown, faChevronUp
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression'; 
-import SearchSelect from '../../components/SearchSelect'; // 👇 NEW: Imported Component
+import SearchSelect from '../../components/SearchSelect'; 
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 
@@ -44,21 +44,23 @@ const AddExpense = () => {
         isCompanyPayment: false 
     });
 
-    const [expenseDetails, setExpenseDetails] = useState({
+    const defaultProduct = {
         productName: '', quantity: 1, unitPrice: '', expiryDate: '', storageLocation: '',
-        inventoryItemStatus: 'Available', 
-        inventoryAssignedTo: '', 
+        inventoryItemStatus: 'Available', inventoryAssignedTo: ''
+    };
 
+    const [productList, setProductList] = useState([{ ...defaultProduct }]);
+    
+    // 👇 NEW: State to track which product form is currently expanded
+    const [expandedItemIndex, setExpandedItemIndex] = useState(0);
+
+    const [expenseDetails, setExpenseDetails] = useState({
         vehicleType: 'Car', vehicleNumber: '', odometerBefore: '', odometerAfter: '', kmTraveled: '', travelFrom: '', travelTo: '', purpose: '',
         travelMode: 'Flight', distanceKm: '', bookingReference: '',
-        
         restaurantName: '', foodItemsOrdered: '', numberOfPeople: '',
         hotelName: '', city: '', checkInDate: '', checkOutDate: '', numberOfNights: '',
-        
         vendorName: '', billingCycle: 'Monthly', expenseDescription: '', participantName: '', 
-        gstNumber: '', 
-        paymentDate: '', 
-
+        gstNumber: '', paymentDate: '', 
         utilityType: 'Electricity', billingMonth: '', invoiceNumber: '',
         repairType: 'Equipment / IT', serviceProvider: '', warrantyIncluded: 'No'
     });
@@ -77,7 +79,6 @@ const AddExpense = () => {
                 ]);
 
                 setUsersList(userRes.data);
-                
                 const employeeArray = Array.isArray(allEmpRes.data) ? allEmpRes.data : (allEmpRes.data?.data || []);
                 setAllEmployeesList(employeeArray);
                 setProjectsList(projRes.data);
@@ -135,12 +136,42 @@ const AddExpense = () => {
 
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    // Helper to generate the Payer List based on roles
+    // Dynamic Product Handlers
+    const handleProductChange = (index, field, value) => {
+        const updatedList = [...productList];
+        updatedList[index][field] = value;
+        
+        if (field === 'inventoryItemStatus') {
+            if (value === 'Available') updatedList[index].inventoryAssignedTo = '';
+            if (value === 'Assigned') updatedList[index].storageLocation = '';
+            if (value === 'Do Not Track') {
+                updatedList[index].storageLocation = '';
+                updatedList[index].inventoryAssignedTo = '';
+            }
+        }
+        setProductList(updatedList);
+    };
+
+    const addProduct = () => {
+        setProductList([...productList, { ...defaultProduct }]);
+        setExpandedItemIndex(productList.length); // Auto-expand the newly created item
+    };
+
+    const removeProduct = (index) => {
+        if (productList.length === 1) return Swal.fire('Wait', 'You must have at least one product in the list.', 'info');
+        const updatedList = productList.filter((_, i) => i !== index);
+        setProductList(updatedList);
+        
+        if (expandedItemIndex === index) {
+            setExpandedItemIndex(Math.max(0, index - 1)); // Expand previous item if active one is deleted
+        } else if (expandedItemIndex > index) {
+            setExpandedItemIndex(expandedItemIndex - 1);
+        }
+    };
+
     const getPaymentSourceOptions = () => {
         const optionsPool = (userRole === 'ADMIN' || userRole === 'ACCOUNTS') ? allEmployeesList : usersList;
         const currentUserId = currentUser.id || currentUser._id;
-        
-        // Ensure "Myself" is always at the top of the dropdown
         const filteredPool = optionsPool.filter(u => String(u._id) !== String(currentUserId));
         return [
             { _id: currentUserId, name: 'Myself (Reimburse Me)', role: userRole },
@@ -201,11 +232,7 @@ const AddExpense = () => {
                     Swal.showValidationMessage('Name and Address are required!');
                     return false;
                 }
-                return {
-                    name, address,
-                    gstNumber: document.getElementById('swal-vgst').value,
-                    notes: document.getElementById('swal-vnotes').value
-                };
+                return { name, address, gstNumber: document.getElementById('swal-vgst').value, notes: document.getElementById('swal-vnotes').value };
             }
         });
 
@@ -225,21 +252,33 @@ const AddExpense = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.amount || !formData.descriptionTags) return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
-        if (formData.category === 'Vendor Payment' && !formData.vendorId) return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
+        if (!formData.amount || !formData.descriptionTags) {
+            return Swal.fire('Required Fields', 'Amount and Description are required.', 'warning');
+        }
+
+        if (formData.category === 'Vendor Payment' && !formData.vendorId) {
+            return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
+        }
 
         if (formData.category === 'Product / Item Purchase') {
-            if (expenseDetails.inventoryItemStatus === 'Assigned' && !expenseDetails.inventoryAssignedTo) {
-                return Swal.fire('Missing Employee', 'Please select which employee this product is assigned to.', 'warning');
-            }
+            for (let i = 0; i < productList.length; i++) {
+                const prod = productList[i];
+                if (!prod.productName || !prod.unitPrice || !prod.quantity) {
+                    return Swal.fire('Missing Details', `Please fill Product Name, Quantity, and Price for Item #${i + 1}`, 'warning');
+                }
+                if (prod.inventoryItemStatus === 'Assigned' && !prod.inventoryAssignedTo) {
+                    return Swal.fire('Missing Employee', `Please select who Item #${i + 1} is assigned to.`, 'warning');
+                }
+                if (prod.inventoryItemStatus === 'Available' && !prod.storageLocation) {
+                    return Swal.fire('Missing Location', `Please provide a storage location for Item #${i + 1}.`, 'warning');
+                }
 
-            if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus)) {
-                const unitCost = Number(expenseDetails.unitPrice);
-                if (unitCost >= systemSettings.inventoryCatAThreshold) {
+                const unitCost = Number(prod.unitPrice);
+                if (['Available', 'Assigned'].includes(prod.inventoryItemStatus) && unitCost >= systemSettings.inventoryCatAThreshold) {
                     if (!files.expenseMedia || files.expenseMedia.length === 0) {
                         return Swal.fire({
                             title: 'Image Required (Category A)',
-                            text: `Because this item costs ₹${systemSettings.inventoryCatAThreshold} or more, it is considered a Category A asset. You MUST upload a photo proof of the product to proceed.`,
+                            text: `Item #${i + 1} costs ₹${systemSettings.inventoryCatAThreshold} or more (Category A). You MUST upload a photo proof of the product.`,
                             icon: 'warning',
                             confirmButtonColor: '#215D7B'
                         });
@@ -261,7 +300,7 @@ const AddExpense = () => {
             switch (formData.category) {
                 case 'Vendor Payment': relevantDetails = { paymentDate: d.paymentDate }; break;
                 case 'Participant Payment': relevantDetails = { participantName: d.participantName }; break;
-                case 'Product / Item Purchase': relevantDetails = { productName: d.productName, quantity: d.quantity, unitPrice: d.unitPrice, inventoryItemStatus: d.inventoryItemStatus, storageLocation: d.inventoryItemStatus === 'Available' ? d.storageLocation : '', inventoryAssignedTo: d.inventoryItemStatus === 'Assigned' ? d.inventoryAssignedTo : '', expiryDate: d.expiryDate }; break;
+                case 'Product / Item Purchase': relevantDetails = { items: productList }; break;
                 case 'Fuel Expense (Car / Bike)': relevantDetails = { vehicleType: d.vehicleType, vehicleNumber: d.vehicleNumber, travelFrom: d.travelFrom, travelTo: d.travelTo, odometerBefore: d.odometerBefore, odometerAfter: d.odometerAfter, kmTraveled: d.kmTraveled, purpose: d.purpose }; break;
                 case 'Food Expense': relevantDetails = { restaurantName: d.restaurantName, foodItemsOrdered: d.foodItemsOrdered, numberOfPeople: d.numberOfPeople }; break;
                 case 'Travel Expense': relevantDetails = { travelMode: d.travelMode, distanceKm: d.distanceKm, travelFrom: d.travelFrom, travelTo: d.travelTo, bookingReference: d.bookingReference, purpose: d.purpose }; break;
@@ -305,15 +344,11 @@ const AddExpense = () => {
     const getMediaLabel = () => {
         switch (formData.category) {
             case 'Vendor Payment': return 'Upload Vendor Invoice / Bill (Required)'; 
+            case 'Product / Item Purchase': return 'Product Photo(s) / Video(s) (Required for Cat A items)';
             case 'Fuel Expense (Car / Bike)': return 'Odometer Image(s) / Fuel Station Receipt';
             case 'Food Expense': return 'Order Screenshot / Restaurant Bill';
             case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
             case 'Accommodation': return 'Hotel Receipt / Invoice';
-            case 'Product / Item Purchase': 
-                if (['Available', 'Assigned'].includes(expenseDetails.inventoryItemStatus) && Number(expenseDetails.unitPrice) >= systemSettings.inventoryCatAThreshold) {
-                    return 'Product Photo(s) / Video(s) (Required for Cat A)';
-                }
-                return 'Product Photo(s) / Video(s) (Optional)';
             case 'Utility / Bills': return 'Utility Bill / Invoice';
             case 'Maintenance & Repairs': return 'Service Receipt / Invoice';
             case 'Regular Office Expense': return 'Supporting Document / Bill';
@@ -327,7 +362,6 @@ const AddExpense = () => {
             case 'Vendor Payment':
                 return (
                     <>
-                        {/* 👇 UPDATED: Clean SearchSelect Component */}
                         <div className="form-group grid-span-2">
                             <label className="input-label"><FontAwesomeIcon icon={faBuilding} /> Select Vendor *</label>
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
@@ -362,47 +396,103 @@ const AddExpense = () => {
                 );
             case 'Product / Item Purchase':
                 return (
-                    <>
-                        <div className="form-group grid-span-2"><label className="input-label">Product Name *</label><input className="custom-input" name="productName" value={expenseDetails.productName} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" min="1" name="quantity" value={expenseDetails.quantity} onChange={handleDetailChange} required /></div>
-                        <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" name="unitPrice" value={expenseDetails.unitPrice} onChange={handleDetailChange} required /></div>
-                        
-                        <div className="form-group grid-span-2">
-                            <label className="input-label" style={{ color: '#0f172a' }}>Will this item be added to Company Inventory?</label>
-                            <div className="expense-type-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <label className={expenseDetails.inventoryItemStatus === 'Available' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
-                                    <input type="radio" name="inventoryItemStatus" value="Available" onChange={handleDetailChange} /> Yes, Keep in Office (Available)
-                                </label>
-                                <label className={expenseDetails.inventoryItemStatus === 'Assigned' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
-                                    <input type="radio" name="inventoryItemStatus" value="Assigned" onChange={handleDetailChange} /> Yes, Assign to Employee
-                                </label>
-                                <label className={expenseDetails.inventoryItemStatus === 'Do Not Track' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start', background: expenseDetails.inventoryItemStatus === 'Do Not Track' ? '#f1f5f9' : '', color: expenseDetails.inventoryItemStatus === 'Do Not Track' ? '#64748b' : '' }}>
-                                    <input type="radio" name="inventoryItemStatus" value="Do Not Track" onChange={handleDetailChange} /> No, Consumable / Do Not Track
-                                </label>
-                            </div>
+                    <div className="grid-span-2" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {productList.map((prod, index) => {
+                            const isExpanded = expandedItemIndex === index;
+                            
+                            return (
+                                <div key={index} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                    
+                                    {/* 👇 Clickable Header for Collapsing/Expanding */}
+                                    <div 
+                                        onClick={() => setExpandedItemIndex(isExpanded ? -1 : index)}
+                                        style={{ 
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                                            padding: '15px 20px', cursor: 'pointer', 
+                                            background: isExpanded ? '#eff6ff' : '#f8fafc', 
+                                            borderBottom: isExpanded ? '1px solid #cbd5e1' : 'none',
+                                            transition: 'background 0.2s'
+                                        }}
+                                    >
+                                        <div>
+                                            <h4 style={{ margin: 0, color: '#0f172a', fontSize: '15px' }}>
+                                                Item #{index + 1} {prod.productName ? <span style={{ color: '#64748b', fontWeight: 'normal' }}>— {prod.productName}</span> : ''}
+                                            </h4>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                            {productList.length > 1 && (
+                                                <button type="button" onClick={(e) => { e.stopPropagation(); removeProduct(index); }} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
+                                                    <FontAwesomeIcon icon={faTrash} /> Remove
+                                                </button>
+                                            )}
+                                            <FontAwesomeIcon icon={isExpanded ? faChevronUp : faChevronDown} style={{ color: '#64748b' }} />
+                                        </div>
+                                    </div>
+
+                                    {/* Body */}
+                                    {isExpanded && (
+                                        <div style={{ padding: '20px' }}>
+                                            <div className="expense-grid">
+                                                <div className="form-group grid-span-2"><label className="input-label">Product Name *</label><input className="custom-input" value={prod.productName} onChange={(e) => handleProductChange(index, 'productName', e.target.value)} required /></div>
+                                                <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" min="1" value={prod.quantity} onChange={(e) => handleProductChange(index, 'quantity', e.target.value)} required /></div>
+                                                <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" value={prod.unitPrice} onChange={(e) => handleProductChange(index, 'unitPrice', e.target.value)} required /></div>
+                                                
+                                                <div className="form-group grid-span-2">
+                                                    <label className="input-label" style={{ color: '#0f172a' }}>Will this item be added to Company Inventory?</label>
+                                                    <div className="expense-type-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        <label className={prod.inventoryItemStatus === 'Available' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
+                                                            <input type="radio" value="Available" checked={prod.inventoryItemStatus === 'Available'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> Yes, Keep in Office (Available)
+                                                        </label>
+                                                        <label className={prod.inventoryItemStatus === 'Assigned' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
+                                                            <input type="radio" value="Assigned" checked={prod.inventoryItemStatus === 'Assigned'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> Yes, Assign to Employee
+                                                        </label>
+                                                        <label className={prod.inventoryItemStatus === 'Do Not Track' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start', background: prod.inventoryItemStatus === 'Do Not Track' ? '#f1f5f9' : '', color: prod.inventoryItemStatus === 'Do Not Track' ? '#64748b' : '' }}>
+                                                            <input type="radio" value="Do Not Track" checked={prod.inventoryItemStatus === 'Do Not Track'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> No, Consumable / Do Not Track
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                {/* 👇 FIXED: Flex container to force row alignment for Location/Assignment and Expiry */}
+                                                <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: 0 }}>
+                                                    {prod.inventoryItemStatus === 'Available' && (
+                                                        <div style={{ flex: 1, minWidth: '200px' }}>
+                                                            <label className="input-label">Storage Location *</label>
+                                                            <input className="custom-input" value={prod.storageLocation} onChange={(e) => handleProductChange(index, 'storageLocation', e.target.value)} placeholder="e.g. Office Room A" required />
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {prod.inventoryItemStatus === 'Assigned' && (
+                                                        <div style={{ flex: 1, minWidth: '200px' }}>
+                                                            <label className="input-label">Assign To Employee *</label>
+                                                            <SearchSelect 
+                                                                options={allEmployeesList}
+                                                                value={prod.inventoryAssignedTo}
+                                                                onChange={(val) => handleProductChange(index, 'inventoryAssignedTo', val)}
+                                                                placeholder="Search by name or role..."
+                                                                secondaryKey="role"
+                                                                icon={faUser}
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                                        <label className="input-label">Expiry Date (If applicable)</label>
+                                                        <input className="custom-input" type="date" value={prod.expiryDate} onChange={(e) => handleProductChange(index, 'expiryDate', e.target.value)} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+
+                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+                            <button type="button" className="gts-btn doc-btn" style={{ background: '#eff6ff', color: '#2563eb', border: '1px dashed #bfdbfe' }} onClick={addProduct}>
+                                <FontAwesomeIcon icon={faPlus} /> Add Another Product to this Bill
+                            </button>
                         </div>
-
-                        {expenseDetails.inventoryItemStatus === 'Available' && (
-                            <div className="form-group grid-span-2"><label className="input-label">Storage Location *</label><input className="custom-input" name="storageLocation" value={expenseDetails.storageLocation} onChange={handleDetailChange} placeholder="e.g. Office Room A" required /></div>
-                        )}
-                        
-                        {expenseDetails.inventoryItemStatus === 'Assigned' && (
-                            <div className="form-group grid-span-2">
-                                <label className="input-label">Assign To Employee *</label>
-                                {/* 👇 UPDATED: Clean SearchSelect Component */}
-                                <SearchSelect 
-                                    options={allEmployeesList}
-                                    value={expenseDetails.inventoryAssignedTo}
-                                    onChange={(val) => handleDetailChange({ target: { name: 'inventoryAssignedTo', value: val } })}
-                                    placeholder="Search by name or role..."
-                                    secondaryKey="role"
-                                    icon={faUser}
-                                />
-                            </div>
-                        )}
-
-                        <div className="form-group grid-span-2"><label className="input-label">Expiry Date (If applicable)</label><input className="custom-input" type="date" name="expiryDate" value={expenseDetails.expiryDate} onChange={handleDetailChange} /></div>
-                    </>
+                    </div>
                 );
             case 'Utility / Bills':
                 return (
@@ -532,13 +622,12 @@ const AddExpense = () => {
                             {formData.expenseType === 'Project Expense' && (
                                 <div className="form-group">
                                     <label className="input-label">Project Name *</label>
-                                    {/* 👇 UPDATED: Clean SearchSelect Component */}
                                     <SearchSelect 
                                         options={projectsList}
                                         value={formData.projectName}
                                         onChange={(val) => setFormData({ ...formData, projectName: val })}
                                         placeholder="Search Project..."
-                                        valueKey="name" // Projects use 'name' as the value
+                                        valueKey="name" 
                                     />
                                 </div>
                             )}
@@ -589,7 +678,6 @@ const AddExpense = () => {
                             {!formData.isCompanyPayment && (
                                 <div className="form-group">
                                     <label className="input-label"><FontAwesomeIcon icon={faCreditCard} /> Payment Source (Who paid?) *</label>
-                                    {/* 👇 UPDATED: Clean SearchSelect Component with dynamic options */}
                                     <SearchSelect 
                                         options={getPaymentSourceOptions()}
                                         value={formData.paymentSourceId}
