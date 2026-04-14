@@ -7,6 +7,7 @@ const Attendance = require('../models/Attendance');
 const AttendanceLog = require('../models/AttendanceLog');
 const Settings = require('../models/Settings');
 const User = require('../models/User');
+const ExcelJS = require('exceljs');
 
 // --- Try to load Leave model ---
 let Leave = null;
@@ -178,10 +179,10 @@ router.get('/absent', auth, async (req, res) => {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
         const now = new Date();
-        
+
         // 👇 FIXED: Includes HR/Managers/Accounts, excludes Admin
-        let userQuery = { role: { $ne: 'ADMIN' }, status: 'ACTIVE' }; 
-        
+        let userQuery = { role: { $ne: 'ADMIN' }, status: 'ACTIVE' };
+
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             userQuery.reportingManagerEmail = manager.email.toLowerCase();
@@ -254,7 +255,7 @@ router.get('/absent-report', auth, async (req, res) => {
         if (req.query.startDate && req.query.endDate) {
             let start = new Date(req.query.startDate);
             let end = new Date(req.query.endDate);
-            
+
             let curr = new Date(start);
             while (curr <= end) {
                 dateArray.push(`${curr.getDate()}/${curr.getMonth() + 1}/${curr.getFullYear()}`);
@@ -264,7 +265,7 @@ router.get('/absent-report', auth, async (req, res) => {
 
         let attendanceQuery = {
             userId: { $in: userIds },
-            status: { $in: ['Absent', 'On Leave', 'Pending'] } 
+            status: { $in: ['Absent', 'On Leave', 'Pending'] }
         };
 
         if (dateArray.length > 0) {
@@ -343,7 +344,7 @@ router.get('/all-logs', auth, async (req, res) => {
         const skip = (page - 1) * limit;
 
         let query = {};
-        
+
         // 👇 FIXED: Explicitly filter OUT Absent and Pending records
         let andConditions = [
             { status: { $nin: ['Absent', 'Pending'] } }
@@ -394,7 +395,7 @@ router.get('/all-logs', auth, async (req, res) => {
         if (req.query.search) {
             const searchRegex = new RegExp(req.query.search, 'i');
             const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
-            
+
             andConditions.push({
                 $or: [
                     { userId: { $in: matchingUsers } },
@@ -458,10 +459,10 @@ router.get('/raw-logs', auth, async (req, res) => {
 
         if (req.query.search) {
             const searchRegex = new RegExp(req.query.search, 'i');
-            const matchingUsers = await User.find({ 
-                $or: [{ name: searchRegex }, { employeeId: searchRegex }] 
+            const matchingUsers = await User.find({
+                $or: [{ name: searchRegex }, { employeeId: searchRegex }]
             }).distinct('_id');
-            
+
             andConditions.push({
                 $or: [
                     { userId: { $in: matchingUsers } },
@@ -517,14 +518,221 @@ router.get('/admin/user-logs/:id', auth, async (req, res) => {
             data: logs,
             pagination: { totalRecords, totalPages, currentPage: page, limit }
         });
-    } catch (err) { 
+    } catch (err) {
         console.error(err);
-        res.status(500).send('Server Error'); 
+        res.status(500).send('Server Error');
     }
 });
 
 // ==========================================
 // 8. MANUAL UPDATE / OVERRIDE
+// ==========================================
+// @route   GET /api/attendance/export
+// @desc    Export attendance logs to formatted Excel (.xlsx) with Summaries, Colors & Sorting
+router.get('/export', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        let query = {};
+        let andConditions = [{ status: { $nin: ['Absent', 'Pending'] } }];
+
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            andConditions.push({ userId: { $in: teamIds } });
+        }
+
+        const { filterType, fromDate, toDate } = req.query;
+        let start = new Date();
+        let end = new Date();
+
+        if (filterType === 'Today') {
+            start.setHours(0, 0, 0, 0); end.setHours(23, 59, 59, 999);
+        } else if (filterType === 'Yesterday') {
+            start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
+            end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999);
+        } else if (filterType === 'Week') {
+            start.setDate(start.getDate() - 7); start.setHours(0, 0, 0, 0);
+            end.setHours(23, 59, 59, 999);
+        } else if (filterType === 'Month' || filterType === 'All') {
+            start.setDate(start.getDate() - 30); start.setHours(0, 0, 0, 0);
+            end.setHours(23, 59, 59, 999);
+        } else if (filterType === 'Custom' && fromDate && toDate) {
+            start = new Date(fromDate); start.setHours(0, 0, 0, 0);
+            end = new Date(toDate); end.setHours(23, 59, 59, 999);
+        }
+
+        let fullDateArray = [];
+        let curr = new Date(start);
+        while (curr <= end) {
+            fullDateArray.push(`${curr.getDate()}/${curr.getMonth() + 1}/${curr.getFullYear()}`);
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        andConditions.push({ date: { $in: fullDateArray } });
+
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
+            andConditions.push({
+                $or: [{ userId: { $in: matchingUsers } }, { note: searchRegex }, { status: searchRegex }]
+            });
+        }
+
+        if (andConditions.length > 0) query.$and = andConditions;
+
+        const logs = await Attendance.find(query).populate('userId', 'name employeeId').sort({ checkIn: 1 });
+
+        const usersMap = {};
+        logs.forEach(log => {
+            if (!log.userId) return;
+            const uid = log.userId._id.toString();
+            if (!usersMap[uid]) {
+                usersMap[uid] = { name: log.userId.name, empId: log.userId.employeeId || 'N/A', records: {} };
+            }
+            usersMap[uid].records[log.date] = log;
+        });
+
+        const sortedUsers = Object.values(usersMap).sort((a, b) => {
+            const idA = a.empId !== 'N/A' ? a.empId : 'ZZZZZ';
+            const idB = b.empId !== 'N/A' ? b.empId : 'ZZZZZ';
+            return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        const isSunday = (dateStr) => {
+            const [d, m, y] = dateStr.split('/');
+            return new Date(y, m - 1, d).getDay() === 0;
+        };
+        const totalWorkingDays = fullDateArray.filter(d => !isSunday(d)).length;
+
+        const formatFilenameDate = (d) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getFullYear()).slice(-2)}`;
+        const fileName = `AttendanceLogs_${formatFilenameDate(start)}_${formatFilenameDate(end)}.xlsx`;
+
+        // --- EXCEL GENERATION START ---
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Attendance Export');
+
+        const thinBorder = {
+            top: { style: 'thin' }, left: { style: 'thin' },
+            bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+
+        sortedUsers.forEach(user => {
+            const empRow = worksheet.addRow(['Details', `ID: ${user.empId}`, `Name: ${user.name}`]);
+            empRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            empRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF215D7B' } };
+
+            const headerRowData = ['Date', ...fullDateArray.map(d => `${d.split('/')[0]}/${d.split('/')[1]}`), 'SUMMARY'];
+            const headerRow = worksheet.addRow(headerRowData);
+            headerRow.font = { bold: true };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+
+            headerRow.eachCell((cell, colNum) => {
+                if (colNum > 1 && colNum <= fullDateArray.length + 1) {
+                    if (isSunday(fullDateArray[colNum - 2])) cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+                }
+            });
+
+            const statusRowData = ['Status'];
+            const inRowData = ['In Time'];
+            const outRowData = ['Out Time'];
+            const durationRowData = ['Duration'];
+
+            let presentCount = 0, halfCount = 0, lateCount = 0, absentCount = 0;
+
+            fullDateArray.forEach(date => {
+                const log = user.records[date];
+                const sun = isSunday(date);
+
+                if (log) {
+                    if (['Present', 'WFH', 'Late', 'Half Day'].includes(log.status)) presentCount++;
+                    if (log.status === 'Absent') absentCount++;
+                    if (log.status === 'Half Day') halfCount++;
+                    if (log.status === 'Late') lateCount++;
+
+                    statusRowData.push(log.status);
+                    inRowData.push(log.checkIn ? new Date(log.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-');
+                    outRowData.push(log.checkOut ? new Date(log.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-');
+                    durationRowData.push(log.totalHours || 0);
+                } else {
+                    statusRowData.push(sun ? 'Sunday' : 'Absent');
+                    inRowData.push('-');
+                    outRowData.push('-');
+                    durationRowData.push('-');
+
+                    if (!sun) absentCount++;
+                }
+            });
+
+            statusRowData.push(`Present: ${presentCount}/${totalWorkingDays}`);
+            inRowData.push(`Absent: ${absentCount}`);
+            outRowData.push(`Late: ${lateCount}`);
+            durationRowData.push(`Half Days: ${halfCount}`);
+
+            const sRow = worksheet.addRow(statusRowData);
+            const iRow = worksheet.addRow(inRowData);
+            const oRow = worksheet.addRow(outRowData);
+            const dRow = worksheet.addRow(durationRowData);
+
+            const styleCell = (row, isStatusRow = false) => {
+                row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+                    cell.border = thinBorder;
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+                    if (colNum > 1 && colNum <= fullDateArray.length + 1) {
+                        const val = cell.value;
+                        const isSun = isSunday(fullDateArray[colNum - 2]);
+
+                        if (isStatusRow && val === 'Absent') {
+                            cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+                        } else if (isSun && val !== 'Sunday' && val !== '-') {
+                            cell.font = { color: { argb: 'FF16A34A' }, bold: true };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                        } else if (isSun) {
+                            if (isStatusRow && val === 'Sunday') cell.font = { color: { argb: 'FF94A3B8' }, italic: true };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                        }
+                    } else if (colNum === fullDateArray.length + 2) {
+                        cell.font = { bold: true, color: { argb: 'FF215D7B' } };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
+                    }
+                });
+            };
+
+            styleCell(sRow, true);
+            styleCell(iRow);
+            styleCell(oRow);
+            styleCell(dRow);
+
+            [empRow, headerRow, sRow, iRow, oRow, dRow].forEach(row => {
+                row.getCell(1).font = { bold: true, color: { argb: 'FF334155' } };
+                row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+                row.getCell(1).border = thinBorder;
+            });
+
+            worksheet.addRow([]);
+        });
+
+        worksheet.columns.forEach(column => { column.width = 12; });
+        worksheet.getColumn(1).width = 18;
+        worksheet.getColumn(fullDateArray.length + 2).width = 18;
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (err) {
+        console.error("Export Error:", err);
+        res.status(500).send('Server Error during export');
+    }
+});
+
+// ==========================================
+// 9. MANUAL UPDATE / OVERRIDE
 // ==========================================
 router.put('/update/:id', auth, async (req, res) => {
     try {
