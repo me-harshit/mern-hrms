@@ -28,7 +28,7 @@ const AllExpenses = () => {
 
     const [selectedExpenses, setSelectedExpenses] = useState([]);
 
-    // 👇 NEW: Stats State for the Summary Cards
+    // Stats State for the Summary Cards
     const [stats, setStats] = useState({
         pendingTotal: 0, pendingCount: 0,
         approvedTotal: 0, approvedCount: 0,
@@ -134,7 +134,7 @@ const AllExpenses = () => {
             const res = await api.get('/expenses/all', { params });
 
             setExpenses(res.data.data);
-            if (res.data.stats) setStats(res.data.stats); // 👇 Capture Stats
+            if (res.data.stats) setStats(res.data.stats); 
             setTotalPages(res.data.pagination.totalPages);
             setTotalRecords(res.data.pagination.totalRecords);
             setCurrentPage(res.data.pagination.currentPage);
@@ -237,10 +237,18 @@ const AllExpenses = () => {
         return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${String(date.getFullYear()).slice(-2)}`;
     };
 
+    // 👇 FIXED: Grab product details dynamically for arrays
     const getSpecificDetail = (item) => {
         if (item.category === 'Vendor Payment' && item.vendorId?.name) return item.vendorId.name;
         if (item.category === 'Participant Payment') return item.expenseDetails?.participantName || item.expenseDetails?.name || item.descriptionTags || 'Participant Payment';
-        if (item.category === 'Product / Item Purchase') return item.expenseDetails?.itemName || item.expenseDetails?.productName || item.descriptionTags || 'Product Purchase';
+        if (item.category === 'Product / Item Purchase') {
+            if (item.expenseDetails?.items && item.expenseDetails.items.length > 0) {
+                const firstItem = item.expenseDetails.items[0].productName;
+                const extraCount = item.expenseDetails.items.length - 1;
+                return extraCount > 0 ? `${firstItem} (+${extraCount} more)` : firstItem;
+            }
+            return item.expenseDetails?.itemName || item.expenseDetails?.productName || item.descriptionTags || 'Product Purchase';
+        }
         return item.descriptionTags || 'No specific details provided';
     };
 
@@ -307,7 +315,6 @@ const AllExpenses = () => {
                 )}
             </div>
 
-            {/* 👇 NEW: Dynamic Summary Metric Cards */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '25px', alignItems: 'stretch' }}>
                 <div style={getMinimalCardStyle('Pending', '#d97706')} onClick={() => handleCardClick('Pending')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -624,7 +631,7 @@ const AllExpenses = () => {
                                                     </div>
                                                     <div style={{ display: 'flex', gap: '5px' }}>
                                                         <button className="gts-btn btn-small m-0" style={{ flex: 1, background: '#fef3c7', color: '#d97706', justifyContent: 'center', padding: '6px' }} onClick={() => handleStatusUpdate(item._id, 'Returned')}><FontAwesomeIcon icon={faUndo} /> Return</button>
-                                                        {(currentUser.role === 'ADMIN' || currentUser.role === 'HR') ? (
+                                                        {(currentUser.role === 'ADMIN' || currentUser.role === 'HR' || currentUser.role === 'ACCOUNTS') ? (
                                                             <button className="gts-btn primary btn-small m-0" style={{ flex: 1, justifyContent: 'center', padding: '6px' }} onClick={() => navigate(`/edit-expense/${item._id}`)}><FontAwesomeIcon icon={faEdit} /> Edit</button>
                                                         ) : <div style={{ flex: 1 }}></div>}
                                                     </div>
@@ -632,7 +639,7 @@ const AllExpenses = () => {
                                             ) : (
                                                 <div className="flex-col gap-5" style={{ alignItems: 'center' }}>
                                                     <span className="text-small text-muted fw-600">Processed</span>
-                                                    {(currentUser.role === 'ADMIN' || currentUser.role === 'HR') && (
+                                                    {(currentUser.role === 'ADMIN' || currentUser.role === 'HR' || currentUser.role === 'ACCOUNTS') && (
                                                         <button className="gts-btn primary btn-small m-0" style={{ width: '100%', justifyContent: 'center' }} onClick={() => navigate(`/edit-expense/${item._id}`)}><FontAwesomeIcon icon={faEdit} /> Admin Edit</button>
                                                     )}
                                                 </div>
@@ -689,16 +696,47 @@ const AllExpenses = () => {
                                     <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label" style={{ color: '#ea580c' }}>Admin Note / Feedback</span><span className="detail-value" style={{ background: '#fef3c7', padding: '8px', borderRadius: '4px', fontStyle: 'italic' }}>"{selectedExpense.adminFeedback}"</span></div>
                                 )}
                             </div>
+                            
+                            {/* 👇 UPDATED: Handle Multiple Products Array OR Legacy fields */}
                             {selectedExpense.expenseDetails && Object.keys(selectedExpense.expenseDetails).length > 0 && (
                                 <>
                                     <h3 className="sidebar-section-title mt-20">Granular Details</h3>
-                                    <div className="detail-grid-2">
-                                        {Object.entries(selectedExpense.expenseDetails).map(([key, value]) => {
-                                            if (!value) return null;
-                                            const isLongText = typeof value === 'string' && value.length > 30;
-                                            return (<div className="detail-group" key={key} style={isLongText ? { gridColumn: 'span 2' } : {}}><span className="detail-label" style={key === 'paymentDate' ? { color: '#16a34a', fontWeight: 'bold' } : {}}>{formatKeyToLabel(key)}</span><span className="detail-value">{value}</span></div>);
-                                        })}
-                                    </div>
+                                    
+                                    {selectedExpense.category === 'Product / Item Purchase' && selectedExpense.expenseDetails.items && selectedExpense.expenseDetails.items.length > 0 ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                            {selectedExpense.expenseDetails.items.map((prod, idx) => (
+                                                <div key={idx} style={{ background: '#f1f5f9', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                    <div style={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '10px', borderBottom: '1px solid #cbd5e1', paddingBottom: '5px' }}>
+                                                        Item #{idx + 1} - {prod.productName}
+                                                    </div>
+                                                    <div className="detail-grid-2">
+                                                        <div className="detail-group"><span className="detail-label">Quantity</span><span className="detail-value">{prod.quantity}</span></div>
+                                                        <div className="detail-group"><span className="detail-label">Unit Price</span><span className="detail-value">₹ {prod.unitPrice}</span></div>
+                                                        <div className="detail-group"><span className="detail-label">Status</span><span className="detail-value">{prod.inventoryItemStatus}</span></div>
+                                                        {prod.storageLocation && <div className="detail-group"><span className="detail-label">Location</span><span className="detail-value">{prod.storageLocation}</span></div>}
+                                                        {prod.inventoryAssignedTo && <div className="detail-group"><span className="detail-label">Assigned To (ID)</span><span className="detail-value">{prod.inventoryAssignedTo}</span></div>}
+                                                        {prod.expiryDate && <div className="detail-group"><span className="detail-label">Expiry Date</span><span className="detail-value">{prod.expiryDate}</span></div>}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="detail-grid-2">
+                                            {Object.entries(selectedExpense.expenseDetails).map(([key, value]) => {
+                                                if (key === 'items') return null; // Safe fallback
+                                                if (!value) return null;
+                                                const isLongText = typeof value === 'string' && value.length > 30;
+                                                return (
+                                                    <div className="detail-group" key={key} style={isLongText ? { gridColumn: 'span 2' } : {}}>
+                                                        <span className="detail-label" style={key === 'paymentDate' ? { color: '#16a34a', fontWeight: 'bold' } : {}}>
+                                                            {formatKeyToLabel(key)}
+                                                        </span>
+                                                        <span className="detail-value">{value}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
