@@ -6,7 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faSearch, faFileInvoice, faImage, faFilter,
     faCheckCircle, faClock, faTimesCircle, faArrowLeft,
-    faEye, faTimes, faUndo, faEdit, faBuilding
+    faEye, faTimes, faUndo, faEdit, faBuilding, faWallet
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination'; 
 import '../../styles/App.css';
@@ -26,8 +26,16 @@ const AllExpenses = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // 👇 NEW: Bulk Selection State
     const [selectedExpenses, setSelectedExpenses] = useState([]);
+
+    // 👇 NEW: Stats State for the Summary Cards
+    const [stats, setStats] = useState({
+        pendingTotal: 0, pendingCount: 0,
+        approvedTotal: 0, approvedCount: 0,
+        returnedTotal: 0, returnedCount: 0,
+        rejectedTotal: 0, rejectedCount: 0,
+        totalFilteredAmount: 0
+    });
 
     // --- DROPDOWN DATA STATES ---
     const [usersList, setUsersList] = useState([]);
@@ -104,7 +112,6 @@ const AllExpenses = () => {
         setCurrentPage(1);
     }, [filters, debouncedSearch]);
 
-    // 👇 NEW: Clear selections when page or filters change to prevent accidental invisible approvals
     useEffect(() => {
         setSelectedExpenses([]);
     }, [currentPage, filters, debouncedSearch, itemsPerPage]);
@@ -127,6 +134,7 @@ const AllExpenses = () => {
             const res = await api.get('/expenses/all', { params });
 
             setExpenses(res.data.data);
+            if (res.data.stats) setStats(res.data.stats); // 👇 Capture Stats
             setTotalPages(res.data.pagination.totalPages);
             setTotalRecords(res.data.pagination.totalRecords);
             setCurrentPage(res.data.pagination.currentPage);
@@ -139,6 +147,10 @@ const AllExpenses = () => {
 
     const handleFilterChange = (e) => setFilters({ ...filters, [e.target.name]: e.target.value });
 
+    const handleCardClick = (status) => {
+        setFilters(prev => ({ ...prev, status: prev.status === status ? '' : status }));
+    };
+
     const clearFilters = () => {
         setFilters({ 
             fromDate: '', toDate: '', expenseType: '', category: '', projectName: '', 
@@ -149,7 +161,7 @@ const AllExpenses = () => {
         setSubmittedBySearchTerm('');
         setApprovedBySearchTerm('');
         setPaidBySearchTerm('');
-        setSelectedExpenses([]); // Clear selections on reset
+        setSelectedExpenses([]); 
     };
 
     const handleStatusUpdate = async (id, newStatus) => {
@@ -171,7 +183,6 @@ const AllExpenses = () => {
         }
     };
 
-    // 👇 NEW: Bulk Approval Logic
     const handleBulkApprove = async () => {
         if (selectedExpenses.length === 0) return;
         
@@ -187,11 +198,7 @@ const AllExpenses = () => {
         if (result.isConfirmed) {
             setLoading(true);
             try {
-                // Fire off concurrent requests for all selected IDs
-                await Promise.all(
-                    selectedExpenses.map(id => api.put(`/expenses/${id}/status`, { status: 'Approved' }))
-                );
-                
+                await Promise.all(selectedExpenses.map(id => api.put(`/expenses/${id}/status`, { status: 'Approved' })));
                 Swal.fire('Success', `${selectedExpenses.length} expenses approved successfully!`, 'success');
                 setSelectedExpenses([]);
                 fetchExpenses(currentPage);
@@ -202,7 +209,6 @@ const AllExpenses = () => {
         }
     };
 
-    // 👇 NEW: Selection Checkbox Logic
     const pendingOnPage = expenses.filter(e => e.status === 'Pending');
     const isAllSelected = pendingOnPage.length > 0 && pendingOnPage.every(e => selectedExpenses.includes(e._id));
 
@@ -264,6 +270,21 @@ const AllExpenses = () => {
         return <FontAwesomeIcon icon={faClock} style={{ color: '#d97706', marginRight: '5px' }} />;
     };
 
+    const getMinimalCardStyle = (status, colorHex) => ({
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        opacity: filters.status === '' || filters.status === status ? 1 : 0.4,
+        border: filters.status === status ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0',
+        background: '#ffffff',
+        padding: '12px 16px',
+        borderRadius: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        minWidth: '140px',
+        boxShadow: filters.status === status ? `0 2px 8px ${colorHex}15` : 'none'
+    });
+
     const filteredSubmittedBy = usersList.filter(u => u.name.toLowerCase().includes(submittedBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(submittedBySearchTerm.toLowerCase()));
     const approversList = usersList.filter(u => ['ADMIN', 'HR', 'MANAGER'].includes(u.role));
     const filteredApprovedBy = approversList.filter(u => u.name.toLowerCase().includes(approvedBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(approvedBySearchTerm.toLowerCase()));
@@ -279,12 +300,56 @@ const AllExpenses = () => {
                     <h1 className="page-title header-no-margin">All Expense Records</h1>
                 </div>
 
-                {/* 👇 NEW: Bulk Approve Button */}
                 {selectedExpenses.length > 0 && (
                     <button className="gts-btn success btn-small m-0 fade-in" onClick={handleBulkApprove} style={{ background: '#16a34a', color: 'white', fontWeight: 'bold' }}>
                         <FontAwesomeIcon icon={faCheckCircle} className="btn-icon" /> Approve Selected ({selectedExpenses.length})
                     </button>
                 )}
+            </div>
+
+            {/* 👇 NEW: Dynamic Summary Metric Cards */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '25px', alignItems: 'stretch' }}>
+                <div style={getMinimalCardStyle('Pending', '#d97706')} onClick={() => handleCardClick('Pending')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }} /> Pending
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.pendingTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.pendingCount} items</div>
+                </div>
+
+                <div style={getMinimalCardStyle('Approved', '#16a34a')} onClick={() => handleCardClick('Approved')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }} /> Accepted
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.approvedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.approvedCount} items</div>
+                </div>
+
+                <div style={getMinimalCardStyle('Returned', '#ea580c')} onClick={() => handleCardClick('Returned')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }} /> Returned
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.returnedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.returnedCount} items</div>
+                </div>
+
+                <div style={getMinimalCardStyle('Rejected', '#dc2626')} onClick={() => handleCardClick('Rejected')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }} /> Rejected
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.rejectedTotal.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.rejectedCount} items</div>
+                </div>
+
+                <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
+                
+                <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px', gap: '4px' }}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }}/> Filtered Total
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.totalFilteredAmount.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>Across {totalRecords} items</div>
+                </div>
             </div>
 
             <div className="expense-form-section">
@@ -404,7 +469,6 @@ const AllExpenses = () => {
                 <table className="employee-table">
                     <thead>
                         <tr>
-                            {/* 👇 NEW: Header Checkbox */}
                             <th style={{ width: '40px', textAlign: 'center' }}>
                                 <input 
                                     type="checkbox" 
@@ -443,7 +507,6 @@ const AllExpenses = () => {
 
                                 return (
                                     <tr key={item._id} style={{ background: selectedExpenses.includes(item._id) ? '#f0fdf4' : 'transparent' }}>
-                                        {/* 👇 NEW: Row Checkbox */}
                                         <td style={{ textAlign: 'center' }}>
                                             {item.status === 'Pending' ? (
                                                 <input 

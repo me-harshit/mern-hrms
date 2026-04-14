@@ -287,6 +287,8 @@ router.get('/all', auth, async (req, res) => {
             query.$and = andConditions;
         }
 
+    // ... (Keep all your existing filter logic above this line) ...
+
         const totalRecords = await Expense.countDocuments(query);
         const totalPages = Math.ceil(totalRecords / limit);
 
@@ -299,9 +301,37 @@ router.get('/all', auth, async (req, res) => {
             .skip(skip)
             .limit(limit);
 
+        let statsConditions = andConditions.filter(cond => !cond.status);
+        const statsQuery = statsConditions.length > 0 ? { $and: statsConditions } : {};
+
+        const allFilteredForStats = await Expense.find(statsQuery);
+
+        let stats = {
+            pendingTotal: 0, pendingCount: 0,
+            approvedTotal: 0, approvedCount: 0,
+            returnedTotal: 0, returnedCount: 0,
+            rejectedTotal: 0, rejectedCount: 0,
+            totalFilteredAmount: 0 
+        };
+
+        allFilteredForStats.forEach(e => {
+            if (e.status === 'Pending') { stats.pendingTotal += e.amount; stats.pendingCount++; }
+            if (e.status === 'Approved') { stats.approvedTotal += e.amount; stats.approvedCount++; }
+            if (e.status === 'Returned') { stats.returnedTotal += e.amount; stats.returnedCount++; }
+            if (e.status === 'Rejected') { stats.rejectedTotal += e.amount; stats.rejectedCount++; }
+        });
+
+        // Get the total specifically for what is currently showing in the table
+        const currentTableTotal = await Expense.aggregate([
+            { $match: query },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]);
+        stats.totalFilteredAmount = currentTableTotal.length > 0 ? currentTableTotal[0].total : 0;
+
         res.json({
             data: expenses,
-            pagination: { totalRecords, totalPages, currentPage: page, limit }
+            pagination: { totalRecords, totalPages, currentPage: page, limit },
+            stats 
         });
 
     } catch (err) {
