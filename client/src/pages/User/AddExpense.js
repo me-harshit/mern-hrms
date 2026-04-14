@@ -50,8 +50,6 @@ const AddExpense = () => {
     };
 
     const [productList, setProductList] = useState([{ ...defaultProduct }]);
-    
-    // 👇 NEW: State to track which product form is currently expanded
     const [expandedItemIndex, setExpandedItemIndex] = useState(0);
 
     const [expenseDetails, setExpenseDetails] = useState({
@@ -136,7 +134,6 @@ const AddExpense = () => {
 
     const handleDetailChange = (e) => setExpenseDetails({ ...expenseDetails, [e.target.name]: e.target.value });
 
-    // Dynamic Product Handlers
     const handleProductChange = (index, field, value) => {
         const updatedList = [...productList];
         updatedList[index][field] = value;
@@ -154,7 +151,7 @@ const AddExpense = () => {
 
     const addProduct = () => {
         setProductList([...productList, { ...defaultProduct }]);
-        setExpandedItemIndex(productList.length); // Auto-expand the newly created item
+        setExpandedItemIndex(productList.length);
     };
 
     const removeProduct = (index) => {
@@ -163,7 +160,7 @@ const AddExpense = () => {
         setProductList(updatedList);
         
         if (expandedItemIndex === index) {
-            setExpandedItemIndex(Math.max(0, index - 1)); // Expand previous item if active one is deleted
+            setExpandedItemIndex(Math.max(0, index - 1));
         } else if (expandedItemIndex > index) {
             setExpandedItemIndex(expandedItemIndex - 1);
         }
@@ -187,6 +184,12 @@ const AddExpense = () => {
 
         for (let file of selectedFiles) {
             const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
+            const isPdf = file.type === 'application/pdf';
+
+            // 👇 NEW: Immediate frontend warning if a non-image file is heavily oversized
+            if (isPdf && file.size > 5 * 1024 * 1024) { // Warns if PDF is over 5MB
+                Swal.fire('Large File Detected', `The PDF "${file.name}" is quite large and might be rejected by the server. Consider compressing it first.`, 'warning');
+            }
 
             if (isImage) {
                 try {
@@ -333,8 +336,30 @@ const AddExpense = () => {
 
             Swal.fire({ icon: 'success', title: 'Expense Logged for Approval', timer: 1500, showConfirmButton: false });
             navigate('/expenses');
+            
+        // 👇 FIXED: Deep error handling to explicitly catch 413 and backend errors
         } catch (err) {
-            Swal.fire('Error', 'Failed to save expense', 'error');
+            console.error("Upload error:", err);
+            
+            let errorMessage = 'Failed to save expense. Please check your connection and try again.';
+            
+            if (err.response) {
+                // If the server blocked the payload due to file size limits
+                if (err.response.status === 413) {
+                    errorMessage = 'File Too Large! The server rejected the upload because your PDF or document exceeds the maximum allowed size. Please upload a smaller file.';
+                } 
+                // If the backend actively returned a specific error message
+                else if (err.response.data && err.response.data.message) {
+                    errorMessage = err.response.data.message;
+                }
+            }
+
+            Swal.fire({
+                title: 'Upload Failed',
+                text: errorMessage,
+                icon: 'error',
+                confirmButtonColor: '#215D7B'
+            });
         } finally {
             setLoading(false);
             setUploadProgress(0);
@@ -403,7 +428,6 @@ const AddExpense = () => {
                             return (
                                 <div key={index} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
                                     
-                                    {/* 👇 Clickable Header for Collapsing/Expanding */}
                                     <div 
                                         onClick={() => setExpandedItemIndex(isExpanded ? -1 : index)}
                                         style={{ 
@@ -429,7 +453,6 @@ const AddExpense = () => {
                                         </div>
                                     </div>
 
-                                    {/* Body */}
                                     {isExpanded && (
                                         <div style={{ padding: '20px' }}>
                                             <div className="expense-grid">
@@ -452,7 +475,6 @@ const AddExpense = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* 👇 FIXED: Flex container to force row alignment for Location/Assignment and Expiry */}
                                                 <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: 0 }}>
                                                     {prod.inventoryItemStatus === 'Available' && (
                                                         <div style={{ flex: 1, minWidth: '200px' }}>
@@ -727,7 +749,7 @@ const AddExpense = () => {
                                 <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
                                     {getMediaLabel()}
                                 </label>
-                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={e => handleFileChange(e, 'expenseMedia')} required={formData.category === 'Vendor Payment'} />
+                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*,application/pdf" onChange={e => handleFileChange(e, 'expenseMedia')} required={formData.category === 'Vendor Payment'} />
                                 {isCompressing ? (
                                     <p className="file-success-text" style={{ color: '#d97706', marginTop: '5px', fontWeight: '600' }}><FontAwesomeIcon icon={faSpinner} spin /> Compressing images...</p>
                                 ) : files.expenseMedia.length > 0 && (
