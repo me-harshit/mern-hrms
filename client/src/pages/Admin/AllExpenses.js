@@ -8,7 +8,7 @@ import {
     faCheckCircle, faClock, faTimesCircle, faArrowLeft,
     faEye, faTimes, faUndo, faEdit, faBuilding, faWallet
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; 
+import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 
@@ -46,11 +46,11 @@ const AllExpenses = () => {
     // --- FILTER STATES ---
     const submittedByDropdownRef = useRef(null);
     const approvedByDropdownRef = useRef(null);
-    const paidByDropdownRef = useRef(null); 
+    const paidByDropdownRef = useRef(null);
 
     const [submittedBySearchTerm, setSubmittedBySearchTerm] = useState('');
     const [isSubmittedByDropdownOpen, setIsSubmittedByDropdownOpen] = useState(false);
-    
+
     const [approvedBySearchTerm, setApprovedBySearchTerm] = useState('');
     const [isApprovedByDropdownOpen, setIsApprovedByDropdownOpen] = useState(false);
 
@@ -66,7 +66,7 @@ const AllExpenses = () => {
         category: searchParams.get('category') || '',
         projectName: searchParams.get('projectName') || '',
         vendorName: searchParams.get('vendorName') || '',
-        submittedBy: '', approvedBy: '', paymentSourceId: '', 
+        submittedBy: '', approvedBy: '', paymentSourceId: '',
         minAmount: '', maxAmount: '', status: '', hasGst: ''
     });
 
@@ -79,7 +79,7 @@ const AllExpenses = () => {
         const handleClickOutside = (event) => {
             if (submittedByDropdownRef.current && !submittedByDropdownRef.current.contains(event.target)) setIsSubmittedByDropdownOpen(false);
             if (approvedByDropdownRef.current && !approvedByDropdownRef.current.contains(event.target)) setIsApprovedByDropdownOpen(false);
-            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false); 
+            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -134,7 +134,7 @@ const AllExpenses = () => {
             const res = await api.get('/expenses/all', { params });
 
             setExpenses(res.data.data);
-            if (res.data.stats) setStats(res.data.stats); 
+            if (res.data.stats) setStats(res.data.stats);
             setTotalPages(res.data.pagination.totalPages);
             setTotalRecords(res.data.pagination.totalRecords);
             setCurrentPage(res.data.pagination.currentPage);
@@ -152,16 +152,16 @@ const AllExpenses = () => {
     };
 
     const clearFilters = () => {
-        setFilters({ 
-            fromDate: '', toDate: '', expenseType: '', category: '', projectName: '', 
-            vendorName: '', submittedBy: '', approvedBy: '', paymentSourceId: '', 
-            minAmount: '', maxAmount: '', status: '', hasGst: '' 
+        setFilters({
+            fromDate: '', toDate: '', expenseType: '', category: '', projectName: '',
+            vendorName: '', submittedBy: '', approvedBy: '', paymentSourceId: '',
+            minAmount: '', maxAmount: '', status: '', hasGst: ''
         });
         setSearchTerm('');
         setSubmittedBySearchTerm('');
         setApprovedBySearchTerm('');
         setPaidBySearchTerm('');
-        setSelectedExpenses([]); 
+        setSelectedExpenses([]);
     };
 
     const handleStatusUpdate = async (id, newStatus) => {
@@ -185,7 +185,7 @@ const AllExpenses = () => {
 
     const handleBulkApprove = async () => {
         if (selectedExpenses.length === 0) return;
-        
+
         const result = await Swal.fire({
             title: 'Approve Selected?',
             text: `You are about to approve ${selectedExpenses.length} expenses at once. This action will process funds and sync inventory.`,
@@ -349,10 +349,10 @@ const AllExpenses = () => {
                 </div>
 
                 <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
-                
+
                 <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px', gap: '4px' }}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }}/> Filtered Total
+                        <FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }} /> Filtered Total
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.totalFilteredAmount.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>Across {totalRecords} items</div>
@@ -422,17 +422,17 @@ const AllExpenses = () => {
                         <label className="input-label" style={{ fontSize: '11px' }}>Paid By (Source)</label>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                             <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '8px', color: '#94a3b8', fontSize: '12px' }} />
-                            <input type="text" className="custom-input" placeholder="Search payer..." style={{ paddingLeft: '28px', paddingRight: '25px', borderColor: filters.paymentSourceId ? '#16a34a' : '#cbd5e1' }} 
-                                value={filters.paymentSourceId && !isPaidByDropdownOpen ? (filters.paymentSourceId === 'COMPANY' ? 'Company Account' : usersList.find(u => u._id === filters.paymentSourceId)?.name || '') : paidBySearchTerm} 
-                                onChange={(e) => { setPaidBySearchTerm(e.target.value); setFilters({ ...filters, paymentSourceId: '' }); setIsPaidByDropdownOpen(true); }} 
-                                onFocus={() => setIsPaidByDropdownOpen(true)} 
+                            <input type="text" className="custom-input" placeholder="Search payer..." style={{ paddingLeft: '28px', paddingRight: '25px', borderColor: filters.paymentSourceId ? '#16a34a' : '#cbd5e1' }}
+                                value={filters.paymentSourceId && !isPaidByDropdownOpen ? (filters.paymentSourceId === 'COMPANY' ? 'Company Account' : usersList.find(u => u._id === filters.paymentSourceId)?.name || '') : paidBySearchTerm}
+                                onChange={(e) => { setPaidBySearchTerm(e.target.value); setFilters({ ...filters, paymentSourceId: '' }); setIsPaidByDropdownOpen(true); }}
+                                onFocus={() => setIsPaidByDropdownOpen(true)}
                             />
                             {filters.paymentSourceId && <FontAwesomeIcon icon={faTimes} style={{ position: 'absolute', right: '8px', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }} onClick={() => { setFilters({ ...filters, paymentSourceId: '' }); setPaidBySearchTerm(''); }} />}
                         </div>
                         {isPaidByDropdownOpen && (
                             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: '4px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
                                 <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: '' }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>-- Anyone --</div>
-                                
+
                                 <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px', background: '#f0fdf4' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: 'COMPANY' }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>
                                     <div style={{ fontWeight: '600', color: '#16a34a' }}>Company Account</div>
                                 </div>
@@ -477,8 +477,8 @@ const AllExpenses = () => {
                     <thead>
                         <tr>
                             <th style={{ width: '40px', textAlign: 'center' }}>
-                                <input 
-                                    type="checkbox" 
+                                <input
+                                    type="checkbox"
                                     style={{ cursor: pendingOnPage.length === 0 ? 'not-allowed' : 'pointer' }}
                                     checked={isAllSelected}
                                     onChange={handleSelectAll}
@@ -508,7 +508,7 @@ const AllExpenses = () => {
 
                                 const submitterId = item.submittedBy?._id;
                                 const payerId = item.paymentSourceId?._id;
-                                
+
                                 const isCompanyPayment = item.isCompanyPayment;
                                 const isSamePerson = submitterId === payerId;
 
@@ -516,19 +516,19 @@ const AllExpenses = () => {
                                     <tr key={item._id} style={{ background: selectedExpenses.includes(item._id) ? '#f0fdf4' : 'transparent' }}>
                                         <td style={{ textAlign: 'center' }}>
                                             {item.status === 'Pending' ? (
-                                                <input 
-                                                    type="checkbox" 
+                                                <input
+                                                    type="checkbox"
                                                     style={{ cursor: 'pointer' }}
                                                     checked={selectedExpenses.includes(item._id)}
                                                     onChange={() => handleSelectOne(item._id)}
                                                 />
                                             ) : null}
                                         </td>
-                                        
+
                                         <td data-label="Submitter / Payer">
                                             {isCompanyPayment || isSamePerson ? (
-                                                <div 
-                                                    className="fw-bold text-primary" 
+                                                <div
+                                                    className="fw-bold text-primary"
                                                     style={{ cursor: 'pointer' }}
                                                     onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
                                                     title="View Profile"
@@ -538,16 +538,16 @@ const AllExpenses = () => {
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <div 
-                                                        className="fw-bold text-primary" 
+                                                    <div
+                                                        className="fw-bold text-primary"
                                                         style={{ cursor: 'pointer', fontSize: '14px' }}
                                                         onClick={() => item.paymentSourceId?._id && handleViewProfile(item.paymentSourceId._id)}
                                                         title="Paid By (View Profile)"
                                                     >
                                                         {item.paymentSourceId?.name || 'Unknown Payer'}
                                                     </div>
-                                                    <div 
-                                                        className="text-muted mt-5" 
+                                                    <div
+                                                        className="text-muted mt-5"
                                                         style={{ fontSize: '11px', cursor: 'pointer' }}
                                                         onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
                                                         title="Submitted By"
@@ -696,12 +696,12 @@ const AllExpenses = () => {
                                     <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label" style={{ color: '#ea580c' }}>Admin Note / Feedback</span><span className="detail-value" style={{ background: '#fef3c7', padding: '8px', borderRadius: '4px', fontStyle: 'italic' }}>"{selectedExpense.adminFeedback}"</span></div>
                                 )}
                             </div>
-                            
+
                             {/* 👇 UPDATED: Handle Multiple Products Array OR Legacy fields */}
                             {selectedExpense.expenseDetails && Object.keys(selectedExpense.expenseDetails).length > 0 && (
                                 <>
                                     <h3 className="sidebar-section-title mt-20">Granular Details</h3>
-                                    
+
                                     {selectedExpense.category === 'Product / Item Purchase' && selectedExpense.expenseDetails.items && selectedExpense.expenseDetails.items.length > 0 ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                             {selectedExpense.expenseDetails.items.map((prod, idx) => (
@@ -714,7 +714,14 @@ const AllExpenses = () => {
                                                         <div className="detail-group"><span className="detail-label">Unit Price</span><span className="detail-value">₹ {prod.unitPrice}</span></div>
                                                         <div className="detail-group"><span className="detail-label">Status</span><span className="detail-value">{prod.inventoryItemStatus}</span></div>
                                                         {prod.storageLocation && <div className="detail-group"><span className="detail-label">Location</span><span className="detail-value">{prod.storageLocation}</span></div>}
-                                                        {prod.inventoryAssignedTo && <div className="detail-group"><span className="detail-label">Assigned To (ID)</span><span className="detail-value">{prod.inventoryAssignedTo}</span></div>}
+                                                        {prod.inventoryAssignedTo && (
+                                                            <div className="detail-group">
+                                                                <span className="detail-label">Assigned To</span>
+                                                                <span className="detail-value">
+                                                                    {usersList.find(u => String(u._id) === String(prod.inventoryAssignedTo))?.name || prod.inventoryAssignedTo}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                         {prod.expiryDate && <div className="detail-group"><span className="detail-label">Expiry Date</span><span className="detail-value">{prod.expiryDate}</span></div>}
                                                     </div>
                                                 </div>
