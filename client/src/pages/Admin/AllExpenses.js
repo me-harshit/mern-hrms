@@ -6,9 +6,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faSearch, faFileInvoice, faImage, faFilter,
     faCheckCircle, faClock, faTimesCircle, faArrowLeft,
-    faEye, faTimes, faUndo, faEdit, faBuilding, faWallet
+    faEye, faTimes, faUndo, faEdit, faBuilding, faWallet, faObjectGroup, faCut
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination';
+import Pagination from '../../components/Pagination'; 
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 
@@ -28,7 +28,6 @@ const AllExpenses = () => {
 
     const [selectedExpenses, setSelectedExpenses] = useState([]);
 
-    // Stats State for the Summary Cards
     const [stats, setStats] = useState({
         pendingTotal: 0, pendingCount: 0,
         approvedTotal: 0, approvedCount: 0,
@@ -46,11 +45,11 @@ const AllExpenses = () => {
     // --- FILTER STATES ---
     const submittedByDropdownRef = useRef(null);
     const approvedByDropdownRef = useRef(null);
-    const paidByDropdownRef = useRef(null);
+    const paidByDropdownRef = useRef(null); 
 
     const [submittedBySearchTerm, setSubmittedBySearchTerm] = useState('');
     const [isSubmittedByDropdownOpen, setIsSubmittedByDropdownOpen] = useState(false);
-
+    
     const [approvedBySearchTerm, setApprovedBySearchTerm] = useState('');
     const [isApprovedByDropdownOpen, setIsApprovedByDropdownOpen] = useState(false);
 
@@ -66,20 +65,17 @@ const AllExpenses = () => {
         category: searchParams.get('category') || '',
         projectName: searchParams.get('projectName') || '',
         vendorName: searchParams.get('vendorName') || '',
-        submittedBy: '', approvedBy: '', paymentSourceId: '',
+        submittedBy: '', approvedBy: '', paymentSourceId: '', 
         minAmount: '', maxAmount: '', status: '', hasGst: ''
     });
 
-    const handleViewProfile = (id) => {
-        navigate(`/employee/${id}`);
-    };
+    const handleViewProfile = (id) => navigate(`/employee/${id}`);
 
-    // Handle Dropdown Outside Clicks
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (submittedByDropdownRef.current && !submittedByDropdownRef.current.contains(event.target)) setIsSubmittedByDropdownOpen(false);
             if (approvedByDropdownRef.current && !approvedByDropdownRef.current.contains(event.target)) setIsApprovedByDropdownOpen(false);
-            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false);
+            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false); 
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -96,7 +92,6 @@ const AllExpenses = () => {
                 const actualProjectArray = projRes.data.data || projRes.data;
                 setProjectsList(actualProjectArray);
             } catch (e) {
-                console.error("Dropdown fetch error", e);
                 setProjectsList([]);
             }
         };
@@ -124,17 +119,10 @@ const AllExpenses = () => {
     const fetchExpenses = async (pageToFetch) => {
         setLoading(true);
         try {
-            const params = {
-                page: pageToFetch,
-                limit: itemsPerPage,
-                search: debouncedSearch,
-                ...filters
-            };
-
+            const params = { page: pageToFetch, limit: itemsPerPage, search: debouncedSearch, ...filters };
             const res = await api.get('/expenses/all', { params });
-
             setExpenses(res.data.data);
-            if (res.data.stats) setStats(res.data.stats);
+            if (res.data.stats) setStats(res.data.stats); 
             setTotalPages(res.data.pagination.totalPages);
             setTotalRecords(res.data.pagination.totalRecords);
             setCurrentPage(res.data.pagination.currentPage);
@@ -146,22 +134,19 @@ const AllExpenses = () => {
     };
 
     const handleFilterChange = (e) => setFilters({ ...filters, [e.target.name]: e.target.value });
-
-    const handleCardClick = (status) => {
-        setFilters(prev => ({ ...prev, status: prev.status === status ? '' : status }));
-    };
+    const handleCardClick = (status) => setFilters(prev => ({ ...prev, status: prev.status === status ? '' : status }));
 
     const clearFilters = () => {
-        setFilters({
-            fromDate: '', toDate: '', expenseType: '', category: '', projectName: '',
-            vendorName: '', submittedBy: '', approvedBy: '', paymentSourceId: '',
-            minAmount: '', maxAmount: '', status: '', hasGst: ''
+        setFilters({ 
+            fromDate: '', toDate: '', expenseType: '', category: '', projectName: '', 
+            vendorName: '', submittedBy: '', approvedBy: '', paymentSourceId: '', 
+            minAmount: '', maxAmount: '', status: '', hasGst: '' 
         });
         setSearchTerm('');
         setSubmittedBySearchTerm('');
         setApprovedBySearchTerm('');
         setPaidBySearchTerm('');
-        setSelectedExpenses([]);
+        setSelectedExpenses([]); 
     };
 
     const handleStatusUpdate = async (id, newStatus) => {
@@ -185,31 +170,99 @@ const AllExpenses = () => {
 
     const handleBulkApprove = async () => {
         if (selectedExpenses.length === 0) return;
-
         const result = await Swal.fire({
-            title: 'Approve Selected?',
-            text: `You are about to approve ${selectedExpenses.length} expenses at once. This action will process funds and sync inventory.`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#16a34a',
-            confirmButtonText: 'Yes, approve all!'
+            title: 'Approve Selected?', text: `You are about to approve ${selectedExpenses.length} expenses at once.`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#16a34a', confirmButtonText: 'Yes, approve all!'
         });
-
         if (result.isConfirmed) {
             setLoading(true);
             try {
                 await Promise.all(selectedExpenses.map(id => api.put(`/expenses/${id}/status`, { status: 'Approved' })));
-                Swal.fire('Success', `${selectedExpenses.length} expenses approved successfully!`, 'success');
+                Swal.fire('Success', `${selectedExpenses.length} expenses approved!`, 'success');
                 setSelectedExpenses([]);
                 fetchExpenses(currentPage);
             } catch (err) {
-                Swal.fire('Error', 'Some approvals failed. Please review the remaining pending items.', 'error');
+                Swal.fire('Error', 'Some approvals failed.', 'error');
                 fetchExpenses(currentPage);
             }
         }
     };
 
-    const pendingOnPage = expenses.filter(e => e.status === 'Pending');
+    // 👇 NEW: Merge Selected Function
+    const handleMergeSelected = async () => {
+        if (selectedExpenses.length < 2) return;
+        
+        // 1. Quick Frontend Validation Check
+        const toMerge = expenses.filter(e => selectedExpenses.includes(e._id));
+        const first = toMerge[0];
+        
+        let totalSum = 0;
+        for (let exp of toMerge) {
+            totalSum += exp.amount;
+            if (exp.status !== 'Pending' && exp.status !== 'Returned') return Swal.fire('Invalid Status', 'You can only merge Pending or Returned expenses.', 'warning');
+            if (exp.category !== 'Product / Item Purchase') return Swal.fire('Category Mismatch', 'Only "Product / Item Purchase" records can be merged.', 'warning');
+            if (exp.submittedBy?._id !== first.submittedBy?._id) return Swal.fire('Submitter Mismatch', 'All records must be submitted by the same person.', 'warning');
+            if (exp.projectName !== first.projectName) return Swal.fire('Project Mismatch', 'All records must belong to the exact same Project.', 'warning');
+        }
+
+        const result = await Swal.fire({
+            title: 'Merge into Single Bill?',
+            text: `You are about to permanently merge ${toMerge.length} items into a single expense bill. The new total amount will be ₹${totalSum.toLocaleString('en-IN')}.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#2563eb',
+            confirmButtonText: 'Yes, Merge Them!'
+        });
+
+        if (result.isConfirmed) {
+            setLoading(true);
+            try {
+                await api.post('/expenses/merge', { expenseIds: selectedExpenses });
+                Swal.fire('Merged!', 'The expenses have been successfully combined into one bill.', 'success');
+                setSelectedExpenses([]);
+                fetchExpenses(currentPage);
+            } catch (err) {
+                Swal.fire('Merge Failed', err.response?.data?.message || 'Could not merge expenses', 'error');
+                setLoading(false);
+            }
+        }
+    };
+
+    // 👇 NEW: Split Item Function
+    const handleSplitItem = async (expenseId, itemIndex, itemObj, maxTotal) => {
+        const defaultSplitAmount = (Number(itemObj.quantity) || 1) * (Number(itemObj.unitPrice) || 0);
+        
+        const { value: splitAmountStr } = await Swal.fire({
+            title: 'Split Item out of Bill',
+            html: `
+                <p style="font-size: 14px; text-align: left; color: #475569;">
+                    Extracting <b>${itemObj.productName || 'this item'}</b> into its own separate expense record.<br/><br/>
+                    Original Bill Total: <b>₹${maxTotal}</b><br/>
+                    What should the total value of this new separated record be? (Include any proportional taxes/shipping).
+                </p>
+                <input id="split-amt" type="number" class="swal2-input" value="${defaultSplitAmount}" style="max-width: 100%;">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Split Item',
+            confirmButtonColor: '#ea580c',
+            preConfirm: () => document.getElementById('split-amt').value
+        });
+
+        if (splitAmountStr) {
+            const amountToDeduct = Number(splitAmountStr);
+            if (amountToDeduct >= maxTotal) return Swal.fire('Error', 'Split amount must be LESS than the total bill!', 'error');
+
+            try {
+                await api.post(`/expenses/${expenseId}/split`, { itemIndex, splitAmount: amountToDeduct });
+                Swal.fire('Split Successful', 'The item has been separated into a new pending expense.', 'success');
+                setIsSidebarOpen(false);
+                fetchExpenses(currentPage);
+            } catch (err) {
+                Swal.fire('Split Failed', err.response?.data?.message || 'Could not split item', 'error');
+            }
+        }
+    };
+
+    const pendingOnPage = expenses.filter(e => e.status === 'Pending' || e.status === 'Returned');
     const isAllSelected = pendingOnPage.length > 0 && pendingOnPage.every(e => selectedExpenses.includes(e._id));
 
     const handleSelectAll = () => {
@@ -222,9 +275,7 @@ const AllExpenses = () => {
         }
     };
 
-    const handleSelectOne = (id) => {
-        setSelectedExpenses(prev => prev.includes(id) ? prev.filter(eId => eId !== id) : [...prev, id]);
-    };
+    const handleSelectOne = (id) => setSelectedExpenses(prev => prev.includes(id) ? prev.filter(eId => eId !== id) : [...prev, id]);
 
     const openSidebar = (expense) => { setSelectedExpense(expense); setIsSidebarOpen(true); };
     const closeSidebar = () => { setIsSidebarOpen(false); setTimeout(() => setSelectedExpense(null), 300); };
@@ -237,7 +288,6 @@ const AllExpenses = () => {
         return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${String(date.getFullYear()).slice(-2)}`;
     };
 
-    // 👇 FIXED: Grab product details dynamically for arrays
     const getSpecificDetail = (item) => {
         if (item.category === 'Vendor Payment' && item.vendorId?.name) return item.vendorId.name;
         if (item.category === 'Participant Payment') return item.expenseDetails?.participantName || item.expenseDetails?.name || item.descriptionTags || 'Participant Payment';
@@ -279,18 +329,7 @@ const AllExpenses = () => {
     };
 
     const getMinimalCardStyle = (status, colorHex) => ({
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        opacity: filters.status === '' || filters.status === status ? 1 : 0.4,
-        border: filters.status === status ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0',
-        background: '#ffffff',
-        padding: '12px 16px',
-        borderRadius: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        minWidth: '140px',
-        boxShadow: filters.status === status ? `0 2px 8px ${colorHex}15` : 'none'
+        cursor: 'pointer', transition: 'all 0.2s ease', opacity: filters.status === '' || filters.status === status ? 1 : 0.4, border: filters.status === status ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0', background: '#ffffff', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '140px', boxShadow: filters.status === status ? `0 2px 8px ${colorHex}15` : 'none'
     });
 
     const filteredSubmittedBy = usersList.filter(u => u.name.toLowerCase().includes(submittedBySearchTerm.toLowerCase()) || u.role.toLowerCase().includes(submittedBySearchTerm.toLowerCase()));
@@ -308,52 +347,46 @@ const AllExpenses = () => {
                     <h1 className="page-title header-no-margin">All Expense Records</h1>
                 </div>
 
-                {selectedExpenses.length > 0 && (
-                    <button className="gts-btn success btn-small m-0 fade-in" onClick={handleBulkApprove} style={{ background: '#16a34a', color: 'white', fontWeight: 'bold' }}>
-                        <FontAwesomeIcon icon={faCheckCircle} className="btn-icon" /> Approve Selected ({selectedExpenses.length})
-                    </button>
-                )}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    {/* 👇 NEW: Merge Button (Only shows if 2+ selected) */}
+                    {selectedExpenses.length >= 2 && (
+                        <button className="gts-btn primary btn-small m-0 fade-in" onClick={handleMergeSelected} style={{ background: '#2563eb', color: 'white', fontWeight: 'bold' }}>
+                            <FontAwesomeIcon icon={faObjectGroup} className="btn-icon" /> Merge into 1 Bill
+                        </button>
+                    )}
+                    
+                    {selectedExpenses.length > 0 && (
+                        <button className="gts-btn success btn-small m-0 fade-in" onClick={handleBulkApprove} style={{ background: '#16a34a', color: 'white', fontWeight: 'bold' }}>
+                            <FontAwesomeIcon icon={faCheckCircle} className="btn-icon" /> Approve Selected ({selectedExpenses.length})
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '25px', alignItems: 'stretch' }}>
                 <div style={getMinimalCardStyle('Pending', '#d97706')} onClick={() => handleCardClick('Pending')}>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }} /> Pending
-                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }} /> Pending</div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.pendingTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.pendingCount} items</div>
                 </div>
-
                 <div style={getMinimalCardStyle('Approved', '#16a34a')} onClick={() => handleCardClick('Approved')}>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }} /> Accepted
-                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }} /> Accepted</div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.approvedTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.approvedCount} items</div>
                 </div>
-
                 <div style={getMinimalCardStyle('Returned', '#ea580c')} onClick={() => handleCardClick('Returned')}>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }} /> Returned
-                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }} /> Returned</div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.returnedTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.returnedCount} items</div>
                 </div>
-
                 <div style={getMinimalCardStyle('Rejected', '#dc2626')} onClick={() => handleCardClick('Rejected')}>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }} /> Rejected
-                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }} /> Rejected</div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.rejectedTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.rejectedCount} items</div>
                 </div>
-
                 <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
-
                 <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px', gap: '4px' }}>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }} /> Filtered Total
-                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }}/> Filtered Total</div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.totalFilteredAmount.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>Across {totalRecords} items</div>
                 </div>
@@ -365,35 +398,24 @@ const AllExpenses = () => {
                     <button className="gts-btn btn-small" onClick={clearFilters} style={{ marginLeft: 'auto', background: '#f1f5f9', color: '#64748b' }}>Clear All</button>
                 </div>
                 <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-
                     <div className="search-wrapper" style={{ gridColumn: '1 / -1', maxWidth: '100%' }}>
                         <FontAwesomeIcon icon={faSearch} className="search-icon" />
                         <input type="text" placeholder="Search by name, tags, project, GST number..." className="swal2-input search-input" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
-
                     <div><label className="input-label" style={{ fontSize: '11px' }}>From Date</label><input type="date" className="custom-input" name="fromDate" value={filters.fromDate} onChange={handleFilterChange} /></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>To Date</label><input type="date" className="custom-input" name="toDate" value={filters.toDate} onChange={handleFilterChange} /></div>
-
                     <div>
                         <label className="input-label" style={{ fontSize: '11px' }}>Status</label>
                         <select className="custom-input" name="status" value={filters.status} onChange={handleFilterChange}>
-                            <option value="">All Statuses</option>
-                            <option value="Pending">Pending</option>
-                            <option value="Approved">Approved</option>
-                            <option value="Rejected">Rejected</option>
-                            <option value="Returned">Returned</option>
+                            <option value="">All Statuses</option><option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option><option value="Returned">Returned</option>
                         </select>
                     </div>
-
                     <div>
                         <label className="input-label" style={{ fontSize: '11px' }}>GST Claim Status</label>
                         <select className="custom-input" name="hasGst" value={filters.hasGst} onChange={handleFilterChange}>
-                            <option value="">All Expenses</option>
-                            <option value="Yes">With Valid GST Number</option>
-                            <option value="No">Without GST</option>
+                            <option value="">All Expenses</option><option value="Yes">With Valid GST Number</option><option value="No">Without GST</option>
                         </select>
                     </div>
-
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Expense Type</label><select className="custom-input" name="expenseType" value={filters.expenseType} onChange={handleFilterChange}><option value="">All Types</option><option value="Project Expense">Project Expense</option><option value="Regular Office Expense">Regular Office Expense</option></select></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Category</label><select className="custom-input" name="category" value={filters.category} onChange={handleFilterChange}><option value="">All Categories</option><option value="Product / Item Purchase">Product / Item Purchase</option><option value="Utility / Bills">Utility / Bills</option><option value="Maintenance & Repairs">Maintenance & Repairs</option><option value="Fuel Expense (Car / Bike)">Fuel Expense (Car / Bike)</option><option value="Food Expense">Food Expense</option><option value="Travel Expense">Travel Expense</option><option value="Accommodation">Accommodation</option><option value="Regular Office Expense">Regular Office Expense</option><option value="Participant Payment">Participant Payment</option><option value="Vendor Payment">Vendor Payment</option></select></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Project</label><select className="custom-input" name="projectName" value={filters.projectName} onChange={handleFilterChange}><option value="">All Projects</option>{projectsList.map(proj => <option key={proj._id} value={proj.name}>{proj.name}</option>)}</select></div>
@@ -410,8 +432,7 @@ const AllExpenses = () => {
                                 <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, submittedBy: '' }); setSubmittedBySearchTerm(''); setIsSubmittedByDropdownOpen(false); }}>-- Anyone --</div>
                                 {filteredSubmittedBy.map(u => (
                                     <div key={u._id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, submittedBy: u._id }); setSubmittedBySearchTerm(''); setIsSubmittedByDropdownOpen(false); }}>
-                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
-                                        <div style={{ fontSize: '11px', color: '#64748b' }}>{u.role}</div>
+                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div><div style={{ fontSize: '11px', color: '#64748b' }}>{u.role}</div>
                                     </div>
                                 ))}
                             </div>
@@ -422,25 +443,18 @@ const AllExpenses = () => {
                         <label className="input-label" style={{ fontSize: '11px' }}>Paid By (Source)</label>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                             <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: '8px', color: '#94a3b8', fontSize: '12px' }} />
-                            <input type="text" className="custom-input" placeholder="Search payer..." style={{ paddingLeft: '28px', paddingRight: '25px', borderColor: filters.paymentSourceId ? '#16a34a' : '#cbd5e1' }}
-                                value={filters.paymentSourceId && !isPaidByDropdownOpen ? (filters.paymentSourceId === 'COMPANY' ? 'Company Account' : usersList.find(u => u._id === filters.paymentSourceId)?.name || '') : paidBySearchTerm}
-                                onChange={(e) => { setPaidBySearchTerm(e.target.value); setFilters({ ...filters, paymentSourceId: '' }); setIsPaidByDropdownOpen(true); }}
-                                onFocus={() => setIsPaidByDropdownOpen(true)}
-                            />
+                            <input type="text" className="custom-input" placeholder="Search payer..." style={{ paddingLeft: '28px', paddingRight: '25px', borderColor: filters.paymentSourceId ? '#16a34a' : '#cbd5e1' }} value={filters.paymentSourceId && !isPaidByDropdownOpen ? (filters.paymentSourceId === 'COMPANY' ? 'Company Account' : usersList.find(u => u._id === filters.paymentSourceId)?.name || '') : paidBySearchTerm} onChange={(e) => { setPaidBySearchTerm(e.target.value); setFilters({ ...filters, paymentSourceId: '' }); setIsPaidByDropdownOpen(true); }} onFocus={() => setIsPaidByDropdownOpen(true)} />
                             {filters.paymentSourceId && <FontAwesomeIcon icon={faTimes} style={{ position: 'absolute', right: '8px', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }} onClick={() => { setFilters({ ...filters, paymentSourceId: '' }); setPaidBySearchTerm(''); }} />}
                         </div>
                         {isPaidByDropdownOpen && (
                             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: '4px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
                                 <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: '' }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>-- Anyone --</div>
-
                                 <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px', background: '#f0fdf4' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: 'COMPANY' }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>
                                     <div style={{ fontWeight: '600', color: '#16a34a' }}>Company Account</div>
                                 </div>
-
                                 {filteredPaidBy.map(u => (
                                     <div key={u._id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, paymentSourceId: u._id }); setPaidBySearchTerm(''); setIsPaidByDropdownOpen(false); }}>
-                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
-                                        <div style={{ fontSize: '11px', color: '#64748b' }}>{u.role}</div>
+                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div><div style={{ fontSize: '11px', color: '#64748b' }}>{u.role}</div>
                                     </div>
                                 ))}
                             </div>
@@ -459,14 +473,12 @@ const AllExpenses = () => {
                                 <div style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, approvedBy: '' }); setApprovedBySearchTerm(''); setIsApprovedByDropdownOpen(false); }}>-- Anyone --</div>
                                 {filteredApprovedBy.map(u => (
                                     <div key={u._id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', fontSize: '13px' }} onMouseDown={() => { setFilters({ ...filters, approvedBy: u._id }); setApprovedBySearchTerm(''); setIsApprovedByDropdownOpen(false); }}>
-                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
-                                        <div style={{ fontSize: '11px', color: '#64748b' }}>{u.role}</div>
+                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div><div style={{ fontSize: '11px', color: '#64748b' }}>{u.role}</div>
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
-
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Min Amount (₹)</label><input type="number" className="custom-input" name="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="0" /></div>
                     <div><label className="input-label" style={{ fontSize: '11px' }}>Max Amount (₹)</label><input type="number" className="custom-input" name="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="Max" /></div>
                 </div>
@@ -477,8 +489,8 @@ const AllExpenses = () => {
                     <thead>
                         <tr>
                             <th style={{ width: '40px', textAlign: 'center' }}>
-                                <input
-                                    type="checkbox"
+                                <input 
+                                    type="checkbox" 
                                     style={{ cursor: pendingOnPage.length === 0 ? 'not-allowed' : 'pointer' }}
                                     checked={isAllSelected}
                                     onChange={handleSelectAll}
@@ -505,107 +517,53 @@ const AllExpenses = () => {
                                 const typeLabel = isProject ? 'Project' : 'Regular';
                                 const typeBorderColor = isProject ? '#A6477F' : '#1E73BE';
                                 const typeBgColor = isProject ? '#fdf2f8' : '#eff6ff';
-
                                 const submitterId = item.submittedBy?._id;
                                 const payerId = item.paymentSourceId?._id;
-
                                 const isCompanyPayment = item.isCompanyPayment;
                                 const isSamePerson = submitterId === payerId;
 
                                 return (
                                     <tr key={item._id} style={{ background: selectedExpenses.includes(item._id) ? '#f0fdf4' : 'transparent' }}>
                                         <td style={{ textAlign: 'center' }}>
-                                            {item.status === 'Pending' ? (
-                                                <input
-                                                    type="checkbox"
-                                                    style={{ cursor: 'pointer' }}
-                                                    checked={selectedExpenses.includes(item._id)}
-                                                    onChange={() => handleSelectOne(item._id)}
-                                                />
+                                            {(item.status === 'Pending' || item.status === 'Returned') ? (
+                                                <input type="checkbox" style={{ cursor: 'pointer' }} checked={selectedExpenses.includes(item._id)} onChange={() => handleSelectOne(item._id)} />
                                             ) : null}
                                         </td>
-
+                                        
                                         <td data-label="Submitter / Payer">
                                             {isCompanyPayment || isSamePerson ? (
-                                                <div
-                                                    className="fw-bold text-primary"
-                                                    style={{ cursor: 'pointer' }}
-                                                    onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
-                                                    title="View Profile"
-                                                >
+                                                <div className="fw-bold text-primary" style={{ cursor: 'pointer' }} onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)} title="View Profile">
                                                     {item.submittedBy?.name || 'Unknown'}
                                                     {isCompanyPayment && <div className="text-small text-success fw-600 mt-5">Company Paid</div>}
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <div
-                                                        className="fw-bold text-primary"
-                                                        style={{ cursor: 'pointer', fontSize: '14px' }}
-                                                        onClick={() => item.paymentSourceId?._id && handleViewProfile(item.paymentSourceId._id)}
-                                                        title="Paid By (View Profile)"
-                                                    >
-                                                        {item.paymentSourceId?.name || 'Unknown Payer'}
-                                                    </div>
-                                                    <div
-                                                        className="text-muted mt-5"
-                                                        style={{ fontSize: '11px', cursor: 'pointer' }}
-                                                        onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)}
-                                                        title="Submitted By"
-                                                    >
-                                                        <span style={{ fontWeight: '600' }}>Logged by:</span> {item.submittedBy?.name || 'Unknown'}
-                                                    </div>
+                                                    <div className="fw-bold text-primary" style={{ cursor: 'pointer', fontSize: '14px' }} onClick={() => item.paymentSourceId?._id && handleViewProfile(item.paymentSourceId._id)} title="Paid By (View Profile)">{item.paymentSourceId?.name || 'Unknown Payer'}</div>
+                                                    <div className="text-muted mt-5" style={{ fontSize: '11px', cursor: 'pointer' }} onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)} title="Submitted By"><span style={{ fontWeight: '600' }}>Logged by:</span> {item.submittedBy?.name || 'Unknown'}</div>
                                                 </>
                                             )}
                                         </td>
 
                                         <td data-label="Details & Context">
-                                            <div className="fw-bold text-dark" style={{ fontSize: '13px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '220px' }} title={getSpecificDetail(item)}>
-                                                {getSpecificDetail(item)}
-                                            </div>
+                                            <div className="fw-bold text-dark" style={{ fontSize: '13px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '220px' }} title={getSpecificDetail(item)}>{getSpecificDetail(item)}</div>
                                             <div className="text-small text-muted fw-600" style={{ marginBottom: '6px' }}>{item.category}</div>
-
-                                            <div style={{ marginTop: '8px' }}>
-                                                <button className="gts-btn doc-btn" style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', background: '#f1f5f9', color: '#215D7B' }} onClick={() => openSidebar(item)}>
-                                                    <FontAwesomeIcon icon={faEye} /> View Details
-                                                </button>
-                                            </div>
+                                            <div style={{ marginTop: '8px' }}><button className="gts-btn doc-btn" style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', background: '#f1f5f9', color: '#215D7B' }} onClick={() => openSidebar(item)}><FontAwesomeIcon icon={faEye} /> View Details</button></div>
                                         </td>
 
                                         <td data-label="Expense Type">
-                                            <span
-                                                className="doc-btn"
-                                                style={{ background: typeBgColor, color: typeBorderColor, border: `1px solid ${typeBorderColor}`, padding: '4px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', display: 'inline-block' }}
-                                            >
-                                                {typeLabel}
-                                            </span>
-                                            {item.projectName && (
-                                                <div className="text-small fw-600" style={{ marginTop: '6px', color: '#475569' }}>
-                                                    {item.projectName}
-                                                </div>
-                                            )}
+                                            <span className="doc-btn" style={{ background: typeBgColor, color: typeBorderColor, border: `1px solid ${typeBorderColor}`, padding: '4px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', display: 'inline-block' }}>{typeLabel}</span>
+                                            {item.projectName && <div className="text-small fw-600" style={{ marginTop: '6px', color: '#475569' }}>{item.projectName}</div>}
                                         </td>
 
                                         <td data-label="Amount & Date">
                                             <div className="expense-amount-large">₹ {item.amount.toLocaleString('en-IN')}</div>
-                                            <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>
-                                                {item.category === 'Vendor Payment' ? 'Inv: ' : ''}{formatDisplayDate(item.expenseDate)}
-                                            </div>
-                                            {item.expenseDetails?.gstNumber && (
-                                                <span style={{ fontSize: '10px', background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>
-                                                    GST: {item.expenseDetails.gstNumber}
-                                                </span>
-                                            )}
+                                            <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{item.category === 'Vendor Payment' ? 'Inv: ' : ''}{formatDisplayDate(item.expenseDate)}</div>
+                                            {item.expenseDetails?.gstNumber && <span style={{ fontSize: '10px', background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>GST: {item.expenseDetails.gstNumber}</span>}
                                         </td>
 
                                         <td data-label="Status & Approver">
-                                            <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : item.status === 'Returned' ? 'warning' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>
-                                                {getStatusIcon(item.status)} {item.status || 'Pending'}
-                                            </span>
-                                            {item.status !== 'Pending' && item.approvedBy && (
-                                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>
-                                                    By: <span style={{ color: '#215D7B', fontWeight: '600' }}>{item.approvedBy.name}</span>
-                                                </div>
-                                            )}
+                                            <span className={`status-badge ${item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'danger' : item.status === 'Returned' ? 'warning' : 'warning'}`} style={{ padding: '6px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}>{getStatusIcon(item.status)} {item.status || 'Pending'}</span>
+                                            {item.status !== 'Pending' && item.approvedBy && <div style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>By: <span style={{ color: '#215D7B', fontWeight: '600' }}>{item.approvedBy.name}</span></div>}
                                         </td>
 
                                         <td data-label="Documents">
@@ -623,7 +581,7 @@ const AllExpenses = () => {
                                         </td>
 
                                         <td data-label="Admin Action">
-                                            {item.status === 'Pending' ? (
+                                            {item.status === 'Pending' || item.status === 'Returned' ? (
                                                 <div className="flex-col gap-5">
                                                     <div style={{ display: 'flex', gap: '5px' }}>
                                                         <button className="gts-btn btn-small m-0" style={{ flex: 1, background: '#dcfce7', color: '#16a34a', justifyContent: 'center', padding: '6px' }} onClick={() => handleStatusUpdate(item._id, 'Approved')}><FontAwesomeIcon icon={faCheckCircle} /> Approve</button>
@@ -660,10 +618,7 @@ const AllExpenses = () => {
                     totalRecords={totalRecords}
                     limit={itemsPerPage}
                     onPageChange={(page) => setCurrentPage(page)}
-                    onLimitChange={(newLimit) => {
-                        setItemsPerPage(newLimit);
-                        setCurrentPage(1);
-                    }}
+                    onLimitChange={(newLimit) => { setItemsPerPage(newLimit); setCurrentPage(1); }}
                 />
             )}
 
@@ -688,25 +643,31 @@ const AllExpenses = () => {
                                 <div className="detail-group"><span className="detail-label">Submitted By</span><span className="detail-value">{selectedExpense.submittedBy?.name || 'N/A'}</span></div>
                                 <div className="detail-group"><span className="detail-label">Payment Source</span><span className="detail-value">{selectedExpense.isCompanyPayment ? 'Company Account' : selectedExpense.paymentSourceId?.name || 'N/A'}</span></div>
                                 <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label">Project / Department</span><span className="detail-value">{selectedExpense.projectName || 'Regular Office Expense'}</span></div>
-                                {selectedExpense.vendorId && (
-                                    <div className="detail-group" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}><span className="detail-label" style={{ color: '#2563eb' }}><FontAwesomeIcon icon={faBuilding} /> Central Vendor Profile</span><span className="detail-value fw-600">{selectedExpense.vendorId.name}</span>{selectedExpense.vendorId.gstNumber && <span className="text-small text-muted d-block">GST: {selectedExpense.vendorId.gstNumber}</span>}</div>
-                                )}
+                                {selectedExpense.vendorId && <div className="detail-group" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}><span className="detail-label" style={{ color: '#2563eb' }}><FontAwesomeIcon icon={faBuilding} /> Central Vendor Profile</span><span className="detail-value fw-600">{selectedExpense.vendorId.name}</span>{selectedExpense.vendorId.gstNumber && <span className="text-small text-muted d-block">GST: {selectedExpense.vendorId.gstNumber}</span>}</div>}
                                 <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label">Description Tags</span><span className="detail-value">{selectedExpense.descriptionTags}</span></div>
-                                {selectedExpense.adminFeedback && (
-                                    <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label" style={{ color: '#ea580c' }}>Admin Note / Feedback</span><span className="detail-value" style={{ background: '#fef3c7', padding: '8px', borderRadius: '4px', fontStyle: 'italic' }}>"{selectedExpense.adminFeedback}"</span></div>
-                                )}
+                                {selectedExpense.adminFeedback && <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label" style={{ color: '#ea580c' }}>Admin Note / Feedback</span><span className="detail-value" style={{ background: '#fef3c7', padding: '8px', borderRadius: '4px', fontStyle: 'italic' }}>"{selectedExpense.adminFeedback}"</span></div>}
                             </div>
-
-                            {/* 👇 UPDATED: Handle Multiple Products Array OR Legacy fields */}
+                            
                             {selectedExpense.expenseDetails && Object.keys(selectedExpense.expenseDetails).length > 0 && (
                                 <>
                                     <h3 className="sidebar-section-title mt-20">Granular Details</h3>
-
                                     {selectedExpense.category === 'Product / Item Purchase' && selectedExpense.expenseDetails.items && selectedExpense.expenseDetails.items.length > 0 ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                             {selectedExpense.expenseDetails.items.map((prod, idx) => (
-                                                <div key={idx} style={{ background: '#f1f5f9', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                    <div style={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '10px', borderBottom: '1px solid #cbd5e1', paddingBottom: '5px' }}>
+                                                <div key={idx} style={{ background: '#f1f5f9', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', position: 'relative' }}>
+                                                    
+                                                    {/* 👇 NEW: Split Item Button */}
+                                                    {selectedExpense.expenseDetails.items.length > 1 && (selectedExpense.status === 'Pending' || selectedExpense.status === 'Returned') && (
+                                                        <button 
+                                                            onClick={() => handleSplitItem(selectedExpense._id, idx, prod, selectedExpense.amount)}
+                                                            title="Extract this item into its own separate expense record"
+                                                            style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', color: '#ea580c', cursor: 'pointer', fontWeight: 'bold' }}
+                                                        >
+                                                            <FontAwesomeIcon icon={faCut} /> Split Out
+                                                        </button>
+                                                    )}
+
+                                                    <div style={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '10px', borderBottom: '1px solid #cbd5e1', paddingBottom: '5px', paddingRight: '70px' }}>
                                                         Item #{idx + 1} - {prod.productName}
                                                     </div>
                                                     <div className="detail-grid-2">
@@ -730,7 +691,7 @@ const AllExpenses = () => {
                                     ) : (
                                         <div className="detail-grid-2">
                                             {Object.entries(selectedExpense.expenseDetails).map(([key, value]) => {
-                                                if (key === 'items') return null; // Safe fallback
+                                                if (key === 'items') return null; 
                                                 if (!value) return null;
                                                 const isLongText = typeof value === 'string' && value.length > 30;
                                                 return (

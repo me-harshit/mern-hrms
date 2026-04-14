@@ -606,4 +606,159 @@ router.put('/:id/status', auth, async (req, res) => {
     }
 });
 
+// ==========================================
+// 🚀 MERGE MULTIPLE EXPENSES INTO ONE
+// ==========================================
+router.post('/merge', auth, async (req, res) => {
+    try {
+        const { expenseIds } = req.body;
+        if (!expenseIds || expenseIds.length < 2) return res.status(400).json({ message: 'Select at least 2 expenses to merge.' });
+
+        const expenses = await Expense.find({ _id: { $in: expenseIds } });
+        if (expenses.length !== expenseIds.length) return res.status(404).json({ message: 'Some expenses were not found.' });
+
+        // 1. Strict Validation checks
+        const first = expenses[0];
+        for (let exp of expenses) {
+            if (exp.status !== 'Pending' && exp.status !== 'Returned') {
+                return res.status(400).json({ message: 'Only Pending or Returned expenses can be merged.' });
+            }
+            if (exp.category !== 'Product / Item Purchase') {
+                return res.status(400).json({ message: 'Only "Product / Item Purchase" categories can be merged.' });
+            }
+            if (String(exp.submittedBy) !== String(first.submittedBy)) {
+                return res.status(400).json({ message: 'All merged expenses must be submitted by the exact same employee.' });
+            }
+            if (exp.projectName !== first.projectName) {
+                return res.status(400).json({ message: 'All merged expenses must belong to the exact same Project (or Regular Office).' });
+            }
+        }
+
+        // 2. Prepare Master Record (We'll keep the first one and absorb the rest)
+        const masterExpense = first;
+        let totalAmount = 0;
+        let mergedItems = [];
+        let combinedScreenshotUrls = new Set();
+        let combinedMediaUrls = new Set();
+        let combinedTags = new Set();
+
+        expenses.forEach(exp => {
+            totalAmount += exp.amount;
+            
+            // Collect Tags
+            if (exp.descriptionTags) exp.descriptionTags.split(',').forEach(tag => combinedTags.add(tag.trim()));
+
+            // Combine Media
+            exp.paymentScreenshotUrls.forEach(url => combinedScreenshotUrls.add(url));
+            if (exp.paymentScreenshotUrl) combinedScreenshotUrls.add(exp.paymentScreenshotUrl); // Legacy single string
+            exp.expenseMediaUrls.forEach(url => combinedMediaUrls.add(url));
+
+            // Legacy Data Compatibility Engine (Converts old single items to new array format)
+            if (exp.expenseDetails?.items && Array.isArray(exp.expenseDetails.items) && exp.expenseDetails.items.length > 0) {
+                mergedItems.push(...exp.expenseDetails.items);
+            } else {
+                // It's a legacy record without the items array, convert it!
+                mergedItems.push({
+                    productName: exp.expenseDetails?.itemName || exp.expenseDetails?.productName || exp.descriptionTags || 'Legacy Item',
+                    quantity: 1,
+                    unitPrice: exp.amount,
+                    inventoryItemStatus: 'Do Not Track', // Safe default for legacy
+                    storageLocation: '',
+                    inventoryAssignedTo: '',
+                    expiryDate: ''
+                });
+            }
+        });
+
+        // 3. Update Master Record
+        masterExpense.amount = totalAmount;
+        masterExpense.descriptionTags = Array.from(combinedTags).join(', ');
+        masterExpense.paymentScreenshotUrls = Array.from(combinedScreenshotUrls);
+        masterExpense.expenseMediaUrls = Array.from(combinedMediaUrls);
+        
+        if (!masterExpense.expenseDetails) masterExpense.expenseDetails = {};
+        masterExpense.expenseDetails.items = mergedItems;
+         
+        masterExpense.markModified('expenseDetails');
+
+        // 4. Save Master & Delete the absorbed duplicates
+        await masterExpense.save();
+        
+        const idsToDelete = expenses.map(e => e._id).filter(id => String(id) !== String(masterExpense._id));
+        await Expense.deleteMany({ _id: { $in: idsToDelete } });
+
+        res.json({ message: 'Expenses merged successfully', masterExpense });
+
+    } catch (err) {
+        console.error("Merge Error:", err);
+        res.status(500).json({ message: 'Server Error during merge' });
+    }
+});
+
+
+// ==========================================
+// 🚀 SPLIT SINGLE ITEM OUT OF AN EXPENSE
+// ==========================================
+router.post('/:id/split', auth, async (req, res) => {
+    try {
+        const { itemIndex, splitAmount } = req.body;
+        const masterExpense = await Expense.findById(req.params.id);
+        
+        if (!masterExpense) return res.status(404).json({ message: 'Expense not found' });
+        if (masterExpense.status !== 'Pending' && masterExpense.status !== 'Returned') {
+            return res.status(400).json({ message: 'You can only split Pending or Returned expenses.' });
+        }
+        if (!masterExpense.expenseDetails?.items || masterExpense.expenseDetails.items.length <= 1) {
+            return res.status(400).json({ message: 'This expense does not have multiple items to split.' });
+        }
+
+        const idx = parseInt(itemIndex);
+        const amountToDeduct = Number(splitAmount);
+
+        if (isNaN(amountToDeduct) || amountToDeduct <= 0 || amountToDeduct >= masterExpense.amount) {
+            return res.status(400).json({ message: 'Invalid split amount. It must be less than the total bill.' });
+        }
+
+        // 1. Extract the Item
+        const extractedItem = masterExpense.expenseDetails.items[idx];
+        
+        // 2. Remove it from Master
+        masterExpense.expenseDetails.items.splice(idx, 1);
+        masterExpense.amount -= amountToDeduct;
+        
+        // Force mongoose to recognize the mixed object array change
+        masterExpense.markModified('expenseDetails');
+        await masterExpense.save();
+
+        // 3. Create the New Cloned Record
+        const newExpense = new Expense({
+            expenseType: masterExpense.expenseType,
+            category: masterExpense.category,
+            expenseDate: masterExpense.expenseDate,
+            amount: amountToDeduct,
+            paymentSourceId: masterExpense.paymentSourceId,
+            isCompanyPayment: masterExpense.isCompanyPayment,
+            projectName: masterExpense.projectName,
+            descriptionTags: `${extractedItem.productName} (Split)`,
+            vendorId: masterExpense.vendorId,
+            submittedBy: masterExpense.submittedBy,
+            paymentScreenshotUrls: masterExpense.paymentScreenshotUrls, // They share the same physical receipt
+            expenseMediaUrls: masterExpense.expenseMediaUrls,
+            status: masterExpense.status, // Inherit Pending or Returned
+            expenseDetails: { items: [extractedItem] }
+        });
+
+        await newExpense.save();
+
+        res.json({ message: 'Item split successfully into a new expense record.' });
+    } catch (err) {
+        console.error("Split Error:", err);
+        res.status(500).json({ message: 'Server Error during split' });
+    }
+});
+
+
+
+
+
 module.exports = router;
