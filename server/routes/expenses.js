@@ -22,7 +22,7 @@ router.post('/', auth, upload.fields([
             expenseType, category, expenseDate, amount,
             paymentSourceId, projectName, descriptionTags, expenseDetails,
             vendorId,
-            isCompanyPayment 
+            isCompanyPayment
         } = req.body;
 
         let parsedExpenseDetails = {};
@@ -79,11 +79,11 @@ router.get('/', auth, async (req, res) => {
         const { page = 1, limit = 10, search, status, filterType, fromDate, toDate } = req.query;
 
         let andConditions = [
-            { 
+            {
                 $or: [
-                    { submittedBy: req.user.id }, 
+                    { submittedBy: req.user.id },
                     { paymentSourceId: req.user.id }
-                ] 
+                ]
             }
         ];
 
@@ -136,7 +136,7 @@ router.get('/', auth, async (req, res) => {
         const skip = (parseInt(page) - 1) * limitNum;
 
         const expenses = await Expense.find(query)
-            .populate('submittedBy', 'name email') 
+            .populate('submittedBy', 'name email')
             .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
             .sort({ createdAt: -1 })
@@ -155,7 +155,7 @@ router.get('/', auth, async (req, res) => {
             approvedTotal: 0, approvedCount: 0,
             returnedTotal: 0, returnedCount: 0,
             rejectedTotal: 0, rejectedCount: 0,
-            totalFilteredAmount: 0 
+            totalFilteredAmount: 0
         };
 
         allFilteredForStats.forEach(e => {
@@ -287,8 +287,6 @@ router.get('/all', auth, async (req, res) => {
             query.$and = andConditions;
         }
 
-    // ... (Keep all your existing filter logic above this line) ...
-
         const totalRecords = await Expense.countDocuments(query);
         const totalPages = Math.ceil(totalRecords / limit);
 
@@ -311,7 +309,7 @@ router.get('/all', auth, async (req, res) => {
             approvedTotal: 0, approvedCount: 0,
             returnedTotal: 0, returnedCount: 0,
             rejectedTotal: 0, rejectedCount: 0,
-            totalFilteredAmount: 0 
+            totalFilteredAmount: 0
         };
 
         allFilteredForStats.forEach(e => {
@@ -331,7 +329,7 @@ router.get('/all', auth, async (req, res) => {
         res.json({
             data: expenses,
             pagination: { totalRecords, totalPages, currentPage: page, limit },
-            stats 
+            stats
         });
 
     } catch (err) {
@@ -346,13 +344,34 @@ router.get('/:id', auth, async (req, res) => {
     try {
         const expense = await Expense.findById(req.params.id)
             .populate('paymentSourceId', 'name')
-            .populate('vendorId', 'name gstNumber');
+            .populate('vendorId', 'name gstNumber')
+            .populate('submittedBy', 'name reportingManagerEmail');
 
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
 
-        if (req.user.role === 'EMPLOYEE' && expense.submittedBy.toString() !== req.user.id) {
-            return res.status(403).json({ message: 'Unauthorized' });
+        let isAuthorized = false;
+        const role = req.user.role;
+
+        if (['ADMIN', 'HR', 'ACCOUNTS'].includes(role)) {
+            isAuthorized = true;
+            // 👇 FIXED: Now checks if you submitted it OR if you are the Payment Source!
+        } else if (
+            expense.submittedBy._id.toString() === req.user.id ||
+            (expense.paymentSourceId && expense.paymentSourceId._id.toString() === req.user.id)
+        ) {
+            isAuthorized = true;
+        } else if (role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            if (expense.submittedBy.reportingManagerEmail?.toLowerCase() === manager.email.toLowerCase()) {
+                isAuthorized = true;
+            }
+            if (!isAuthorized && expense.expenseType === 'Project Expense' && expense.projectName) {
+                const project = await Project.findOne({ name: expense.projectName, projectLead: req.user.id });
+                if (project) isAuthorized = true;
+            }
         }
+
+        if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized to view this expense.' });
         res.json(expense);
     } catch (err) {
         console.error(err.message);
@@ -368,31 +387,42 @@ router.put('/:id', auth, upload.fields([
     { name: 'expenseMedia', maxCount: 10 }
 ]), async (req, res) => {
     try {
-        let expense = await Expense.findById(req.params.id).populate('submittedBy');
+        let expense = await Expense.findById(req.params.id).populate('submittedBy', 'name reportingManagerEmail');
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
 
         let isAuthorized = false;
-        if (req.user.role === 'ADMIN' || req.user.role === 'HR') {
+        const role = req.user.role;
+
+        if (['ADMIN', 'HR', 'ACCOUNTS'].includes(role)) {
             isAuthorized = true;
-        } else if (expense.submittedBy._id.toString() === req.user.id) {
+            // 👇 FIXED: Now checks if you submitted it OR if you are the Payment Source!
+        } else if (
+            expense.submittedBy._id.toString() === req.user.id ||
+            (expense.paymentSourceId && expense.paymentSourceId.toString() === req.user.id)
+        ) {
             isAuthorized = true;
-        } else if (req.user.role === 'MANAGER') {
-            if (expense.expenseType === 'Project Expense' && expense.projectName) {
+        } else if (role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            if (expense.submittedBy.reportingManagerEmail?.toLowerCase() === manager.email.toLowerCase()) {
+                isAuthorized = true;
+            }
+            if (!isAuthorized && expense.expenseType === 'Project Expense' && expense.projectName) {
                 const project = await Project.findOne({ name: expense.projectName, projectLead: req.user.id });
                 if (project) isAuthorized = true;
             }
         }
 
-        if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized' });
+        if (!isAuthorized) return res.status(403).json({ message: 'Unauthorized to edit this expense' });
 
-        if (expense.status === 'Approved' && req.user.role !== 'ADMIN' && req.user.role !== 'HR') {
+        // Safe Guard: If it's already approved, normal users cannot tamper with it.
+        if (expense.status === 'Approved' && !['ADMIN', 'HR', 'ACCOUNTS'].includes(role)) {
             return res.status(400).json({ message: 'Cannot edit an approved expense.' });
         }
 
         const {
             expenseType, category, expenseDate, amount,
             paymentSourceId, projectName, descriptionTags, expenseDetails, notes,
-            vendorId, isCompanyPayment 
+            vendorId, isCompanyPayment
         } = req.body;
 
         if (expenseType) expense.expenseType = expenseType;
@@ -501,7 +531,7 @@ router.put('/:id/status', auth, async (req, res) => {
                 });
             }
 
-            // 👇 NEW: Iterating through MULTIPLE items to sync Inventory
+            // Iterating through MULTIPLE items to sync Inventory
             if (expense.category === 'Product / Item Purchase' && !expense.inventorySynced) {
                 const items = expense.expenseDetails?.items || [];
                 let linkedIds = [];

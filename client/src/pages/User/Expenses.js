@@ -13,7 +13,7 @@ import api, { SERVER_URL } from '../../utils/api';
 
 const Expenses = () => {
     const navigate = useNavigate();
-    const currentUser = JSON.parse(localStorage.getItem('user')); // 👇 ADDED THIS
+    const currentUser = JSON.parse(localStorage.getItem('user')); 
     
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -143,6 +143,23 @@ const Expenses = () => {
         return <FontAwesomeIcon icon={faClock} style={{ color: '#d97706', marginRight: '5px' }} />;
     };
 
+    // 👇 NEW: Helper function to grab specific details from the new array structure
+    const getSpecificDetail = (item) => {
+        if (item.category === 'Vendor Payment' && item.vendorId?.name) return item.vendorId.name;
+        if (item.category === 'Participant Payment') return item.expenseDetails?.participantName || item.expenseDetails?.name || item.descriptionTags || 'Participant Payment';
+        if (item.category === 'Product / Item Purchase') {
+            // Handle the new multi-product array format
+            if (item.expenseDetails?.items && item.expenseDetails.items.length > 0) {
+                const firstItem = item.expenseDetails.items[0].productName;
+                const extraCount = item.expenseDetails.items.length - 1;
+                return extraCount > 0 ? `${firstItem} (+${extraCount} more)` : firstItem;
+            }
+            // Fallback for old legacy records
+            return item.expenseDetails?.itemName || item.expenseDetails?.productName || item.descriptionTags || 'Product Purchase';
+        }
+        return item.descriptionTags || 'No specific details provided';
+    };
+
     const getMinimalCardStyle = (status, colorHex) => ({
         cursor: 'pointer',
         transition: 'all 0.2s ease',
@@ -250,7 +267,8 @@ const Expenses = () => {
                     <thead>
                         <tr>
                             <th>Expense Category</th>
-                            <th>Project / Tags</th>
+                            {/* 👇 UPDATED HEADER */}
+                            <th>Project & Details</th> 
                             <th>Amount & Date</th>
                             <th>Payment Source</th>
                             <th>Status</th>
@@ -271,8 +289,14 @@ const Expenses = () => {
                                         <div className="text-small text-muted">{item.expenseType}</div>
                                     </td>
 
-                                    <td data-label="Project / Tags">
-                                        <div className="fw-500 text-small">{item.projectName || 'Regular Office'}</div>
+                                    <td data-label="Project & Details">
+                                        {/* 👇 ADDED: Specific product/vendor name at the top */}
+                                        <div className="fw-bold text-dark" style={{ fontSize: '13px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '220px' }} title={getSpecificDetail(item)}>
+                                            {getSpecificDetail(item)}
+                                        </div>
+                                        <div className="fw-500 text-small text-muted" style={{ marginBottom: '4px' }}>
+                                            {item.projectName || 'Regular Office'}
+                                        </div>
                                         <div className="expense-tag-pill">{item.descriptionTags}</div>
                                     </td>
 
@@ -281,7 +305,6 @@ const Expenses = () => {
                                         <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.expenseDate).toLocaleDateString()}</div>
                                     </td>
 
-                                    {/* 👇 UPDATED: Clears up who actually logged the expense if not the current user */}
                                     <td data-label="Payment Source">
                                         {item.submittedBy?._id && item.submittedBy._id !== currentUser.id && (
                                             <div className="text-small text-muted" style={{ marginBottom: '4px' }}>
