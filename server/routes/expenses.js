@@ -197,6 +197,126 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
+// =========================================
+// ADMIN DASHBOARD ANALYTICS (Recharts Data)
+// =========================================
+router.get('/admin-charts', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        // Base Match Condition (Respects Manager's Scope)
+        let baseMatch = {};
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const myProjects = await Project.find({
+                $or: [
+                    { leadEmail: manager.email.toLowerCase() },
+                    { managerEmail: manager.email.toLowerCase() },
+                    { projectManager: manager._id },
+                    { lead: manager._id }
+                ]
+            }).distinct('name');
+
+            baseMatch = {
+                $or: [
+                    { submittedBy: { $in: teamIds } },
+                    { paymentSourceId: { $in: teamIds } },
+                    { projectName: { $in: myProjects } }
+                ]
+            };
+        }
+
+        // Apply Global Dashboard Filters (if passed from frontend)
+        if (req.query.expenseType && req.query.expenseType !== 'All') {
+            baseMatch.expenseType = req.query.expenseType;
+        }
+        if (req.query.projectName) {
+            baseMatch.projectName = req.query.projectName;
+        }
+
+        // 1. Get Top KPIs (Pending Count, Approved Value, Total Processed Value)
+        const kpiStats = await Expense.aggregate([
+            { $match: baseMatch },
+            { 
+                $group: {
+                    _id: "$status",
+                    totalAmount: { $sum: "$amount" },
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        let stats = { totalVal: 0, pendingCount: 0, approvedVal: 0 };
+        kpiStats.forEach(group => {
+            if (group._id === 'Pending') { stats.pendingCount = group.count; }
+            if (group._id === 'Approved') { stats.approvedVal = group.totalAmount; }
+            if (group._id !== 'Rejected' && group._id !== 'Returned') {
+                stats.totalVal += group.totalAmount;
+            }
+        });
+
+        // For the charts, we ONLY want valid/processed data (No Rejected/Returned)
+        const validMatch = { ...baseMatch, status: { $nin: ['Rejected', 'Returned'] } };
+
+        // 2. Aggregate Types (Office vs Project)
+        const typeData = await Expense.aggregate([
+            { $match: validMatch },
+            { $group: { _id: "$expenseType", value: { $sum: "$amount" } } },
+            { $project: { _id: 0, name: "$_id", value: 1 } }
+        ]);
+
+        // 3. Aggregate Top 5 Categories
+        const categoryData = await Expense.aggregate([
+            { $match: validMatch },
+            { $group: { _id: "$category", value: { $sum: "$amount" } } },
+            { $sort: { value: -1 } },
+            { $limit: 5 },
+            { $project: { _id: 0, name: "$_id", value: 1 } }
+        ]);
+
+        // 4. Aggregate Top 5 Projects (Only if it has a project name)
+        const projectData = await Expense.aggregate([
+            { $match: { ...validMatch, projectName: { $exists: true, $ne: null, $ne: "" } } },
+            { $group: { _id: "$projectName", value: { $sum: "$amount" } } },
+            { $sort: { value: -1 } },
+            { $limit: 5 },
+            { $project: { _id: 0, name: "$_id", value: 1 } }
+        ]);
+
+        // 5. Aggregate Top 5 Vendors (Requires looking up Vendor name)
+        const vendorData = await Expense.aggregate([
+            { $match: { ...validMatch, category: 'Vendor Payment', vendorId: { $exists: true, $ne: null } } },
+            {
+                $lookup: {
+                    from: "vendors", // Ensure this matches your Vendor collection name in MongoDB
+                    localField: "vendorId",
+                    foreignField: "_id",
+                    as: "vendorDetails"
+                }
+            },
+            { $unwind: "$vendorDetails" },
+            { $group: { _id: "$vendorDetails.name", value: { $sum: "$amount" } } },
+            { $sort: { value: -1 } },
+            { $limit: 5 },
+            { $project: { _id: 0, name: "$_id", value: 1 } }
+        ]);
+
+        res.json({
+            stats,
+            types: typeData,
+            categories: categoryData,
+            projects: projectData,
+            vendors: vendorData
+        });
+
+    } catch (err) {
+        console.error("Analytics Error:", err);
+        res.status(500).json({ message: 'Server Error building charts' });
+    }
+});
+
+
 // @route   GET /api/expenses/all
 // @desc    Get all expenses (Paginated & Filtered via Server)
 router.get('/all', auth, async (req, res) => {

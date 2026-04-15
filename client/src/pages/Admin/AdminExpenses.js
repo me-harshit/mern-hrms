@@ -11,7 +11,11 @@ import '../../styles/expenses.css';
 const AdminExpenses = () => {
     const navigate = useNavigate();
 
-    const [expenses, setExpenses] = useState([]);
+    const [chartData, setChartData] = useState({
+        stats: { totalVal: 0, pendingCount: 0, approvedVal: 0 },
+        types: [], categories: [], projects: [], vendors: []
+    });
+    
     const [projectsList, setProjectsList] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -21,88 +25,46 @@ const AdminExpenses = () => {
 
     const COLORS = ['#215D7B', '#16a34a', '#f59e0b', '#dc2626', '#8b5cf6', '#0ea5e9', '#ec4899'];
 
+    // 1. Fetch Dropdown Data (Once on load)
     useEffect(() => {
-        const fetchInitialData = async () => {
+        const fetchDropdowns = async () => {
             try {
-                // 👇 FIX 1: Ask the paginated backend for a massive limit so the dashboard charts get all historical data
-                const res = await api.get('/expenses/all', { params: { limit: 100000 } });
-                
-                // 👇 FIX 2: Extract the array from the new paginated object structure (.data.data)
-                setExpenses(res.data.data || res.data);
+                const projRes = await api.get('/projects');
+                setProjectsList(projRes.data);
+            } catch (e) {
+                console.log("Projects API not ready yet. Skipping.");
+            }
+        };
+        fetchDropdowns();
+    }, []);
 
-                try {
-                    const projRes = await api.get('/projects');
-                    setProjectsList(projRes.data);
-                } catch (e) {
-                    console.log("Projects API not ready yet. Skipping.");
-                }
+    // 2. Fetch Chart Data (Whenever filters change)
+    useEffect(() => {
+        const fetchAnalytics = async () => {
+            setLoading(true);
+            try {
+                // 👇 HIGH PERFORMANCE FIX: Ask backend to do the math and return a tiny JSON object
+                const params = {};
+                if (dashboardFilter !== 'All') params.expenseType = dashboardFilter;
+                if (dashboardFilter === 'Project Expense' && dashboardProject) params.projectName = dashboardProject;
+
+                const res = await api.get('/expenses/admin-charts', { params });
+                setChartData(res.data);
             } catch (err) {
-                Swal.fire('Error', 'Failed to load company expenses', 'error');
+                Swal.fire('Error', 'Failed to load company analytics', 'error');
             } finally {
                 setLoading(false);
             }
         };
-        fetchInitialData();
-    }, []);
+        fetchAnalytics();
+    }, [dashboardFilter, dashboardProject]);
 
     // Interactive Click Handler - navigates to AllExpenses with query params
     const handleChartClick = (filterKey, value) => {
         navigate(`/all-expenses?${filterKey}=${encodeURIComponent(value)}`);
     };
 
-    // Data Aggregation Engine (Respects Global Filters)
-    const getChartData = () => {
-        const typeMap = {};
-        const categoryMap = {};
-        const projectMap = {};
-        const vendorMap = {};
-        let totalVal = 0, pendingCount = 0, approvedVal = 0;
-
-        // Failsafe: Ensure expenses is an array before running forEach
-        if (Array.isArray(expenses)) {
-            expenses.forEach(exp => {
-                // 1. Apply Global Dashboard Filters
-                if (dashboardFilter !== 'All' && exp.expenseType !== dashboardFilter) return;
-                if (dashboardFilter === 'Project Expense' && dashboardProject && exp.projectName !== dashboardProject) return;
-
-                // 2. Aggregate Stats
-                if (exp.status === 'Pending') pendingCount++;
-                if (exp.status === 'Approved') approvedVal += exp.amount;
-
-                // 3. Populate Charts (Only chart valid/processed data)
-                if (exp.status !== 'Rejected' && exp.status !== 'Returned') {
-                    totalVal += exp.amount;
-                    typeMap[exp.expenseType] = (typeMap[exp.expenseType] || 0) + exp.amount;
-                    categoryMap[exp.category] = (categoryMap[exp.category] || 0) + exp.amount;
-
-                    if (exp.projectName) {
-                        projectMap[exp.projectName] = (projectMap[exp.projectName] || 0) + exp.amount;
-                    }
-
-                    if (exp.category === 'Vendor Payment' && exp.vendorId?.name) {
-                        vendorMap[exp.vendorId.name] = (vendorMap[exp.vendorId.name] || 0) + exp.amount;
-                    }
-                }
-            });
-        }
-
-        const sortAndSlice = (map) => Object.keys(map)
-            .map(k => ({ name: k, value: map[k] }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5); // Get top 5
-
-        return {
-            stats: { totalVal, pendingCount, approvedVal },
-            types: Object.keys(typeMap).map(k => ({ name: k, value: typeMap[k] })),
-            categories: sortAndSlice(categoryMap),
-            projects: sortAndSlice(projectMap),
-            vendors: sortAndSlice(vendorMap)
-        };
-    };
-
-    const chartData = getChartData();
-
-    if (loading) return <div className="main-content">Loading Dashboard...</div>;
+    if (loading && chartData.stats.totalVal === 0) return <div className="main-content">Loading Analytics Dashboard...</div>;
 
     return (
         <div className="settings-container fade-in">
@@ -148,7 +110,7 @@ const AdminExpenses = () => {
             </div>
 
             {/* Top KPIs */}
-            <div className="stats-grid">
+            <div className="stats-grid" style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
                 <div className="stat-card theme-blue">
                     <div className="stat-icon"><FontAwesomeIcon icon={faChartLine} /></div>
                     <div className="stat-info">
@@ -173,7 +135,7 @@ const AdminExpenses = () => {
             </div>
 
             {/* Interactive Charts */}
-            <div className="dashboard-charts-grid fade-in">
+            <div className="dashboard-charts-grid fade-in" style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
 
                 {/* 1. Category Breakdown */}
                 <div className="chart-card">
@@ -188,7 +150,6 @@ const AdminExpenses = () => {
                                         {chartData.categories.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                     </Pie>
                                     <RechartsTooltip formatter={(value) => `₹ ${value.toLocaleString('en-IN')}`} />
-                                    {/* Small, right-aligned legend */}
                                     <Legend layout="vertical" verticalAlign="middle" align="right" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', right: 0, width: '45%' }} />
                                 </PieChart>
                             </ResponsiveContainer>
