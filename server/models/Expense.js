@@ -35,4 +35,11 @@ const expenseSchema = new mongoose.Schema({
     reimbursementTxnId: { type: mongoose.Schema.Types.ObjectId, ref: 'WalletTransaction', default: null }
 }, { timestamps: true });
 
+expenseSchema.index({ status: 1 });
+expenseSchema.index({ submittedBy: 1 });
+expenseSchema.index({ paymentSourceId: 1 });
+expenseSchema.index({ expenseDate: -1 }); // -1 because we sort dates descending (newest first)
+expenseSchema.index({ category: 1 });
+expenseSchema.index({ projectName: 1 });
+
 module.exports = mongoose.model('Expense', expenseSchema);
