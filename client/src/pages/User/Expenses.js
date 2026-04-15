@@ -6,15 +6,15 @@ import {
     faBoxOpen, faPlus, faSearch, faEdit, faFileInvoice,
     faImage, faFilter, faCheckCircle, faClock, faTimesCircle, faUndo, faWallet, faTrash
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; 
+import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 import api, { SERVER_URL } from '../../utils/api';
 
 const Expenses = () => {
     const navigate = useNavigate();
-    const currentUser = JSON.parse(localStorage.getItem('user')); 
-    
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [walletBalance, setWalletBalance] = useState(0);
@@ -24,7 +24,7 @@ const Expenses = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [totalRecords, setTotalRecords] = useState(0);
     const [itemsPerPage, setItemsPerPage] = useState(10);
-    
+
     const [stats, setStats] = useState({
         pendingTotal: 0, pendingCount: 0,
         approvedTotal: 0, approvedCount: 0,
@@ -71,7 +71,7 @@ const Expenses = () => {
             };
 
             const res = await api.get('/expenses', { params });
-            
+
             setExpenses(res.data.data);
             setStats(res.data.stats);
             setTotalPages(res.data.pagination.totalPages);
@@ -288,7 +288,7 @@ const Expenses = () => {
                     <thead>
                         <tr>
                             <th>Expense Category</th>
-                            <th>Project & Details</th> 
+                            <th>Project & Details</th>
                             <th>Amount & Date</th>
                             <th>Payment Source</th>
                             <th>Status</th>
@@ -308,17 +308,24 @@ const Expenses = () => {
                                 const typeBorderColor = isProject ? '#A6477F' : '#1E73BE';
                                 const typeBgColor = isProject ? '#fdf2f8' : '#eff6ff';
 
-                                const submitterId = item.submittedBy?._id;
-                                const payerId = item.paymentSourceId?._id;
-                                
-                                const isCompanyPayment = item.isCompanyPayment;
-                                const isSamePerson = submitterId === payerId;
-
                                 return (
                                     <tr key={item._id}>
                                         <td data-label="Category">
-                                            <div className="fw-600 text-primary">{item.category}</div>
-                                            <div className="text-small text-muted">{item.expenseType}</div>
+                                            <div className="fw-600 text-primary" style={{ marginBottom: '6px' }}>{item.category}</div>
+                                            <span
+                                                style={{
+                                                    background: typeBgColor,
+                                                    color: typeBorderColor,
+                                                    border: `1px solid ${typeBorderColor}`,
+                                                    padding: '3px 8px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '10px',
+                                                    fontWeight: '600',
+                                                    display: 'inline-block'
+                                                }}
+                                            >
+                                                {typeLabel}
+                                            </span>
                                         </td>
 
                                         <td data-label="Project & Details">
@@ -344,9 +351,9 @@ const Expenses = () => {
                                             )}
                                             <div className="text-small">
                                                 <span className="fw-600 text-dark">Paid by:</span> {
-                                                    item.isCompanyPayment ? 'Company Account' : 
-                                                    item.paymentSourceId?._id === currentUser.id ? 'Me' : 
-                                                    item.paymentSourceId?.name || 'Me'
+                                                    item.isCompanyPayment ? 'Company Account' :
+                                                        item.paymentSourceId?._id === currentUser.id ? 'Me' :
+                                                            item.paymentSourceId?.name || 'Me'
                                                 }
                                             </div>
                                         </td>

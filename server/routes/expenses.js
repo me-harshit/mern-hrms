@@ -148,8 +148,6 @@ router.get('/', auth, async (req, res) => {
         let statsConditions = andConditions.filter(cond => !cond.status);
         const statsQuery = statsConditions.length > 0 ? { $and: statsConditions } : {};
 
-        const allFilteredForStats = await Expense.find(statsQuery);
-
         let stats = {
             pendingTotal: 0, pendingCount: 0,
             approvedTotal: 0, approvedCount: 0,
@@ -158,13 +156,25 @@ router.get('/', auth, async (req, res) => {
             totalFilteredAmount: 0
         };
 
-        allFilteredForStats.forEach(e => {
-            if (e.status === 'Pending') { stats.pendingTotal += e.amount; stats.pendingCount++; }
-            if (e.status === 'Approved') { stats.approvedTotal += e.amount; stats.approvedCount++; }
-            if (e.status === 'Returned') { stats.returnedTotal += e.amount; stats.returnedCount++; }
-            if (e.status === 'Rejected') { stats.rejectedTotal += e.amount; stats.rejectedCount++; }
+        const groupedStats = await Expense.aggregate([
+            { $match: statsQuery },
+            { 
+                $group: { 
+                    _id: "$status", 
+                    totalAmount: { $sum: "$amount" }, 
+                    count: { $sum: 1 } 
+                } 
+            }
+        ]);
+
+        groupedStats.forEach(group => {
+            if (group._id === 'Pending') { stats.pendingTotal = group.totalAmount; stats.pendingCount = group.count; }
+            if (group._id === 'Approved') { stats.approvedTotal = group.totalAmount; stats.approvedCount = group.count; }
+            if (group._id === 'Returned') { stats.returnedTotal = group.totalAmount; stats.returnedCount = group.count; }
+            if (group._id === 'Rejected') { stats.rejectedTotal = group.totalAmount; stats.rejectedCount = group.count; }
         });
 
+        // Get the total specifically for what is currently showing in the table
         const currentTableTotal = await Expense.aggregate([
             { $match: query },
             { $group: { _id: null, total: { $sum: "$amount" } } }
@@ -302,8 +312,6 @@ router.get('/all', auth, async (req, res) => {
         let statsConditions = andConditions.filter(cond => !cond.status);
         const statsQuery = statsConditions.length > 0 ? { $and: statsConditions } : {};
 
-        const allFilteredForStats = await Expense.find(statsQuery);
-
         let stats = {
             pendingTotal: 0, pendingCount: 0,
             approvedTotal: 0, approvedCount: 0,
@@ -312,11 +320,22 @@ router.get('/all', auth, async (req, res) => {
             totalFilteredAmount: 0
         };
 
-        allFilteredForStats.forEach(e => {
-            if (e.status === 'Pending') { stats.pendingTotal += e.amount; stats.pendingCount++; }
-            if (e.status === 'Approved') { stats.approvedTotal += e.amount; stats.approvedCount++; }
-            if (e.status === 'Returned') { stats.returnedTotal += e.amount; stats.returnedCount++; }
-            if (e.status === 'Rejected') { stats.rejectedTotal += e.amount; stats.rejectedCount++; }
+        const groupedStats = await Expense.aggregate([
+            { $match: statsQuery },
+            { 
+                $group: { 
+                    _id: "$status", 
+                    totalAmount: { $sum: "$amount" }, 
+                    count: { $sum: 1 } 
+                } 
+            }
+        ]);
+
+        groupedStats.forEach(group => {
+            if (group._id === 'Pending') { stats.pendingTotal = group.totalAmount; stats.pendingCount = group.count; }
+            if (group._id === 'Approved') { stats.approvedTotal = group.totalAmount; stats.approvedCount = group.count; }
+            if (group._id === 'Returned') { stats.returnedTotal = group.totalAmount; stats.returnedCount = group.count; }
+            if (group._id === 'Rejected') { stats.rejectedTotal = group.totalAmount; stats.rejectedCount = group.count; }
         });
 
         // Get the total specifically for what is currently showing in the table
