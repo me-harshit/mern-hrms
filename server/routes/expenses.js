@@ -476,8 +476,25 @@ router.delete('/:id', auth, async (req, res) => {
         const expense = await Expense.findById(req.params.id);
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
 
+        // 1. Check Authorization (Is it Admin/HR/Accounts, or the original Submitter?)
+        const role = req.user.role;
+        const isPrivileged = ['ADMIN', 'HR', 'ACCOUNTS'].includes(role);
+        const isOwner = expense.submittedBy.toString() === req.user.id;
+
+        if (!isPrivileged && !isOwner) {
+            return res.status(403).json({ message: 'Unauthorized to delete this expense.' });
+        }
+
+        // 2. Check Status (Prevent deleting already processed financial records)
+        // Regular users can ONLY delete Pending or Returned expenses.
+        if (!isPrivileged && (expense.status === 'Approved' || expense.status === 'Rejected')) {
+            return res.status(400).json({ message: 'Cannot delete an expense that has already been processed.' });
+        }
+
+        // If it passes the checks, safely delete it
         await expense.deleteOne();
-        res.json({ message: 'Expense record removed' });
+        res.json({ message: 'Expense record removed successfully' });
+
     } catch (err) {
         console.error(err.message);
         if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Expense not found' });
@@ -644,7 +661,7 @@ router.post('/merge', auth, async (req, res) => {
 
         expenses.forEach(exp => {
             totalAmount += exp.amount;
-            
+
             // Collect Tags
             if (exp.descriptionTags) exp.descriptionTags.split(',').forEach(tag => combinedTags.add(tag.trim()));
 
@@ -675,15 +692,15 @@ router.post('/merge', auth, async (req, res) => {
         masterExpense.descriptionTags = Array.from(combinedTags).join(', ');
         masterExpense.paymentScreenshotUrls = Array.from(combinedScreenshotUrls);
         masterExpense.expenseMediaUrls = Array.from(combinedMediaUrls);
-        
+
         if (!masterExpense.expenseDetails) masterExpense.expenseDetails = {};
         masterExpense.expenseDetails.items = mergedItems;
-         
+
         masterExpense.markModified('expenseDetails');
 
         // 4. Save Master & Delete the absorbed duplicates
         await masterExpense.save();
-        
+
         const idsToDelete = expenses.map(e => e._id).filter(id => String(id) !== String(masterExpense._id));
         await Expense.deleteMany({ _id: { $in: idsToDelete } });
 
@@ -703,7 +720,7 @@ router.post('/:id/split', auth, async (req, res) => {
     try {
         const { itemIndex, splitAmount } = req.body;
         const masterExpense = await Expense.findById(req.params.id);
-        
+
         if (!masterExpense) return res.status(404).json({ message: 'Expense not found' });
         if (masterExpense.status !== 'Pending' && masterExpense.status !== 'Returned') {
             return res.status(400).json({ message: 'You can only split Pending or Returned expenses.' });
@@ -721,11 +738,11 @@ router.post('/:id/split', auth, async (req, res) => {
 
         // 1. Extract the Item
         const extractedItem = masterExpense.expenseDetails.items[idx];
-        
+
         // 2. Remove it from Master
         masterExpense.expenseDetails.items.splice(idx, 1);
         masterExpense.amount -= amountToDeduct;
-        
+
         // Force mongoose to recognize the mixed object array change
         masterExpense.markModified('expenseDetails');
         await masterExpense.save();
