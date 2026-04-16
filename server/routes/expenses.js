@@ -158,12 +158,12 @@ router.get('/', auth, async (req, res) => {
 
         const groupedStats = await Expense.aggregate([
             { $match: statsQuery },
-            { 
-                $group: { 
-                    _id: "$status", 
-                    totalAmount: { $sum: "$amount" }, 
-                    count: { $sum: 1 } 
-                } 
+            {
+                $group: {
+                    _id: "$status",
+                    totalAmount: { $sum: "$amount" },
+                    count: { $sum: 1 }
+                }
             }
         ]);
 
@@ -238,7 +238,7 @@ router.get('/admin-charts', auth, async (req, res) => {
         // 1. Get Top KPIs (Pending Count, Approved Value, Total Processed Value)
         const kpiStats = await Expense.aggregate([
             { $match: baseMatch },
-            { 
+            {
                 $group: {
                     _id: "$status",
                     totalAmount: { $sum: "$amount" },
@@ -330,6 +330,12 @@ router.get('/all', auth, async (req, res) => {
         let query = {};
         let andConditions = [];
 
+        // Dynamic Mongoose model imports to avoid circular dependencies
+        const mongoose = require('mongoose');
+        const User = mongoose.model('User');
+        const Project = mongoose.model('Project');
+        const Vendor = mongoose.model('Vendor');
+
         if (req.user.role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
             const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
@@ -380,16 +386,34 @@ router.get('/all', auth, async (req, res) => {
             andConditions.push({ expenseDate: { $gte: start, $lte: end } });
         }
 
-        if (req.query.hasGst === 'Yes') {
-            andConditions.push({ 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } });
-        } else if (req.query.hasGst === 'No') {
-            andConditions.push({
-                $or: [
-                    { 'expenseDetails.gstNumber': { $exists: false } },
-                    { 'expenseDetails.gstNumber': "" },
-                    { 'expenseDetails.gstNumber': null }
-                ]
-            });
+        // 👇 UPDATED: Check direct GST AND Vendor GST
+        if (req.query.hasGst) {
+            // Find all vendors that have a valid GST number
+            const validVendors = await Vendor.find({ gstNumber: { $exists: true, $ne: "", $regex: /[^ ]/ } }).select('_id');
+            const validVendorIds = validVendors.map(v => v._id);
+
+            if (req.query.hasGst === 'Yes') {
+                andConditions.push({
+                    $or: [
+                        { 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } },
+                        { vendorId: { $in: validVendorIds } } // Expense is tied to a vendor with a GST
+                    ]
+                });
+            } else if (req.query.hasGst === 'No') {
+                // Must NOT have direct GST AND must NOT be tied to a vendor with a GST
+                andConditions.push({
+                    $and: [
+                        {
+                            $or: [
+                                { 'expenseDetails.gstNumber': { $exists: false } },
+                                { 'expenseDetails.gstNumber': "" },
+                                { 'expenseDetails.gstNumber': null }
+                            ]
+                        },
+                        { vendorId: { $nin: validVendorIds } }
+                    ]
+                });
+            }
         }
 
         if (req.query.search) {
@@ -398,12 +422,19 @@ router.get('/all', auth, async (req, res) => {
             const matchingUsers = await User.find({ name: searchRegex }).select('_id');
             const userIds = matchingUsers.map(u => u._id);
 
+            // 👇 UPDATED: Search vendor names and vendor GST numbers too
+            const matchingVendors = await Vendor.find({
+                $or: [{ name: searchRegex }, { gstNumber: searchRegex }]
+            }).select('_id');
+            const vendorIds = matchingVendors.map(v => v._id);
+
             let searchOr = [
                 { category: searchRegex },
                 { descriptionTags: searchRegex },
                 { projectName: searchRegex },
                 { 'expenseDetails.gstNumber': searchRegex },
-                { submittedBy: { $in: userIds } }
+                { submittedBy: { $in: userIds } },
+                { vendorId: { $in: vendorIds } }
             ];
 
             if (!isNaN(req.query.search)) {
@@ -420,12 +451,17 @@ router.get('/all', auth, async (req, res) => {
         const totalRecords = await Expense.countDocuments(query);
         const totalPages = Math.ceil(totalRecords / limit);
 
+        const sortBy = req.query.sortBy || 'expenseDate';
+        const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+        let sortObj = {};
+        sortObj[sortBy] = sortOrder;
+
         const expenses = await Expense.find(query)
             .populate('submittedBy', 'name email employeeId')
             .populate('paymentSourceId', 'name role')
             .populate('approvedBy', 'name')
             .populate('vendorId', 'name gstNumber')
-            .sort({ expenseDate: -1 })
+            .sort(sortObj)
             .skip(skip)
             .limit(limit);
 
@@ -437,17 +473,18 @@ router.get('/all', auth, async (req, res) => {
             approvedTotal: 0, approvedCount: 0,
             returnedTotal: 0, returnedCount: 0,
             rejectedTotal: 0, rejectedCount: 0,
+            gstTotal: 0, gstCount: 0,
             totalFilteredAmount: 0
         };
 
         const groupedStats = await Expense.aggregate([
             { $match: statsQuery },
-            { 
-                $group: { 
-                    _id: "$status", 
-                    totalAmount: { $sum: "$amount" }, 
-                    count: { $sum: 1 } 
-                } 
+            {
+                $group: {
+                    _id: "$status",
+                    totalAmount: { $sum: "$amount" },
+                    count: { $sum: 1 }
+                }
             }
         ]);
 
@@ -457,6 +494,39 @@ router.get('/all', auth, async (req, res) => {
             if (group._id === 'Returned') { stats.returnedTotal = group.totalAmount; stats.returnedCount = group.count; }
             if (group._id === 'Rejected') { stats.rejectedTotal = group.totalAmount; stats.rejectedCount = group.count; }
         });
+
+        // 👇 UPDATED: GST Aggregation using $lookup to join the Vendor collection
+        const gstStats = await Expense.aggregate([
+            { $match: statsQuery },
+            {
+                $lookup: {
+                    from: "vendors", // Mongoose uses lowercase plural for collections
+                    localField: "vendorId",
+                    foreignField: "_id",
+                    as: "vendorDetails"
+                }
+            },
+            {
+                $match: {
+                    $or: [
+                        { 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } },
+                        { 'vendorDetails.0.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" },
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        if (gstStats.length > 0) {
+            stats.gstTotal = gstStats[0].totalAmount;
+            stats.gstCount = gstStats[0].count;
+        }
 
         // Get the total specifically for what is currently showing in the table
         const currentTableTotal = await Expense.aggregate([
