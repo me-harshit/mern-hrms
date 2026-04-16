@@ -29,7 +29,6 @@ const AllExpenses = () => {
 
     const [selectedExpenses, setSelectedExpenses] = useState([]);
 
-    // 👇 NEW: Sorting State
     const [sortConfig, setSortConfig] = useState({ key: 'expenseDate', direction: 'desc' });
 
     const [stats, setStats] = useState({
@@ -538,7 +537,6 @@ const AllExpenses = () => {
                             <th>Details & Context</th>
                             <th>Expense Type</th>
                             
-                            {/* 👇 UPDATED: Split and Clickable Sorting Headers */}
                             <th 
                                 onClick={() => handleSort('amount')} 
                                 style={{ cursor: 'pointer', userSelect: 'none' }}

@@ -4,17 +4,18 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faBoxOpen, faPlus, faSearch, faEdit, faFileInvoice,
-    faImage, faFilter, faCheckCircle, faClock, faTimesCircle, faUndo, faWallet, faTrash
+    faImage, faFilter, faCheckCircle, faClock, faTimesCircle, 
+    faUndo, faWallet, faTrash, faFileContract, faSort, faSortUp, faSortDown
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination';
+import Pagination from '../../components/Pagination'; 
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 import api, { SERVER_URL } from '../../utils/api';
 
 const Expenses = () => {
     const navigate = useNavigate();
-    const currentUser = JSON.parse(localStorage.getItem('user'));
-
+    const currentUser = JSON.parse(localStorage.getItem('user')); 
+    
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [walletBalance, setWalletBalance] = useState(0);
@@ -25,11 +26,14 @@ const Expenses = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    const [sortConfig, setSortConfig] = useState({ key: 'expenseDate', direction: 'desc' });
+    
     const [stats, setStats] = useState({
         pendingTotal: 0, pendingCount: 0,
         approvedTotal: 0, approvedCount: 0,
         returnedTotal: 0, returnedCount: 0,
         rejectedTotal: 0, rejectedCount: 0,
+        gstTotal: 0, gstCount: 0,
         totalFilteredAmount: 0
     });
 
@@ -39,23 +43,21 @@ const Expenses = () => {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [customDates, setCustomDates] = useState({ from: '', to: '' });
     const [statusFilter, setStatusFilter] = useState('All');
+    const [hasGstFilter, setHasGstFilter] = useState('All');
 
-    // Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // Reset to Page 1 when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [filterType, customDates, statusFilter, debouncedSearch]);
+    }, [filterType, customDates, statusFilter, hasGstFilter, debouncedSearch, sortConfig]);
 
-    // Fetch Data
     useEffect(() => {
         fetchExpenses(currentPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage, itemsPerPage, filterType, customDates, statusFilter, debouncedSearch]);
+    }, [currentPage, itemsPerPage, filterType, customDates, statusFilter, hasGstFilter, debouncedSearch, sortConfig]);
 
     const fetchExpenses = async (pageToFetch) => {
         setLoading(true);
@@ -65,23 +67,25 @@ const Expenses = () => {
                 limit: itemsPerPage,
                 search: debouncedSearch,
                 status: statusFilter,
+                hasGst: hasGstFilter === 'All' ? '' : hasGstFilter,
                 filterType: filterType,
                 fromDate: customDates.from,
-                toDate: customDates.to
+                toDate: customDates.to,
+                sortBy: sortConfig.key,
+                sortOrder: sortConfig.direction
             };
 
             const res = await api.get('/expenses', { params });
+            
+            setExpenses(res.data.data || []);
+            if (res.data.stats) setStats(res.data.stats);
+            setTotalPages(res.data.pagination?.totalPages || 1);
+            setTotalRecords(res.data.pagination?.totalRecords || 0);
+            setCurrentPage(res.data.pagination?.currentPage || 1);
 
-            setExpenses(res.data.data);
-            setStats(res.data.stats);
-            setTotalPages(res.data.pagination.totalPages);
-            setTotalRecords(res.data.pagination.totalRecords);
-            setCurrentPage(res.data.pagination.currentPage);
-
-            // Fetch Wallet separately
             try {
                 const walletRes = await api.get('/wallets/my-balance');
-                setWalletBalance(walletRes.data.balance);
+                setWalletBalance(walletRes.data.balance || 0);
             } catch (err) {
                 console.error("Wallet API not found yet", err);
             }
@@ -94,7 +98,6 @@ const Expenses = () => {
         }
     };
 
-    // 👇 NEW: Delete Expense Handler
     const handleDeleteExpense = async (id) => {
         const confirm = await Swal.fire({
             title: 'Delete this Expense?',
@@ -110,7 +113,6 @@ const Expenses = () => {
             try {
                 await api.delete(`/expenses/${id}`);
                 Swal.fire('Deleted!', 'Your expense has been deleted.', 'success');
-                // Refresh the list
                 fetchExpenses(currentPage);
             } catch (err) {
                 Swal.fire('Error', 'Failed to delete expense. It may be locked.', 'error');
@@ -118,8 +120,26 @@ const Expenses = () => {
         }
     };
 
-    const handleCardClick = (status) => {
-        setStatusFilter(prev => prev === status ? 'All' : status);
+    const handleSort = (key) => {
+        let direction = 'desc';
+        if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = 'asc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIcon = (columnName) => {
+        if (sortConfig.key !== columnName) return <FontAwesomeIcon icon={faSort} style={{ color: '#cbd5e1', marginLeft: '5px' }} />;
+        if (sortConfig.direction === 'asc') return <FontAwesomeIcon icon={faSortUp} style={{ color: '#2563eb', marginLeft: '5px' }} />;
+        return <FontAwesomeIcon icon={faSortDown} style={{ color: '#2563eb', marginLeft: '5px' }} />;
+    };
+
+    const handleCardClick = (type, value) => {
+        if (type === 'status') {
+            setStatusFilter(prev => prev === value ? 'All' : value);
+        } else if (type === 'hasGst') {
+            setHasGstFilter(prev => prev === value ? 'All' : value);
+        }
     };
 
     const getFileUrl = (url) => {
@@ -181,20 +201,25 @@ const Expenses = () => {
         return item.descriptionTags || 'No specific details provided';
     };
 
-    const getMinimalCardStyle = (status, colorHex) => ({
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        opacity: statusFilter === 'All' || statusFilter === status ? 1 : 0.4,
-        border: statusFilter === status ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0',
-        background: '#ffffff',
-        padding: '12px 16px',
-        borderRadius: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        minWidth: '140px',
-        boxShadow: statusFilter === status ? `0 2px 8px ${colorHex}15` : 'none'
-    });
+    const getMinimalCardStyle = (type, value, colorHex) => {
+        const isActive = type === 'status' ? statusFilter === value : hasGstFilter === value;
+        const isAll = type === 'status' ? statusFilter === 'All' : hasGstFilter === 'All';
+        
+        return {
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            opacity: isAll || isActive ? 1 : 0.4,
+            border: isActive ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0',
+            background: '#ffffff',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            minWidth: '140px',
+            boxShadow: isActive ? `0 2px 8px ${colorHex}15` : 'none'
+        };
+    };
 
     return (
         <div className="settings-container fade-in">
@@ -208,52 +233,52 @@ const Expenses = () => {
                 </button>
             </div>
 
-            {/* --- MINIMALIST SUMMARY METRICS & FILTERS --- */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '25px', alignItems: 'stretch' }}>
 
-                {/* Wallet Pill */}
+                {/* Wallet Pill - Bulletproof formatting */}
                 <div style={{ background: walletBalance < 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${walletBalance < 0 ? '#fecaca' : '#bbf7d0'}`, padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '160px', gap: '4px' }}>
                     <div style={{ fontSize: '12px', color: walletBalance < 0 ? '#dc2626' : '#16a34a', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faWallet} /> Wallet Balance
                     </div>
                     <div style={{ fontSize: '18px', fontWeight: 'bold', color: walletBalance < 0 ? '#b91c1c' : '#15803d' }}>
-                        {walletBalance < 0 ? '-' : ''}₹ {Math.abs(walletBalance).toLocaleString('en-IN')}
+                        {walletBalance < 0 ? '-' : ''}₹ {(Math.abs(walletBalance) || 0).toLocaleString('en-IN')}
                     </div>
                 </div>
 
                 <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
 
-                {/* Minimalist Filter Pills (Using Server Stats) */}
-                <div style={getMinimalCardStyle('Pending', '#d97706')} onClick={() => handleCardClick('Pending')}>
+                {/* Metric Pills - Bulletproof formatting */}
+                <div style={getMinimalCardStyle('status', 'Pending', '#d97706')} onClick={() => handleCardClick('status', 'Pending')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faClock} style={{ color: '#d97706' }} /> Pending
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.pendingTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.pendingCount} items</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {(stats?.pendingTotal || 0).toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats?.pendingCount || 0} items</div>
                 </div>
 
-                <div style={getMinimalCardStyle('Approved', '#16a34a')} onClick={() => handleCardClick('Approved')}>
+                <div style={getMinimalCardStyle('status', 'Approved', '#16a34a')} onClick={() => handleCardClick('status', 'Approved')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faCheckCircle} style={{ color: '#16a34a' }} /> Accepted
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.approvedTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.approvedCount} items</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {(stats?.approvedTotal || 0).toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats?.approvedCount || 0} items</div>
                 </div>
 
-                <div style={getMinimalCardStyle('Returned', '#ea580c')} onClick={() => handleCardClick('Returned')}>
+                <div style={getMinimalCardStyle('status', 'Returned', '#ea580c')} onClick={() => handleCardClick('status', 'Returned')}>
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <FontAwesomeIcon icon={faUndo} style={{ color: '#ea580c' }} /> Returned
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.returnedTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.returnedCount} items</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {(stats?.returnedTotal || 0).toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats?.returnedCount || 0} items</div>
                 </div>
 
-                <div style={getMinimalCardStyle('Rejected', '#dc2626')} onClick={() => handleCardClick('Rejected')}>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <FontAwesomeIcon icon={faTimesCircle} style={{ color: '#dc2626' }} /> Rejected
-                    </div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.rejectedTotal.toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.rejectedCount} items</div>
+                <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
+
+                {/* GST Card Filter */}
+                <div style={getMinimalCardStyle('hasGst', 'Yes', '#8b5cf6')} onClick={() => handleCardClick('hasGst', 'Yes')}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faFileContract} style={{ color: '#8b5cf6' }} /> With Valid GST</div>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {(stats?.gstTotal || 0).toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats?.gstCount || 0} items</div>
                 </div>
             </div>
 
@@ -280,7 +305,7 @@ const Expenses = () => {
             </div>
 
             <div className="table-summary-text fade-in" style={{ marginBottom: '20px', fontSize: '14px', fontWeight: '600', color: '#64748b', textAlign: 'right' }}>
-                Showing {expenses.length} of {totalRecords} records &nbsp;|&nbsp; View Total: <span style={{ color: '#0f172a' }}>₹ {stats.totalFilteredAmount.toLocaleString('en-IN')}</span>
+                Showing {expenses.length} of {totalRecords} records &nbsp;|&nbsp; View Total: <span style={{ color: '#0f172a' }}>₹ {(stats?.totalFilteredAmount || 0).toLocaleString('en-IN')}</span>
             </div>
 
             <div className="employee-table-container fade-in">
@@ -288,8 +313,21 @@ const Expenses = () => {
                     <thead>
                         <tr>
                             <th>Expense Category</th>
-                            <th>Project & Details</th>
-                            <th>Amount & Date</th>
+                            <th>Project & Details</th> 
+                            <th 
+                                onClick={() => handleSort('amount')} 
+                                style={{ cursor: 'pointer', userSelect: 'none' }}
+                                title="Click to sort by Amount"
+                            >
+                                Amount {getSortIcon('amount')}
+                            </th>
+                            <th 
+                                onClick={() => handleSort('expenseDate')} 
+                                style={{ cursor: 'pointer', userSelect: 'none' }}
+                                title="Click to sort by Date"
+                            >
+                                Date {getSortIcon('expenseDate')}
+                            </th>
                             <th>Payment Source</th>
                             <th>Status</th>
                             <th>Proof</th>
@@ -298,9 +336,9 @@ const Expenses = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="7" className="empty-table-message">Loading Server Data...</td></tr>
+                            <tr><td colSpan="8" className="empty-table-message">Loading Server Data...</td></tr>
                         ) : expenses.length === 0 ? (
-                            <tr><td colSpan="7" className="empty-table-message">No records found.</td></tr>
+                            <tr><td colSpan="8" className="empty-table-message">No records found.</td></tr>
                         ) : (
                             expenses.map(item => {
                                 const isProject = item.expenseType === 'Project Expense';
@@ -312,16 +350,16 @@ const Expenses = () => {
                                     <tr key={item._id}>
                                         <td data-label="Category">
                                             <div className="fw-600 text-primary" style={{ marginBottom: '6px' }}>{item.category}</div>
-                                            <span
-                                                style={{
-                                                    background: typeBgColor,
-                                                    color: typeBorderColor,
-                                                    border: `1px solid ${typeBorderColor}`,
-                                                    padding: '3px 8px',
-                                                    borderRadius: '4px',
-                                                    fontSize: '10px',
-                                                    fontWeight: '600',
-                                                    display: 'inline-block'
+                                            <span 
+                                                style={{ 
+                                                    background: typeBgColor, 
+                                                    color: typeBorderColor, 
+                                                    border: `1px solid ${typeBorderColor}`, 
+                                                    padding: '3px 8px', 
+                                                    borderRadius: '4px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '600', 
+                                                    display: 'inline-block' 
                                                 }}
                                             >
                                                 {typeLabel}
@@ -338,9 +376,14 @@ const Expenses = () => {
                                             <div className="expense-tag-pill">{item.descriptionTags}</div>
                                         </td>
 
-                                        <td data-label="Amount & Date">
-                                            <div className="expense-amount-large">₹ {item.amount.toLocaleString('en-IN')}</div>
-                                            <div className="text-small text-muted fw-normal" style={{ marginTop: '4px' }}>{new Date(item.expenseDate).toLocaleDateString()}</div>
+                                        <td data-label="Amount">
+                                            <div className="expense-amount-large">₹ {(item.amount || 0).toLocaleString('en-IN')}</div>
+                                            {item.expenseDetails?.gstNumber && <span style={{ fontSize: '10px', background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>GST: {item.expenseDetails.gstNumber}</span>}
+                                        </td>
+
+                                        <td data-label="Date">
+                                            <div className="text-small text-dark fw-600">{item.expenseDate ? new Date(item.expenseDate).toLocaleDateString('en-GB') : '-'}</div>
+                                            {item.category === 'Vendor Payment' && <div className="text-muted text-small mt-5">Inv Date</div>}
                                         </td>
 
                                         <td data-label="Payment Source">
@@ -351,9 +394,9 @@ const Expenses = () => {
                                             )}
                                             <div className="text-small">
                                                 <span className="fw-600 text-dark">Paid by:</span> {
-                                                    item.isCompanyPayment ? 'Company Account' :
-                                                        item.paymentSourceId?._id === currentUser.id ? 'Me' :
-                                                            item.paymentSourceId?.name || 'Me'
+                                                    item.isCompanyPayment ? 'Company Account' : 
+                                                    item.paymentSourceId?._id === currentUser.id ? 'Me' : 
+                                                    item.paymentSourceId?.name || 'Me'
                                                 }
                                             </div>
                                         </td>
@@ -394,7 +437,6 @@ const Expenses = () => {
                                             </div>
                                         </td>
 
-                                        {/* 👇 UPDATED: Added Delete button next to Edit */}
                                         <td data-label="Actions">
                                             {item.status === 'Pending' || item.status === 'Returned' ? (
                                                 <div style={{ display: 'flex', gap: '5px' }}>
