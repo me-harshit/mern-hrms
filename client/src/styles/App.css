@@ -324,6 +324,20 @@ html {
   cursor: pointer;
 }
 
+/* --- FORM GRIDS --- */
+/* This ensures 2 columns minimum on desktop, dropping to 1 on mobile */
+.form-grid-2-col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(calc(50% - 15px), 1fr));
+    gap: 20px 15px; /* 20px vertical gap, 15px horizontal gap */
+    align-items: end; /* Keeps labels and inputs aligned nicely */
+}
+
+/* Optional: Utility to force an input to span the whole row (like an Address field) */
+.col-span-full {
+    grid-column: 1 / -1;
+}
+
 /* Document Viewing Buttons (Used in Purchases / AdminPurchases) */
 .doc-btn {
   padding: 4px 8px !important;

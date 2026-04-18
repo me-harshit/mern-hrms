@@ -217,6 +217,7 @@ router.put('/:id', auth, async (req, res) => {
         if (employeeId !== undefined) updateData.employeeId = employeeId;
         if (isPurchaser !== undefined) updateData.isPurchaser = isPurchaser;
 
+        // 👇 FIXED: Safely hash and append to updateData
         if (password && password.trim() !== "") {
             const salt = await bcrypt.genSalt(10);
             updateData.password = await bcrypt.hash(password, salt);
