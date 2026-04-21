@@ -6,10 +6,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faSearch, faFileInvoice, faImage, faFilter,
     faCheckCircle, faClock, faTimesCircle, faArrowLeft,
-    faEye, faTimes, faUndo, faEdit, faBuilding, faWallet, 
+    faEye, faTimes, faUndo, faEdit, faBuilding, faWallet,
     faObjectGroup, faCut, faFileContract, faSort, faSortUp, faSortDown
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; 
+import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 
@@ -49,11 +49,11 @@ const AllExpenses = () => {
     // --- FILTER STATES ---
     const submittedByDropdownRef = useRef(null);
     const approvedByDropdownRef = useRef(null);
-    const paidByDropdownRef = useRef(null); 
+    const paidByDropdownRef = useRef(null);
 
     const [submittedBySearchTerm, setSubmittedBySearchTerm] = useState('');
     const [isSubmittedByDropdownOpen, setIsSubmittedByDropdownOpen] = useState(false);
-    
+
     const [approvedBySearchTerm, setApprovedBySearchTerm] = useState('');
     const [isApprovedByDropdownOpen, setIsApprovedByDropdownOpen] = useState(false);
 
@@ -69,7 +69,7 @@ const AllExpenses = () => {
         category: searchParams.get('category') || '',
         projectName: searchParams.get('projectName') || '',
         vendorName: searchParams.get('vendorName') || '',
-        submittedBy: '', approvedBy: '', paymentSourceId: '', 
+        submittedBy: '', approvedBy: '', paymentSourceId: '',
         minAmount: '', maxAmount: '', status: '', hasGst: ''
     });
 
@@ -79,7 +79,7 @@ const AllExpenses = () => {
         const handleClickOutside = (event) => {
             if (submittedByDropdownRef.current && !submittedByDropdownRef.current.contains(event.target)) setIsSubmittedByDropdownOpen(false);
             if (approvedByDropdownRef.current && !approvedByDropdownRef.current.contains(event.target)) setIsApprovedByDropdownOpen(false);
-            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false); 
+            if (paidByDropdownRef.current && !paidByDropdownRef.current.contains(event.target)) setIsPaidByDropdownOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -125,17 +125,17 @@ const AllExpenses = () => {
         setLoading(true);
         try {
             // 👇 UPDATED: Attach sortBy and sortOrder to the API request
-            const params = { 
-                page: pageToFetch, 
-                limit: itemsPerPage, 
-                search: debouncedSearch, 
+            const params = {
+                page: pageToFetch,
+                limit: itemsPerPage,
+                search: debouncedSearch,
                 sortBy: sortConfig.key,
                 sortOrder: sortConfig.direction,
-                ...filters 
+                ...filters
             };
             const res = await api.get('/expenses/all', { params });
             setExpenses(res.data.data);
-            if (res.data.stats) setStats(res.data.stats); 
+            if (res.data.stats) setStats(res.data.stats);
             setTotalPages(res.data.pagination.totalPages);
             setTotalRecords(res.data.pagination.totalRecords);
             setCurrentPage(res.data.pagination.currentPage);
@@ -162,41 +162,77 @@ const AllExpenses = () => {
     };
 
     const handleFilterChange = (e) => setFilters({ ...filters, [e.target.name]: e.target.value });
-    
+
     const handleCardClick = (type, value) => {
         setFilters(prev => ({ ...prev, [type]: prev[type] === value ? '' : value }));
     };
 
     const clearFilters = () => {
-        setFilters({ 
-            fromDate: '', toDate: '', expenseType: '', category: '', projectName: '', 
-            vendorName: '', submittedBy: '', approvedBy: '', paymentSourceId: '', 
-            minAmount: '', maxAmount: '', status: '', hasGst: '' 
+        setFilters({
+            fromDate: '', toDate: '', expenseType: '', category: '', projectName: '',
+            vendorName: '', submittedBy: '', approvedBy: '', paymentSourceId: '',
+            minAmount: '', maxAmount: '', status: '', hasGst: ''
         });
         setSearchTerm('');
         setSubmittedBySearchTerm('');
         setApprovedBySearchTerm('');
         setPaidBySearchTerm('');
-        setSelectedExpenses([]); 
+        setSelectedExpenses([]);
         setSortConfig({ key: 'expenseDate', direction: 'desc' }); // Reset sort on clear
     };
 
     const handleStatusUpdate = async (id, newStatus) => {
         if (newStatus === 'Returned') {
             const { value: adminNote } = await Swal.fire({
-                title: 'Return for Correction', text: "Please provide a reason.", input: 'textarea', showCancelButton: true, confirmButtonColor: '#f59e0b', confirmButtonText: 'Return to Employee', inputValidator: (value) => !value && 'You need to write a reason!'
+                title: 'Return for Correction',
+                text: "Please provide a reason.",
+                input: 'textarea',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                confirmButtonText: 'Return to Employee',
+                inputValidator: (value) => !value && 'You need to write a reason!'
             });
             if (adminNote) {
-                try { await api.put(`/expenses/${id}/status`, { status: newStatus, adminFeedback: adminNote }); fetchExpenses(currentPage); setIsSidebarOpen(false); } catch (err) { Swal.fire('Error', 'Failed', 'error'); }
+                try {
+                    await api.put(`/expenses/${id}/status`, { status: newStatus, adminFeedback: adminNote });
+                    fetchExpenses(currentPage);
+                    setIsSidebarOpen(false);
+                } catch (err) {
+                    Swal.fire('Error', 'Failed to return expense.', 'error');
+                }
             }
             return;
         }
 
-        const confirmText = newStatus === 'Approved' ? 'This will process funds and sync Inventory.' : 'Reject this expense permanently?';
-        const result = await Swal.fire({ title: 'Confirm Action', text: confirmText, icon: 'warning', showCancelButton: true, confirmButtonColor: newStatus === 'Approved' ? '#16a34a' : '#dc2626', confirmButtonText: `Yes, ${newStatus} it!` });
+        const previousExpenses = [...expenses];
 
-        if (result.isConfirmed) {
-            try { await api.put(`/expenses/${id}/status`, { status: newStatus }); fetchExpenses(currentPage); setIsSidebarOpen(false); } catch (err) { Swal.fire('Error', 'Failed', 'error'); }
+        setExpenses(prevExpenses => prevExpenses.map(exp => {
+            if (exp._id === id) {
+                return { ...exp, status: newStatus, approvedBy: { name: currentUser.name } };
+            }
+            return exp;
+        }));
+
+        setIsSidebarOpen(false);
+
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'bottom-end',
+            showConfirmButton: false,
+            timer: 1500,
+            timerProgressBar: true
+        });
+        Toast.fire({
+            icon: newStatus === 'Approved' ? 'success' : 'error',
+            title: newStatus === 'Approved' ? 'Approved!' : 'Rejected!'
+        });
+
+        try {
+            await api.put(`/expenses/${id}/status`, { status: newStatus });
+            fetchExpenses(currentPage);
+        } catch (err) {
+            setExpenses(previousExpenses);
+            Swal.fire('Error', 'Failed to update status on the server. Reverted changes.', 'error');
         }
     };
 
@@ -221,10 +257,10 @@ const AllExpenses = () => {
 
     const handleMergeSelected = async () => {
         if (selectedExpenses.length < 2) return;
-        
+
         const toMerge = expenses.filter(e => selectedExpenses.includes(e._id));
         const first = toMerge[0];
-        
+
         let totalSum = 0;
         for (let exp of toMerge) {
             totalSum += exp.amount;
@@ -259,7 +295,7 @@ const AllExpenses = () => {
 
     const handleSplitItem = async (expenseId, itemIndex, itemObj, maxTotal) => {
         const defaultSplitAmount = (Number(itemObj.quantity) || 1) * (Number(itemObj.unitPrice) || 0);
-        
+
         const { value: splitAmountStr } = await Swal.fire({
             title: 'Split Item out of Bill',
             html: `
@@ -382,7 +418,7 @@ const AllExpenses = () => {
                             <FontAwesomeIcon icon={faObjectGroup} className="btn-icon" /> Merge into 1 Bill
                         </button>
                     )}
-                    
+
                     {selectedExpenses.length > 0 && (
                         <button className="gts-btn success btn-small m-0 fade-in" onClick={handleBulkApprove} style={{ background: '#16a34a', color: 'white', fontWeight: 'bold' }}>
                             <FontAwesomeIcon icon={faCheckCircle} className="btn-icon" /> Approve Selected ({selectedExpenses.length})
@@ -412,7 +448,7 @@ const AllExpenses = () => {
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.rejectedTotal.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{stats.rejectedCount} items</div>
                 </div>
-                
+
                 <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
 
                 <div style={getMinimalCardStyle('hasGst', 'Yes', '#8b5cf6')} onClick={() => handleCardClick('hasGst', 'Yes')}>
@@ -422,7 +458,7 @@ const AllExpenses = () => {
                 </div>
 
                 <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px', gap: '4px', marginLeft: 'auto' }}>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }}/> Filtered Total</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }} /> Filtered Total</div>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {stats.totalFilteredAmount.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>Across {totalRecords} items</div>
                 </div>
@@ -525,8 +561,8 @@ const AllExpenses = () => {
                     <thead>
                         <tr>
                             <th style={{ width: '40px', textAlign: 'center' }}>
-                                <input 
-                                    type="checkbox" 
+                                <input
+                                    type="checkbox"
                                     style={{ cursor: pendingOnPage.length === 0 ? 'not-allowed' : 'pointer' }}
                                     checked={isAllSelected}
                                     onChange={handleSelectAll}
@@ -536,22 +572,22 @@ const AllExpenses = () => {
                             <th>Submitter / Payer</th>
                             <th>Details & Context</th>
                             <th>Expense Type</th>
-                            
-                            <th 
-                                onClick={() => handleSort('amount')} 
+
+                            <th
+                                onClick={() => handleSort('amount')}
                                 style={{ cursor: 'pointer', userSelect: 'none' }}
                                 title="Click to sort by Amount"
                             >
                                 Amount {getSortIcon('amount')}
                             </th>
-                            <th 
-                                onClick={() => handleSort('expenseDate')} 
+                            <th
+                                onClick={() => handleSort('expenseDate')}
                                 style={{ cursor: 'pointer', userSelect: 'none' }}
                                 title="Click to sort by Date"
                             >
                                 Date {getSortIcon('expenseDate')}
                             </th>
-                            
+
                             <th>Status & Approver</th>
                             <th>Documents</th>
                             <th>Admin Action</th>
@@ -580,7 +616,7 @@ const AllExpenses = () => {
                                                 <input type="checkbox" style={{ cursor: 'pointer' }} checked={selectedExpenses.includes(item._id)} onChange={() => handleSelectOne(item._id)} />
                                             ) : null}
                                         </td>
-                                        
+
                                         <td data-label="Submitter / Payer">
                                             {isCompanyPayment || isSamePerson ? (
                                                 <div className="fw-bold text-primary" style={{ cursor: 'pointer' }} onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)} title="View Profile">
@@ -704,7 +740,7 @@ const AllExpenses = () => {
                                 <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label">Description Tags</span><span className="detail-value">{selectedExpense.descriptionTags}</span></div>
                                 {selectedExpense.adminFeedback && <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label" style={{ color: '#ea580c' }}>Admin Note / Feedback</span><span className="detail-value" style={{ background: '#fef3c7', padding: '8px', borderRadius: '4px', fontStyle: 'italic' }}>"{selectedExpense.adminFeedback}"</span></div>}
                             </div>
-                            
+
                             {selectedExpense.expenseDetails && Object.keys(selectedExpense.expenseDetails).length > 0 && (
                                 <>
                                     <h3 className="sidebar-section-title mt-20">Granular Details</h3>
@@ -712,9 +748,9 @@ const AllExpenses = () => {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                             {selectedExpense.expenseDetails.items.map((prod, idx) => (
                                                 <div key={idx} style={{ background: '#f1f5f9', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', position: 'relative' }}>
-                                                    
+
                                                     {selectedExpense.expenseDetails.items.length > 1 && (selectedExpense.status === 'Pending' || selectedExpense.status === 'Returned') && (
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleSplitItem(selectedExpense._id, idx, prod, selectedExpense.amount)}
                                                             title="Extract this item into its own separate expense record"
                                                             style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', color: '#ea580c', cursor: 'pointer', fontWeight: 'bold' }}
@@ -747,7 +783,7 @@ const AllExpenses = () => {
                                     ) : (
                                         <div className="detail-grid-2">
                                             {Object.entries(selectedExpense.expenseDetails).map(([key, value]) => {
-                                                if (key === 'items') return null; 
+                                                if (key === 'items') return null;
                                                 if (!value) return null;
                                                 const isLongText = typeof value === 'string' && value.length > 30;
                                                 return (
