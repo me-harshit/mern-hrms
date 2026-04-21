@@ -121,10 +121,10 @@ const AllExpenses = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, filters, debouncedSearch, itemsPerPage, sortConfig]);
 
-    const fetchExpenses = async (pageToFetch) => {
-        setLoading(true);
+    const fetchExpenses = async (pageToFetch, silent = false) => {
+        // 👇 Only show the loading overlay if silent is false
+        if (!silent) setLoading(true);
         try {
-            // 👇 UPDATED: Attach sortBy and sortOrder to the API request
             const params = {
                 page: pageToFetch,
                 limit: itemsPerPage,
@@ -140,13 +140,12 @@ const AllExpenses = () => {
             setTotalRecords(res.data.pagination.totalRecords);
             setCurrentPage(res.data.pagination.currentPage);
         } catch (err) {
-            Swal.fire('Error', 'Failed to load expenses', 'error');
+            if (!silent) Swal.fire('Error', 'Failed to load expenses', 'error');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
-    // 👇 NEW: Click Handler for Sorting
     const handleSort = (key) => {
         let direction = 'desc';
         if (sortConfig.key === key && sortConfig.direction === 'desc') {
@@ -195,7 +194,7 @@ const AllExpenses = () => {
             if (adminNote) {
                 try {
                     await api.put(`/expenses/${id}/status`, { status: newStatus, adminFeedback: adminNote });
-                    fetchExpenses(currentPage);
+                    fetchExpenses(currentPage, true); // 👈 SILENT REFRESH
                     setIsSidebarOpen(false);
                 } catch (err) {
                     Swal.fire('Error', 'Failed to return expense.', 'error');
@@ -206,6 +205,7 @@ const AllExpenses = () => {
 
         const previousExpenses = [...expenses];
 
+        // Optimistic UI Update (Changes color instantly)
         setExpenses(prevExpenses => prevExpenses.map(exp => {
             if (exp._id === id) {
                 return { ...exp, status: newStatus, approvedBy: { name: currentUser.name } };
@@ -227,31 +227,43 @@ const AllExpenses = () => {
             title: newStatus === 'Approved' ? 'Approved!' : 'Rejected!'
         });
 
+        // Silent Database Update
         try {
             await api.put(`/expenses/${id}/status`, { status: newStatus });
-            fetchExpenses(currentPage);
+            fetchExpenses(currentPage, true); // 👈 SILENT REFRESH
         } catch (err) {
-            setExpenses(previousExpenses);
+            setExpenses(previousExpenses); // Revert if network fails
             Swal.fire('Error', 'Failed to update status on the server. Reverted changes.', 'error');
         }
     };
 
     const handleBulkApprove = async () => {
         if (selectedExpenses.length === 0) return;
-        const result = await Swal.fire({
-            title: 'Approve Selected?', text: `You are about to approve ${selectedExpenses.length} expenses at once.`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#16a34a', confirmButtonText: 'Yes, approve all!'
-        });
-        if (result.isConfirmed) {
-            setLoading(true);
-            try {
-                await Promise.all(selectedExpenses.map(id => api.put(`/expenses/${id}/status`, { status: 'Approved' })));
-                Swal.fire('Success', `${selectedExpenses.length} expenses approved!`, 'success');
-                setSelectedExpenses([]);
-                fetchExpenses(currentPage);
-            } catch (err) {
-                Swal.fire('Error', 'Some approvals failed.', 'error');
-                fetchExpenses(currentPage);
-            }
+
+        const count = selectedExpenses.length;
+        const currentSelection = [...selectedExpenses];
+
+        // 1. Optimistic Update UI instantly
+        setExpenses(prev => prev.map(exp =>
+            currentSelection.includes(exp._id)
+                ? { ...exp, status: 'Approved', approvedBy: { name: currentUser.name } }
+                : exp
+        ));
+
+        // Clear checkboxes instantly
+        setSelectedExpenses([]);
+
+        // Non-intrusive success popup
+        const Toast = Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 2000 });
+        Toast.fire({ icon: 'success', title: `${count} expenses approved!` });
+
+        // 2. Process in background silently
+        try {
+            await Promise.all(currentSelection.map(id => api.put(`/expenses/${id}/status`, { status: 'Approved' })));
+            fetchExpenses(currentPage, true); // 👈 SILENT REFRESH
+        } catch (err) {
+            Swal.fire('Error', 'Some approvals failed.', 'error');
+            fetchExpenses(currentPage); // Do a hard refresh to sync back to reality if network fails
         }
     };
 

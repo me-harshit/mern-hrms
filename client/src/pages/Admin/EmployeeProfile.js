@@ -4,8 +4,8 @@ import api, { SERVER_URL } from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faUser, faArrowLeft, faClock, faPlaneDeparture, faEdit, faEnvelope, faPhone, 
-    faWallet, faHistory, faUserSecret, faBoxOpen, faFileInvoice, faImage, 
+    faUser, faArrowLeft, faClock, faPlaneDeparture, faEdit, faEnvelope, faPhone,
+    faWallet, faHistory, faUserSecret, faBoxOpen, faFileInvoice, faImage,
     faCheckCircle, faTimesCircle, faUndo, faEye, faTimes, faBuilding, faCut
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
@@ -20,7 +20,7 @@ const EmployeeProfile = () => {
 
     const currentUser = JSON.parse(localStorage.getItem('user'));
     const [user, setUser] = useState({});
-    const [usersList, setUsersList] = useState([]); 
+    const [usersList, setUsersList] = useState([]);
     const [leaveStats, setLeaveStats] = useState({ history: [] });
 
     // --- WALLET & LEDGER STATES ---
@@ -45,7 +45,7 @@ const EmployeeProfile = () => {
     const [expLimit, setExpLimit] = useState(10);
     const [selectedExpense, setSelectedExpense] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    
+
     // 👇 NEW: Expense Filter & Stats
     const [expStatusFilter, setExpStatusFilter] = useState('');
     const [expStats, setExpStats] = useState({
@@ -92,7 +92,7 @@ const EmployeeProfile = () => {
             setLeaveStats(leaveRes.data);
             setWalletBalance(walletRes.data.balance);
             setUsersList(Array.isArray(dirRes.data) ? dirRes.data : (dirRes.data?.data || []));
-            fetchTransactions(); 
+            fetchTransactions();
             setLoading(false);
         } catch (err) {
             console.error(err);
@@ -135,7 +135,7 @@ const EmployeeProfile = () => {
             if (expStatusFilter) params.status = expStatusFilter;
 
             const res = await api.get('/expenses/all', { params });
-            
+
             setExpenses(res.data.data);
             if (res.data.stats) setExpStats(res.data.stats); // Capture stats
             setExpTotalPages(res.data.pagination.totalPages);
@@ -150,7 +150,7 @@ const EmployeeProfile = () => {
 
     // --- WALLET LOGIC ---
     const handleManageWallet = async () => {
-        const today = new Date().toISOString().split('T')[0]; 
+        const today = new Date().toISOString().split('T')[0];
 
         const { value: formValues } = await Swal.fire({
             title: 'Manage Wallet Balance',
@@ -171,7 +171,10 @@ const EmployeeProfile = () => {
                     <input id="wallet-amount" type="number" class="swal2-input" placeholder="e.g. 5000" style="width: 100%; margin-bottom: 15px;">
 
                     <label class="swal-custom-label">Transaction Date</label>
-                    <input id="wallet-date" type="date" class="swal2-input" value="${today}" style="width: 100%;">
+                    <input id="wallet-date" type="date" class="swal2-input" value="${today}" style="width: 100%; margin-bottom: 15px;">
+
+                    <label class="swal-custom-label">Description / Note</label>
+                    <input id="wallet-desc" type="text" class="swal2-input" placeholder="e.g. Advance for Client Meeting" style="width: 100%; margin-bottom: 15px;">
                 </div>
             `,
             showCancelButton: true,
@@ -181,6 +184,7 @@ const EmployeeProfile = () => {
                 const action = document.getElementById('wallet-action').value;
                 const amount = Number(document.getElementById('wallet-amount').value);
                 const date = document.getElementById('wallet-date').value;
+                const description = document.getElementById('wallet-desc').value; // Capture Description
 
                 if (!amount && amount !== 0) {
                     Swal.showValidationMessage('Please enter a valid amount');
@@ -190,7 +194,7 @@ const EmployeeProfile = () => {
                     Swal.showValidationMessage('Please select a date');
                     return false;
                 }
-                return { action, amount, date };
+                return { action, amount, date, description };
             }
         });
 
@@ -206,11 +210,12 @@ const EmployeeProfile = () => {
                     newBalance,
                     action: formValues.action,
                     amountChanged: formValues.amount,
-                    date: formValues.date 
+                    date: formValues.date,
+                    description: formValues.description // 👇 Pass to backend
                 });
                 Swal.fire('Success', `Wallet updated to ₹${newBalance.toLocaleString('en-IN')}`, 'success');
                 setWalletBalance(newBalance);
-                fetchTransactions(); 
+                fetchTransactions();
             } catch (err) {
                 Swal.fire('Error', 'Failed to update wallet', 'error');
             }
@@ -264,7 +269,7 @@ const EmployeeProfile = () => {
 
     const handleSplitItem = async (expenseId, itemIndex, itemObj, maxTotal) => {
         const defaultSplitAmount = (Number(itemObj.quantity) || 1) * (Number(itemObj.unitPrice) || 0);
-        
+
         const { value: splitAmountStr } = await Swal.fire({
             title: 'Split Item out of Bill',
             html: `
@@ -302,11 +307,11 @@ const EmployeeProfile = () => {
     };
 
     const getExpMinimalCardStyle = (status, colorHex) => ({
-        cursor: 'pointer', transition: 'all 0.2s ease', 
-        opacity: expStatusFilter === '' || expStatusFilter === status ? 1 : 0.4, 
-        border: expStatusFilter === status ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0', 
-        background: '#ffffff', padding: '12px 16px', borderRadius: '8px', 
-        display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '140px', 
+        cursor: 'pointer', transition: 'all 0.2s ease',
+        opacity: expStatusFilter === '' || expStatusFilter === status ? 1 : 0.4,
+        border: expStatusFilter === status ? `1.5px solid ${colorHex}` : '1px solid #e2e8f0',
+        background: '#ffffff', padding: '12px 16px', borderRadius: '8px',
+        display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '140px',
         boxShadow: expStatusFilter === status ? `0 2px 8px ${colorHex}15` : 'none'
     });
 
@@ -377,8 +382,9 @@ const EmployeeProfile = () => {
         return `${hours}h ${minutes}m`;
     };
 
-    const filteredTransactions = transactions.filter(t => txFilter === 'All' ? true : t.type === txFilter);
-
+    const filteredTransactions = transactions
+        .filter(t => txFilter === 'All' ? true : t.type === txFilter)
+        .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
     if (loading) return <div className="main-content">Loading Profile...</div>;
 
     return (
@@ -391,7 +397,7 @@ const EmployeeProfile = () => {
                     </button>
                     <h1 className="page-title header-no-margin">{user.name}'s Profile</h1>
                 </div>
-                
+
                 <div style={{ display: 'flex', gap: '10px' }}>
                     {currentUser?.role === 'ADMIN' && (
                         <button className="gts-btn warning m-0" onClick={handleImpersonate}>
@@ -405,7 +411,7 @@ const EmployeeProfile = () => {
             </div>
 
             {/* SUMMARY CARD */}
-            <div className="control-card p-20 mb-20" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: '#f8fafc'}}>
+            <div className="control-card p-20 mb-20" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: '#f8fafc' }}>
                 <div style={{ width: '80px', height: '80px', background: '#215D7B', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' }}>
                     {user.name?.charAt(0)}
                 </div>
@@ -599,8 +605,8 @@ const EmployeeProfile = () => {
                                         </td>
                                         <td data-label="Status">
                                             <span className={`status-badge ${log.status === 'Present' ? 'success' :
-                                                    log.status === 'Half Day' ? 'warning' :
-                                                        log.status === 'Pending' ? 'primary' : 'danger'
+                                                log.status === 'Half Day' ? 'warning' :
+                                                    log.status === 'Pending' ? 'primary' : 'danger'
                                                 }`}>
                                                 {log.status}
                                             </span>
@@ -633,7 +639,7 @@ const EmployeeProfile = () => {
             {/* --- TAB CONTENT: EXPENSES --- */}
             {activeTab === 'expenses' && (
                 <div className="fade-in">
-                    
+
                     {/* 👇 NEW: Interactive Expense Summary Cards */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '20px', alignItems: 'stretch' }}>
                         <div style={getExpMinimalCardStyle('Pending', '#d97706')} onClick={() => handleExpCardClick('Pending')}>
@@ -658,7 +664,7 @@ const EmployeeProfile = () => {
                         </div>
                         <div style={{ width: '1px', background: '#e2e8f0', margin: '0 5px' }}></div>
                         <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', padding: '12px 16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px', gap: '4px' }}>
-                            <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }}/> Filtered Total</div>
+                            <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><FontAwesomeIcon icon={faWallet} style={{ color: '#475569' }} /> Filtered Total</div>
                             <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>₹ {expStats.totalFilteredAmount.toLocaleString('en-IN')}</div>
                             <div style={{ fontSize: '11px', color: '#94a3b8' }}>Across {expTotalRecords} items</div>
                         </div>
@@ -694,16 +700,16 @@ const EmployeeProfile = () => {
                                             <tr key={item._id}>
                                                 <td data-label="Category">
                                                     <div className="fw-600 text-primary" style={{ marginBottom: '6px' }}>{item.category}</div>
-                                                    <span 
-                                                        style={{ 
-                                                            background: typeBgColor, 
-                                                            color: typeBorderColor, 
-                                                            border: `1px solid ${typeBorderColor}`, 
-                                                            padding: '3px 8px', 
-                                                            borderRadius: '4px', 
-                                                            fontSize: '10px', 
-                                                            fontWeight: '600', 
-                                                            display: 'inline-block' 
+                                                    <span
+                                                        style={{
+                                                            background: typeBgColor,
+                                                            color: typeBorderColor,
+                                                            border: `1px solid ${typeBorderColor}`,
+                                                            padding: '3px 8px',
+                                                            borderRadius: '4px',
+                                                            fontSize: '10px',
+                                                            fontWeight: '600',
+                                                            display: 'inline-block'
                                                         }}
                                                     >
                                                         {typeLabel}
@@ -730,8 +736,8 @@ const EmployeeProfile = () => {
                                                 <td data-label="Payment Source">
                                                     <div className="text-small">
                                                         <span className="fw-600 text-dark">Paid by:</span> {
-                                                            item.isCompanyPayment ? 'Company Account' : 
-                                                            item.paymentSourceId?.name || 'Self'
+                                                            item.isCompanyPayment ? 'Company Account' :
+                                                                item.paymentSourceId?.name || 'Self'
                                                         }
                                                     </div>
                                                 </td>
@@ -845,7 +851,7 @@ const EmployeeProfile = () => {
                                 <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label">Description Tags</span><span className="detail-value">{selectedExpense.descriptionTags}</span></div>
                                 {selectedExpense.adminFeedback && <div className="detail-group" style={{ gridColumn: 'span 2' }}><span className="detail-label" style={{ color: '#ea580c' }}>Admin Note / Feedback</span><span className="detail-value" style={{ background: '#fef3c7', padding: '8px', borderRadius: '4px', fontStyle: 'italic' }}>"{selectedExpense.adminFeedback}"</span></div>}
                             </div>
-                            
+
                             {selectedExpense.expenseDetails && Object.keys(selectedExpense.expenseDetails).length > 0 && (
                                 <>
                                     <h3 className="sidebar-section-title mt-20">Granular Details</h3>
@@ -854,7 +860,7 @@ const EmployeeProfile = () => {
                                             {selectedExpense.expenseDetails.items.map((prod, idx) => (
                                                 <div key={idx} style={{ background: '#f1f5f9', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', position: 'relative' }}>
                                                     {selectedExpense.expenseDetails.items.length > 1 && (selectedExpense.status === 'Pending' || selectedExpense.status === 'Returned') && (
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleSplitItem(selectedExpense._id, idx, prod, selectedExpense.amount)}
                                                             title="Extract this item into its own separate expense record"
                                                             style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', color: '#ea580c', cursor: 'pointer', fontWeight: 'bold' }}
@@ -887,7 +893,7 @@ const EmployeeProfile = () => {
                                     ) : (
                                         <div className="detail-grid-2">
                                             {Object.entries(selectedExpense.expenseDetails).map(([key, value]) => {
-                                                if (key === 'items') return null; 
+                                                if (key === 'items') return null;
                                                 if (!value) return null;
                                                 const isLongText = typeof value === 'string' && value.length > 30;
                                                 return (

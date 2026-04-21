@@ -3,13 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture, 
-    faEdit, faWallet, faHistory, faTimes, faUserEdit, faCog, faMoneyBillWave, faKey 
+import {
+    faUser, faSave, faArrowLeft, faClock, faPlaneDeparture,
+    faEdit, faWallet, faHistory, faTimes, faUserEdit, faCog, faMoneyBillWave, faKey
 } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; 
+import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
-import '../../styles/expenses.css'; 
+import '../../styles/expenses.css';
 
 const EditEmployee = () => {
     const { id } = useParams();
@@ -21,7 +21,7 @@ const EditEmployee = () => {
     const [newPassword, setNewPassword] = useState(''); // Separated for safety
     const [leaveStats, setLeaveStats] = useState({ history: [] });
     const currentUser = JSON.parse(localStorage.getItem('user'));
-    
+
     // --- WALLET STATES ---
     const [walletBalance, setWalletBalance] = useState(0);
     const [transactions, setTransactions] = useState([]);
@@ -93,7 +93,7 @@ const EditEmployee = () => {
             await api.put(`/employees/${id}`, payload);
             Swal.fire('Success', 'Employee Profile Updated', 'success');
             setNewPassword(''); // Clear after success
-            navigate(`/employee/${id}`); 
+            navigate(`/employee/${id}`);
         } catch (err) {
             Swal.fire('Error', 'Failed to update profile', 'error');
         }
@@ -117,12 +117,12 @@ const EditEmployee = () => {
     const calculateDuration = (start, end) => {
         if (!start && !end) return <span className="text-muted">-</span>;
         if (!start || !end) return <span className="text-muted italic text-small">In Progress</span>;
-        
+
         const startTime = new Date(start);
         const endTime = new Date(end);
         const diffMs = endTime - startTime;
         if (diffMs < 0) return "-";
-        
+
         const totalMinutes = Math.floor(diffMs / 60000);
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
@@ -179,10 +179,10 @@ const EditEmployee = () => {
             if (formValues.action === 'set') newBalance = formValues.amount;
 
             try {
-                await api.put('/wallets/update', { 
-                    targetUserId: id, 
-                    newBalance, 
-                    action: formValues.action, 
+                await api.put('/wallets/update', {
+                    targetUserId: id,
+                    newBalance,
+                    action: formValues.action,
                     amountChanged: formValues.amount,
                     date: formValues.date
                 });
@@ -278,7 +278,9 @@ const EditEmployee = () => {
         }
     };
 
-    const filteredTransactions = transactions.filter(t => txFilter === 'All' ? true : t.type === txFilter);
+    const filteredTransactions = transactions
+        .filter(t => txFilter === 'All' ? true : t.type === txFilter)
+        .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
 
     if (loading) return <div className="main-content">Loading...</div>;
 
@@ -290,7 +292,7 @@ const EditEmployee = () => {
                     <FontAwesomeIcon icon={faArrowLeft} className="btn-icon" /> Cancel
                 </button>
                 <h1 className="page-title header-no-margin">
-                    <FontAwesomeIcon icon={faUserEdit} className="text-primary mr-10" /> 
+                    <FontAwesomeIcon icon={faUserEdit} className="text-primary mr-10" />
                     Edit Configuration: {user.name}
                 </h1>
             </div>
@@ -314,7 +316,7 @@ const EditEmployee = () => {
             {activeTab === 'details' && (
                 <div className="control-card p-30 fade-in d-block">
                     <form onSubmit={handleUpdateProfile}>
-                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faUser} className="mr-5 text-muted"/> Personal Details</h3>
+                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faUser} className="mr-5 text-muted" /> Personal Details</h3>
                         {/* 👇 UPDATED: using the new CSS Grid class */}
                         <div className="form-grid-2-col mt-15 mb-30">
                             <div className="form-group"><label className="input-label">Full Name</label><input className="custom-input" value={user.name || ''} onChange={e => setUser({ ...user, name: e.target.value })} /></div>
@@ -328,9 +330,9 @@ const EditEmployee = () => {
                             <div className="form-group col-span-full"><label className="input-label">Address</label><input className="custom-input" value={user.address || ''} onChange={e => setUser({ ...user, address: e.target.value })} /></div>
                         </div>
 
-                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted"/> System Configuration</h3>
+                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted" /> System Configuration</h3>
                         <div className="form-grid-2-col mt-15 mb-30">
-                            
+
                             {/* Password Reset Field */}
                             <div className="form-group">
                                 <label className="input-label text-danger fw-bold"><FontAwesomeIcon icon={faKey} /> Reset Password</label>
@@ -351,17 +353,17 @@ const EditEmployee = () => {
                             <div className="form-group"><label className="input-label">Account Status</label><select className="swal2-select custom-input" value={user.status || 'ACTIVE'} onChange={e => setUser({ ...user, status: e.target.value })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
                             <div className="form-group"><label className="input-label">Reporting Manager Name</label><input className="custom-input" placeholder="Manager's Full Name" value={user.reportingManagerName || ''} onChange={e => setUser({ ...user, reportingManagerName: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Reporting Manager Email</label><input type="email" className="custom-input" placeholder="manager@gts.ai" value={user.reportingManagerEmail || ''} onChange={e => setUser({ ...user, reportingManagerEmail: e.target.value })} /></div>
-                            
+
                             {/* Clean Checkbox Card */}
                             <div className="form-group checkbox-card">
                                 <label className="checkbox-card-label">
-                                    <input type="checkbox" className="custom-checkbox mr-5" checked={user.isPurchaser || false} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} /> 
+                                    <input type="checkbox" className="custom-checkbox mr-5" checked={user.isPurchaser || false} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} />
                                     Grant Purchaser Access
                                 </label>
                             </div>
                         </div>
 
-                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faMoneyBillWave} className="mr-5 text-muted"/> Payroll & Wallet</h3>
+                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faMoneyBillWave} className="mr-5 text-muted" /> Payroll & Wallet</h3>
                         <div className="form-grid-2-col mt-15">
                             <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} /></div>
                             <div className="form-group">
@@ -442,21 +444,20 @@ const EditEmployee = () => {
                                 attendanceLogs.map(log => (
                                     <tr key={log._id}>
                                         <td data-label="Date" className="fw-500 text-dark-blue">{log.date}</td>
-                                        
+
                                         <td data-label="Check In">
                                             {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </td>
                                         <td data-label="Check Out">
                                             {log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </td>
-                                        
+
                                         <td data-label="Working Hours" className="fw-bold text-dark-gray">{calculateDuration(log.checkIn, log.checkOut)}</td>
                                         <td data-label="Status">
-                                            <span className={`status-badge ${
-                                                log.status === 'Present' ? 'success' : 
-                                                log.status === 'Half Day' ? 'warning' : 
-                                                log.status === 'Pending' ? 'primary' : 'danger'
-                                            }`}>
+                                            <span className={`status-badge ${log.status === 'Present' ? 'success' :
+                                                    log.status === 'Half Day' ? 'warning' :
+                                                        log.status === 'Pending' ? 'primary' : 'danger'
+                                                }`}>
                                                 {log.status}
                                             </span>
                                         </td>
@@ -469,9 +470,9 @@ const EditEmployee = () => {
                             )}
                         </tbody>
                     </table>
-                    
+
                     {!attLoading && (
-                        <Pagination 
+                        <Pagination
                             currentPage={attPage}
                             totalPages={attTotalPages}
                             totalRecords={attTotalRecords}
@@ -491,8 +492,8 @@ const EditEmployee = () => {
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
                     <div className="fade-in" style={{ background: 'var(--bg-card, white)', borderRadius: '12px', padding: '25px', width: '90%', maxWidth: '800px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--card-shadow, 0 25px 50px -12px rgba(0, 0, 0, 0.25))' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color, #e2e8f0)', paddingBottom: '15px', marginBottom: '15px' }}>
-                            <h2 style={{ margin: 0, fontSize: '20px', color: 'var(--text-main, #1e293b)' }}><FontAwesomeIcon icon={faHistory} style={{ color: 'var(--primary, #215D7B)', marginRight: '8px' }}/> Transaction Ledger</h2>
-                            <button onClick={() => setShowLedger(false)} style={{ background: 'var(--bg-hover, #f1f5f9)', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', color: 'var(--text-muted, #64748b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FontAwesomeIcon icon={faTimes}/></button>
+                            <h2 style={{ margin: 0, fontSize: '20px', color: 'var(--text-main, #1e293b)' }}><FontAwesomeIcon icon={faHistory} style={{ color: 'var(--primary, #215D7B)', marginRight: '8px' }} /> Transaction Ledger</h2>
+                            <button onClick={() => setShowLedger(false)} style={{ background: 'var(--bg-hover, #f1f5f9)', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', color: 'var(--text-muted, #64748b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FontAwesomeIcon icon={faTimes} /></button>
                         </div>
                         <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
                             <select className="custom-input" value={txFilter} onChange={(e) => setTxFilter(e.target.value)} style={{ maxWidth: '200px', margin: 0 }}>

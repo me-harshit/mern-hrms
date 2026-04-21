@@ -89,8 +89,7 @@ router.post('/add-funds', auth, async (req, res) => {
 // @desc    Update wallet balance manually (Admin/HR/Manager)
 router.put('/update', auth, async (req, res) => {
     try {
-        // 👇 Extracted 'date' from req.body
-        const { targetUserId, newBalance, action, amountChanged, date } = req.body;
+        const { targetUserId, newBalance, action, amountChanged, date, description } = req.body;
 
         let wallet = await Wallet.findOne({ userId: targetUserId });
         if (!wallet) {
@@ -104,11 +103,15 @@ router.put('/update', auth, async (req, res) => {
         if (action === 'add') type = 'Credit';
         if (action === 'deduct') type = 'Debit';
 
+        const transactionDescription = description && description.trim() !== '' 
+            ? description.trim() 
+            : 'Manual Wallet Adjustment';
+
         await WalletTransaction.create({
             userId: targetUserId,
             amount: amountChanged,
             type: type,
-            description: `Manual Wallet Adjustment`,
+            description: transactionDescription, // 👇 Now saves the custom note
             performedBy: req.user.id,
             date: date ? new Date(date) : Date.now()
         });
