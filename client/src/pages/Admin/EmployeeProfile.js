@@ -385,6 +385,9 @@ const EmployeeProfile = () => {
     const filteredTransactions = transactions
         .filter(t => txFilter === 'All' ? true : t.type === txFilter)
         .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+
+    const totalCredit = transactions.filter(t => t.type === 'Credit').reduce((sum, t) => sum + t.amount, 0);
+    const totalDebit = transactions.filter(t => t.type === 'Debit').reduce((sum, t) => sum + t.amount, 0);
     if (loading) return <div className="main-content">Loading Profile...</div>;
 
     return (
@@ -481,28 +484,49 @@ const EmployeeProfile = () => {
             {/* --- TAB CONTENT: WALLET & LEDGER --- */}
             {activeTab === 'wallet' && (
                 <div className="fade-in">
-                    <div className="control-card p-25 mb-20" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-                        <div>
-                            <h3 className="section-title m-0"><FontAwesomeIcon icon={faWallet} className="text-primary mr-10" /> Company Wallet</h3>
-                            <div style={{ fontSize: '28px', fontWeight: 'bold', color: walletBalance < 0 ? '#dc2626' : '#16a34a', marginTop: '10px' }}>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', marginBottom: '25px' }}>
+
+                        <div className="control-card p-20" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                <div className="text-muted text-small fw-600"><FontAwesomeIcon icon={faWallet} className="mr-5 text-primary" /> Current Balance</div>
+                                {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER' || currentUser?.role === 'HR') && (
+                                    <button className="gts-btn primary btn-small m-0" onClick={handleManageWallet} style={{ padding: '4px 10px', fontSize: '11px' }}>
+                                        <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Adjust
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ fontSize: '28px', fontWeight: 'bold', color: walletBalance < 0 ? '#dc2626' : '#16a34a' }}>
                                 ₹{walletBalance.toLocaleString('en-IN')}
                             </div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', fontStyle: 'italic' }}>
+                                * Reflects actual system balance
+                            </div>
                         </div>
-                        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER' || currentUser?.role === 'HR') && (
-                            <button className="gts-btn primary btn-large" onClick={handleManageWallet}>
-                                <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Adjust Funds
-                            </button>
-                        )}
+
+                        <div className="control-card p-20" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div className="text-muted text-small fw-600 mb-10">Total All-Time Credits (+)</div>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>
+                                ₹{totalCredit.toLocaleString('en-IN')}
+                            </div>
+                        </div>
+
+                        <div className="control-card p-20" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div className="text-muted text-small fw-600 mb-10">Total All-Time Debits (-)</div>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#dc2626' }}>
+                                ₹{totalDebit.toLocaleString('en-IN')}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="employee-table-container">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 20px 0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 20px 0', flexWrap: 'wrap', gap: '15px' }}>
                             <h3 className="table-header-title m-0"><FontAwesomeIcon icon={faHistory} className="text-muted mr-10" /> Transaction Ledger</h3>
                             <select className="custom-input" value={txFilter} onChange={(e) => setTxFilter(e.target.value)} style={{ width: '200px', margin: 0 }}>
                                 <option value="All">All Transactions</option>
                                 <option value="Credit">Credits (+)</option>
                                 <option value="Debit">Debits (-)</option>
-                                <option value="Reset">Manual Resets</option>
+                                <option value="Reset">Manual Overrides (=)</option>
                             </select>
                         </div>
                         <table className="employee-table mt-15">
@@ -520,7 +544,7 @@ const EmployeeProfile = () => {
                                 ) : (
                                     filteredTransactions.map(tx => (
                                         <tr key={tx._id}>
-                                            <td data-label="Date">{new Date(tx.date || tx.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                                            <td data-label="Date" className="fw-500 text-dark-blue">{new Date(tx.date || tx.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                                             <td data-label="Description" className="text-muted fw-500">{tx.description}</td>
                                             <td data-label="Auth By">{tx.performedBy?.name || 'System'}</td>
                                             <td data-label="Amount" style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '15px', color: tx.type === 'Credit' ? '#16a34a' : (tx.type === 'Debit' ? '#dc2626' : '#d97706') }}>

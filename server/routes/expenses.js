@@ -130,7 +130,7 @@ router.get('/', auth, async (req, res) => {
                 andConditions.push({
                     $or: [
                         { 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } },
-                        { vendorId: { $in: validVendorIds } } 
+                        { vendorId: { $in: validVendorIds } }
                     ]
                 });
             } else if (hasGst === 'No') {
@@ -151,7 +151,7 @@ router.get('/', auth, async (req, res) => {
 
         if (search) {
             const searchRegex = new RegExp(search, 'i');
-            
+
             const matchingVendors = await Vendor.find({
                 $or: [{ name: searchRegex }, { gstNumber: searchRegex }]
             }).select('_id');
@@ -222,7 +222,7 @@ router.get('/', auth, async (req, res) => {
             // Calculate GST Totals
             const hasDirectGst = e.expenseDetails && e.expenseDetails.gstNumber && e.expenseDetails.gstNumber.trim() !== "";
             const hasVendorGst = e.vendorId && e.vendorId.gstNumber && e.vendorId.gstNumber.trim() !== "";
-            
+
             if (hasDirectGst || hasVendorGst) {
                 stats.gstTotal += e.amount;
                 stats.gstCount++;
@@ -793,12 +793,11 @@ router.put('/:id/status', auth, async (req, res) => {
         if (status === 'Approved') {
 
             if (!expense.isCompanyPayment) {
-                let wallet = await Wallet.findOne({ userId: expense.paymentSourceId });
-                if (!wallet) {
-                    wallet = new Wallet({ userId: expense.paymentSourceId, balance: 0 });
-                }
-                wallet.balance -= expense.amount;
-                await wallet.save();
+                await Wallet.findOneAndUpdate(
+                    { userId: expense.paymentSourceId },
+                    { $inc: { balance: -expense.amount } },
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                );
 
                 await WalletTransaction.create({
                     userId: expense.paymentSourceId,
@@ -1034,9 +1033,5 @@ router.post('/:id/split', auth, async (req, res) => {
         res.status(500).json({ message: 'Server Error during split' });
     }
 });
-
-
-
-
 
 module.exports = router;
