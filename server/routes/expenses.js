@@ -438,9 +438,8 @@ router.get('/all', auth, async (req, res) => {
             andConditions.push({ expenseDate: { $gte: start, $lte: end } });
         }
 
-        // 👇 UPDATED: Check direct GST AND Vendor GST
+        // GST Logic
         if (req.query.hasGst) {
-            // Find all vendors that have a valid GST number
             const validVendors = await Vendor.find({ gstNumber: { $exists: true, $ne: "", $regex: /[^ ]/ } }).select('_id');
             const validVendorIds = validVendors.map(v => v._id);
 
@@ -448,11 +447,10 @@ router.get('/all', auth, async (req, res) => {
                 andConditions.push({
                     $or: [
                         { 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } },
-                        { vendorId: { $in: validVendorIds } } // Expense is tied to a vendor with a GST
+                        { vendorId: { $in: validVendorIds } }
                     ]
                 });
             } else if (req.query.hasGst === 'No') {
-                // Must NOT have direct GST AND must NOT be tied to a vendor with a GST
                 andConditions.push({
                     $and: [
                         {
@@ -474,7 +472,6 @@ router.get('/all', auth, async (req, res) => {
             const matchingUsers = await User.find({ name: searchRegex }).select('_id');
             const userIds = matchingUsers.map(u => u._id);
 
-            // 👇 UPDATED: Search vendor names and vendor GST numbers too
             const matchingVendors = await Vendor.find({
                 $or: [{ name: searchRegex }, { gstNumber: searchRegex }]
             }).select('_id');
@@ -529,63 +526,29 @@ router.get('/all', auth, async (req, res) => {
             totalFilteredAmount: 0
         };
 
-        const groupedStats = await Expense.aggregate([
-            { $match: statsQuery },
-            {
-                $group: {
-                    _id: "$status",
-                    totalAmount: { $sum: "$amount" },
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
+        // 👇 HIGH PERFORMANCE FIX: Use .find().select() instead of $aggregate
+        const allFilteredForStats = await Expense.find(statsQuery)
+            .select('amount status expenseDetails vendorId')
+            .populate('vendorId', 'gstNumber');
 
-        groupedStats.forEach(group => {
-            if (group._id === 'Pending') { stats.pendingTotal = group.totalAmount; stats.pendingCount = group.count; }
-            if (group._id === 'Approved') { stats.approvedTotal = group.totalAmount; stats.approvedCount = group.count; }
-            if (group._id === 'Returned') { stats.returnedTotal = group.totalAmount; stats.returnedCount = group.count; }
-            if (group._id === 'Rejected') { stats.rejectedTotal = group.totalAmount; stats.rejectedCount = group.count; }
+        allFilteredForStats.forEach(e => {
+            if (e.status === 'Pending') { stats.pendingTotal += e.amount; stats.pendingCount++; }
+            if (e.status === 'Approved') { stats.approvedTotal += e.amount; stats.approvedCount++; }
+            if (e.status === 'Returned') { stats.returnedTotal += e.amount; stats.returnedCount++; }
+            if (e.status === 'Rejected') { stats.rejectedTotal += e.amount; stats.rejectedCount++; }
+
+            const hasDirectGst = e.expenseDetails && e.expenseDetails.gstNumber && e.expenseDetails.gstNumber.trim() !== "";
+            const hasVendorGst = e.vendorId && e.vendorId.gstNumber && e.vendorId.gstNumber.trim() !== "";
+
+            if (hasDirectGst || hasVendorGst) {
+                stats.gstTotal += e.amount;
+                stats.gstCount++;
+            }
         });
 
-        // 👇 UPDATED: GST Aggregation using $lookup to join the Vendor collection
-        const gstStats = await Expense.aggregate([
-            { $match: statsQuery },
-            {
-                $lookup: {
-                    from: "vendors", // Mongoose uses lowercase plural for collections
-                    localField: "vendorId",
-                    foreignField: "_id",
-                    as: "vendorDetails"
-                }
-            },
-            {
-                $match: {
-                    $or: [
-                        { 'expenseDetails.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } },
-                        { 'vendorDetails.0.gstNumber': { $exists: true, $ne: "", $regex: /[^ ]/ } }
-                    ]
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalAmount: { $sum: "$amount" },
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        if (gstStats.length > 0) {
-            stats.gstTotal = gstStats[0].totalAmount;
-            stats.gstCount = gstStats[0].count;
-        }
-
-        // Get the total specifically for what is currently showing in the table
-        const currentTableTotal = await Expense.aggregate([
-            { $match: query },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
-        ]);
-        stats.totalFilteredAmount = currentTableTotal.length > 0 ? currentTableTotal[0].total : 0;
+        // Calculate specific table total
+        const currentTableTotal = await Expense.find(query).select('amount');
+        stats.totalFilteredAmount = currentTableTotal.reduce((sum, item) => sum + item.amount, 0);
 
         res.json({
             data: expenses,
