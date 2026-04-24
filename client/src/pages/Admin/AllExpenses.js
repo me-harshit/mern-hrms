@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { SERVER_URL } from '../../utils/api';
 import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx'; // 👈 NEW: Excel Library
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faSearch, faFileInvoice, faImage, faFilter,
     faCheckCircle, faClock, faTimesCircle, faArrowLeft,
     faEye, faTimes, faUndo, faEdit, faBuilding, faWallet,
-    faObjectGroup, faCut, faFileContract, faSort, faSortUp, faSortDown
+    faObjectGroup, faCut, faFileContract, faSort, faSortUp, faSortDown, faFileExcel
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
@@ -107,7 +108,6 @@ const AllExpenses = () => {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // 👇 UPDATED: Added sortConfig to dependency array
     useEffect(() => {
         setCurrentPage(1);
     }, [filters, debouncedSearch, sortConfig]);
@@ -122,7 +122,6 @@ const AllExpenses = () => {
     }, [currentPage, filters, debouncedSearch, itemsPerPage, sortConfig]);
 
     const fetchExpenses = async (pageToFetch, silent = false) => {
-        // 👇 Only show the loading overlay if silent is false
         if (!silent) setLoading(true);
         try {
             const params = {
@@ -143,6 +142,68 @@ const AllExpenses = () => {
             if (!silent) Swal.fire('Error', 'Failed to load expenses', 'error');
         } finally {
             if (!silent) setLoading(false);
+        }
+    };
+
+    // 👇 NEW: Export to Excel Logic (Bypasses Pagination safely)
+    const handleExportExcel = async () => {
+        if (totalRecords === 0) return Swal.fire('No Data', 'There are no records to export.', 'info');
+
+        try {
+            Swal.fire({
+                title: 'Preparing Excel Export...',
+                text: 'Fetching all filtered records. Please wait.',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            // Make a special API call requesting ALL records matching current filters
+            const params = {
+                page: 1,
+                limit: totalRecords > 0 ? totalRecords : 10000, // Bypass UI limit
+                search: debouncedSearch,
+                sortBy: sortConfig.key,
+                sortOrder: sortConfig.direction,
+                ...filters
+            };
+            
+            const res = await api.get('/expenses/all', { params });
+            const allData = res.data.data;
+
+            // Map backend data to beautiful Excel columns
+            const excelData = allData.map(exp => ({
+                'Date': exp.expenseDate ? new Date(exp.expenseDate).toLocaleDateString('en-GB') : '-',
+                'Category': exp.category,
+                'Expense Type': exp.expenseType,
+                'Project Context': exp.projectName || 'Regular Office',
+                'Details / Tags': exp.descriptionTags || '-',
+                'Amount (₹)': exp.amount,
+                'GST Number': exp.expenseDetails?.gstNumber || '-',
+                'Vendor Name': exp.vendorId?.name || '-',
+                'Submitted By': exp.submittedBy?.name || 'Unknown',
+                'Paid By': exp.isCompanyPayment ? 'Company Account' : (exp.paymentSourceId?.name || 'Unknown'),
+                'Status': exp.status,
+                'Approved By': exp.approvedBy?.name || '-',
+                'Admin Feedback': exp.adminFeedback || '-'
+            }));
+
+            // Generate Sheet
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Filtered_Expenses");
+
+            // Download File
+            const fileName = `Expense_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+
+            Swal.close();
+            
+            const Toast = Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 3000 });
+            Toast.fire({ icon: 'success', title: 'Export Downloaded Successfully!' });
+
+        } catch (err) {
+            console.error("Export Error:", err);
+            Swal.fire('Export Failed', 'An error occurred while generating the Excel file.', 'error');
         }
     };
 
@@ -177,7 +238,7 @@ const AllExpenses = () => {
         setApprovedBySearchTerm('');
         setPaidBySearchTerm('');
         setSelectedExpenses([]);
-        setSortConfig({ key: 'expenseDate', direction: 'desc' }); // Reset sort on clear
+        setSortConfig({ key: 'expenseDate', direction: 'desc' });
     };
 
     const handleStatusUpdate = async (id, newStatus) => {
@@ -194,7 +255,7 @@ const AllExpenses = () => {
             if (adminNote) {
                 try {
                     await api.put(`/expenses/${id}/status`, { status: newStatus, adminFeedback: adminNote });
-                    fetchExpenses(currentPage, true); // 👈 SILENT REFRESH
+                    fetchExpenses(currentPage, true);
                     setIsSidebarOpen(false);
                 } catch (err) {
                     Swal.fire('Error', 'Failed to return expense.', 'error');
@@ -205,7 +266,6 @@ const AllExpenses = () => {
 
         const previousExpenses = [...expenses];
 
-        // Optimistic UI Update (Changes color instantly)
         setExpenses(prevExpenses => prevExpenses.map(exp => {
             if (exp._id === id) {
                 return { ...exp, status: newStatus, approvedBy: { name: currentUser.name } };
@@ -215,24 +275,14 @@ const AllExpenses = () => {
 
         setIsSidebarOpen(false);
 
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'bottom-end',
-            showConfirmButton: false,
-            timer: 1500,
-            timerProgressBar: true
-        });
-        Toast.fire({
-            icon: newStatus === 'Approved' ? 'success' : 'error',
-            title: newStatus === 'Approved' ? 'Approved!' : 'Rejected!'
-        });
+        const Toast = Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 1500, timerProgressBar: true });
+        Toast.fire({ icon: newStatus === 'Approved' ? 'success' : 'error', title: newStatus === 'Approved' ? 'Approved!' : 'Rejected!' });
 
-        // Silent Database Update
         try {
             await api.put(`/expenses/${id}/status`, { status: newStatus });
-            fetchExpenses(currentPage, true); // 👈 SILENT REFRESH
+            fetchExpenses(currentPage, true);
         } catch (err) {
-            setExpenses(previousExpenses); // Revert if network fails
+            setExpenses(previousExpenses);
             Swal.fire('Error', 'Failed to update status on the server. Reverted changes.', 'error');
         }
     };
@@ -243,27 +293,18 @@ const AllExpenses = () => {
         const count = selectedExpenses.length;
         const currentSelection = [...selectedExpenses];
 
-        // 1. Optimistic Update UI instantly
-        setExpenses(prev => prev.map(exp =>
-            currentSelection.includes(exp._id)
-                ? { ...exp, status: 'Approved', approvedBy: { name: currentUser.name } }
-                : exp
-        ));
-
-        // Clear checkboxes instantly
+        setExpenses(prev => prev.map(exp => currentSelection.includes(exp._id) ? { ...exp, status: 'Approved', approvedBy: { name: currentUser.name } } : exp));
         setSelectedExpenses([]);
 
-        // Non-intrusive success popup
         const Toast = Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 2000 });
         Toast.fire({ icon: 'success', title: `${count} expenses approved!` });
 
-        // 2. Process in background silently
         try {
             await Promise.all(currentSelection.map(id => api.put(`/expenses/${id}/status`, { status: 'Approved' })));
-            fetchExpenses(currentPage, true); // 👈 SILENT REFRESH
+            fetchExpenses(currentPage, true);
         } catch (err) {
             Swal.fire('Error', 'Some approvals failed.', 'error');
-            fetchExpenses(currentPage); // Do a hard refresh to sync back to reality if network fails
+            fetchExpenses(currentPage);
         }
     };
 
@@ -425,6 +466,11 @@ const AllExpenses = () => {
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px' }}>
+                    {/* 👇 NEW: Excel Export Button added to the top action bar */}
+                    <button className="gts-btn success btn-small m-0 fade-in" onClick={handleExportExcel} style={{ background: '#059669', color: 'white', fontWeight: 'bold' }}>
+                        <FontAwesomeIcon icon={faFileExcel} className="btn-icon" /> Export Excel
+                    </button>
+
                     {selectedExpenses.length >= 2 && (
                         <button className="gts-btn primary btn-small m-0 fade-in" onClick={handleMergeSelected} style={{ background: '#2563eb', color: 'white', fontWeight: 'bold' }}>
                             <FontAwesomeIcon icon={faObjectGroup} className="btn-icon" /> Merge into 1 Bill
@@ -654,7 +700,6 @@ const AllExpenses = () => {
                                             {item.projectName && <div className="text-small fw-600" style={{ marginTop: '6px', color: '#475569' }}>{item.projectName}</div>}
                                         </td>
 
-                                        {/* 👇 UPDATED: Split Table Data */}
                                         <td data-label="Amount">
                                             <div className="expense-amount-large">₹ {item.amount.toLocaleString('en-IN')}</div>
                                             {item.expenseDetails?.gstNumber && <span style={{ fontSize: '10px', background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>GST: {item.expenseDetails.gstNumber}</span>}
