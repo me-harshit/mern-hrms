@@ -1,11 +1,11 @@
-import React, { useState, useEffect} from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
-    faArrowLeft, faSave, faTimes, faPaperclip, faTags, faRupeeSign, faCreditCard, 
-    faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle, 
+    faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, 
+    faInfoCircle, faListAlt, faTimes, faUser, faBuilding, faSpinner, faCheckCircle, 
     faPlus, faSearch, faTrash, faChevronDown, faChevronUp, faLink, faBoxOpen
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression'; 
@@ -27,7 +27,7 @@ const AddExpense = () => {
     const [projectsList, setProjectsList] = useState([]);
     const [vendorsList, setVendorsList] = useState([]); 
     
-    // 👇 NEW: Unbilled Inventory States
+    // Unbilled Inventory States
     const [unbilledInventory, setUnbilledInventory] = useState([]);
     const [showUnbilledModal, setShowUnbilledModal] = useState(false);
     const [unbilledSelections, setUnbilledSelections] = useState({});
@@ -73,7 +73,6 @@ const AddExpense = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                // 👇 UPDATED: Added the unbilled inventory fetch
                 const [userRes, allEmpRes, projRes, venRes, settingsRes, unbilledRes] = await Promise.all([
                     api.get('/employees/payment-sources'),
                     api.get('/employees/directory').catch(() => ({ data: [] })),
@@ -174,7 +173,6 @@ const AddExpense = () => {
         }
     };
 
-    // 👇 NEW: Modal Logic for Linking Unbilled Inventory
     const openUnbilledModal = () => {
         if (unbilledInventory.length === 0) {
             return Swal.fire('All Clear!', 'There are no unbilled inventory items waiting in the system.', 'info');
@@ -196,7 +194,7 @@ const AddExpense = () => {
                     productName: itemName,
                     quantity: unbilledSelections[itemName].qty,
                     isLinkedItem: true,
-                    inventoryItemStatus: 'Linked' // Custom status to hide unnecessary fields
+                    inventoryItemStatus: 'Linked' 
                 });
             }
         });
@@ -305,7 +303,7 @@ const AddExpense = () => {
             return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
         }
 
-        let hasLinkedItems = false; // 👇 NEW: Track if we are submitting linked items
+        let hasLinkedItems = false; 
 
         if (formData.category === 'Product / Item Purchase') {
             for (let i = 0; i < productList.length; i++) {
@@ -316,7 +314,6 @@ const AddExpense = () => {
                     return Swal.fire('Missing Details', `Please fill Product Name, Quantity, and Price for Item #${i + 1}`, 'warning');
                 }
                 
-                // Bypass assignee/location validation if it's already a linked item
                 if (!prod.isLinkedItem) {
                     if (prod.inventoryItemStatus === 'Assigned' && !prod.inventoryAssignedTo) {
                         return Swal.fire('Missing Employee', `Please select who Item #${i + 1} is assigned to.`, 'warning');
@@ -326,6 +323,8 @@ const AddExpense = () => {
                     }
                 }
 
+                // 👇 TEMPORARILY DISABLED: Category A Image Verification Check
+                /*
                 const unitCost = Number(prod.unitPrice);
                 if (['Available', 'Assigned'].includes(prod.inventoryItemStatus) && unitCost >= systemSettings.inventoryCatAThreshold) {
                     if (!files.expenseMedia || files.expenseMedia.length === 0) {
@@ -337,6 +336,7 @@ const AddExpense = () => {
                         });
                     }
                 }
+                */
             }
         }
 
@@ -347,7 +347,6 @@ const AddExpense = () => {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             
-            // 👇 NEW: Send the boolean flag to the backend so it bypasses inventory double-creation
             data.append('isLinkedToExistingInventory', hasLinkedItems);
 
             let relevantDetails = {};
@@ -416,10 +415,11 @@ const AddExpense = () => {
         }
     };
 
+    // 👇 UPDATED: Media Labels to explicitly state they are Optional for now
     const getMediaLabel = () => {
         switch (formData.category) {
-            case 'Vendor Payment': return 'Upload Vendor Invoice / Bill (Required)'; 
-            case 'Product / Item Purchase': return 'Product Photo(s) / Video(s) (Required for Cat A items)';
+            case 'Vendor Payment': return 'Upload Vendor Invoice / Bill (Optional for now)'; 
+            case 'Product / Item Purchase': return 'Product Photo(s) / Video(s) (Optional for now)';
             case 'Fuel Expense (Car / Bike)': return 'Odometer Image(s) / Fuel Station Receipt';
             case 'Food Expense': return 'Order Screenshot / Restaurant Bill';
             case 'Travel Expense': return 'Travel Receipt / Ticket Screenshot';
@@ -491,7 +491,6 @@ const AddExpense = () => {
                                         <div>
                                             <h4 style={{ margin: 0, color: '#0f172a', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                 Item #{index + 1} {prod.productName ? <span style={{ color: '#64748b', fontWeight: 'normal' }}>— {prod.productName}</span> : ''}
-                                                {/* 👇 NEW: Visual indicator if item is linked */}
                                                 {prod.isLinkedItem && <span style={{ background: '#dcfce7', color: '#16a34a', fontSize: '10px', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}><FontAwesomeIcon icon={faLink} /> Linked to Office DB</span>}
                                             </h4>
                                         </div>
@@ -508,7 +507,6 @@ const AddExpense = () => {
                                     {isExpanded && (
                                         <div style={{ padding: '20px' }}>
                                             <div className="expense-grid">
-                                                {/* If it's a linked item, we lock the name so they don't break the DB link */}
                                                 <div className="form-group grid-span-2">
                                                     <label className="input-label">Product Name *</label>
                                                     <input className="custom-input" value={prod.productName} onChange={(e) => handleProductChange(index, 'productName', e.target.value)} disabled={prod.isLinkedItem} required />
@@ -516,7 +514,6 @@ const AddExpense = () => {
                                                 <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" min="1" value={prod.quantity} onChange={(e) => handleProductChange(index, 'quantity', e.target.value)} required /></div>
                                                 <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" value={prod.unitPrice} onChange={(e) => handleProductChange(index, 'unitPrice', e.target.value)} required /></div>
                                                 
-                                                {/* 👇 UPDATED: Hide inventory logic if it's already a linked item */}
                                                 {!prod.isLinkedItem ? (
                                                     <>
                                                         <div className="form-group grid-span-2">
@@ -581,7 +578,6 @@ const AddExpense = () => {
                                 <FontAwesomeIcon icon={faPlus} /> Add New Product
                             </button>
                             
-                            {/* 👇 NEW: Link Unbilled Button */}
                             {(userRole === 'ADMIN' || userRole === 'ACCOUNTS' || userRole === 'HR') && (
                                 <button type="button" className="gts-btn doc-btn" style={{ background: '#fdf2f8', color: '#db2777', border: '1px dashed #fbcfe8' }} onClick={openUnbilledModal}>
                                     <FontAwesomeIcon icon={faBoxOpen} /> Link Unbilled Inventory
@@ -823,7 +819,8 @@ const AddExpense = () => {
                                 <label className="input-label" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px' }}>
                                     {getMediaLabel()}
                                 </label>
-                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*,application/pdf" onChange={e => handleFileChange(e, 'expenseMedia')} required={formData.category === 'Vendor Payment'} />
+                                {/* 👇 UPDATED: Removed 'required' constraint from here */}
+                                <input className="custom-file-input" type="file" multiple accept="image/*,video/*,application/pdf" onChange={e => handleFileChange(e, 'expenseMedia')} />
                                 {isCompressing ? (
                                     <p className="file-success-text" style={{ color: '#d97706', marginTop: '5px', fontWeight: '600' }}><FontAwesomeIcon icon={faSpinner} spin /> Compressing images...</p>
                                 ) : files.expenseMedia.length > 0 && (
@@ -849,7 +846,7 @@ const AddExpense = () => {
                 </form>
             </div>
 
-            {/* 👇 NEW: Unbilled Inventory Modal overlay */}
+            {/* Unbilled Inventory Modal overlay */}
             {showUnbilledModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
                     <div className="fade-in" style={{ background: '#fff', borderRadius: '12px', width: '90%', maxWidth: '600px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
