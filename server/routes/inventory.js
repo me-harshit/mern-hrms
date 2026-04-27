@@ -148,6 +148,54 @@ router.get('/my-items', auth, async (req, res) => {
     }
 });
 
+
+// @route   GET /api/inventory/unbilled
+// @desc    Get all inventory items not yet linked to an expense bill (Grouped by Name)
+router.get('/unbilled', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        const unbilledGrouped = await Inventory.aggregate([
+            // 1. Find all items that are NOT linked to an expense
+            {
+                $match: {
+                    $or: [
+                        { linkedExpenseId: null },
+                        { linkedExpenseId: { $exists: false } }
+                    ]
+                }
+            },
+            // 2. Group them by their exact Name
+            {
+                $group: {
+                    _id: "$itemName",
+                    totalUnbilledQty: { $sum: "$quantity" },
+                    // Optional: keep a rough idea of estimated price if available
+                    estimatedTotalValue: { 
+                        $sum: { $multiply: ["$quantity", { $ifNull: ["$price", 0] }] } 
+                    }
+                }
+            },
+            // 3. Clean up the output format for the frontend
+            {
+                $project: {
+                    itemName: "$_id",
+                    totalUnbilledQty: 1,
+                    estimatedTotalValue: 1,
+                    _id: 0
+                }
+            },
+            // 4. Sort alphabetically
+            { $sort: { itemName: 1 } }
+        ]);
+
+        res.json(unbilledGrouped);
+    } catch (err) {
+        console.error("Unbilled Inventory Fetch Error:", err.message);
+        res.status(500).json({ message: 'Server Error fetching unbilled inventory' });
+    }
+});
+
 // @route   GET /api/inventory/:id
 // @desc    Get a single asset by ID (For Edit Page)
 router.get('/:id', auth, async (req, res) => {

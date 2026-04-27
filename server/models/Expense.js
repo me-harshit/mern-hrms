@@ -21,8 +21,14 @@ const expenseSchema = new mongoose.Schema({
     expenseDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
     paymentScreenshotUrls: [{ type: String }],
     expenseMediaUrls: [{ type: String }], 
+    
+    // --- INVENTORY SYNCING LOGIC ---
     inventorySynced: { type: Boolean, default: false },
-    linkedInventoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory' },
+    linkedInventoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Inventory' }], // Supports multiple items
+    
+    // 👇 NEW: Flag to prevent double-creating inventory during approval
+    isLinkedToExistingInventory: { type: Boolean, default: false }, 
+    
     inventoryStatus: {
         type: String,
         enum: ['Available', 'In Use', 'Consumed', 'Lost/Damaged'],
@@ -38,7 +44,7 @@ const expenseSchema = new mongoose.Schema({
 expenseSchema.index({ status: 1 });
 expenseSchema.index({ submittedBy: 1 });
 expenseSchema.index({ paymentSourceId: 1 });
-expenseSchema.index({ expenseDate: -1 }); // -1 because we sort dates descending (newest first)
+expenseSchema.index({ expenseDate: -1 }); 
 expenseSchema.index({ category: 1 });
 expenseSchema.index({ projectName: 1 });
 

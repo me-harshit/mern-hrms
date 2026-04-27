@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect} from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
-    faArrowLeft, faSave, faPaperclip, faTags, faRupeeSign, faCreditCard, 
+    faArrowLeft, faSave, faTimes, faPaperclip, faTags, faRupeeSign, faCreditCard, 
     faInfoCircle, faListAlt, faUser, faBuilding, faSpinner, faCheckCircle, 
-    faPlus, faSearch, faTrash, faChevronDown, faChevronUp
+    faPlus, faSearch, faTrash, faChevronDown, faChevronUp, faLink, faBoxOpen
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression'; 
 import SearchSelect from '../../components/SearchSelect'; 
@@ -27,6 +27,11 @@ const AddExpense = () => {
     const [projectsList, setProjectsList] = useState([]);
     const [vendorsList, setVendorsList] = useState([]); 
     
+    // 👇 NEW: Unbilled Inventory States
+    const [unbilledInventory, setUnbilledInventory] = useState([]);
+    const [showUnbilledModal, setShowUnbilledModal] = useState(false);
+    const [unbilledSelections, setUnbilledSelections] = useState({});
+    
     const [systemSettings, setSystemSettings] = useState({
         inventoryCatAThreshold: 500,
         inventoryCatBThreshold: 100
@@ -46,7 +51,7 @@ const AddExpense = () => {
 
     const defaultProduct = {
         productName: '', quantity: 1, unitPrice: '', expiryDate: '', storageLocation: '',
-        inventoryItemStatus: 'Available', inventoryAssignedTo: ''
+        inventoryItemStatus: 'Available', inventoryAssignedTo: '', isLinkedItem: false
     };
 
     const [productList, setProductList] = useState([{ ...defaultProduct }]);
@@ -68,12 +73,14 @@ const AddExpense = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [userRes, allEmpRes, projRes, venRes, settingsRes] = await Promise.all([
+                // 👇 UPDATED: Added the unbilled inventory fetch
+                const [userRes, allEmpRes, projRes, venRes, settingsRes, unbilledRes] = await Promise.all([
                     api.get('/employees/payment-sources'),
                     api.get('/employees/directory').catch(() => ({ data: [] })),
                     api.get('/projects'),
                     api.get('/vendors').catch(() => ({ data: [] })),
-                    api.get('/settings').catch(() => ({ data: {} }))
+                    api.get('/settings').catch(() => ({ data: {} })),
+                    api.get('/inventory/unbilled').catch(() => ({ data: [] }))
                 ]);
 
                 setUsersList(userRes.data);
@@ -81,6 +88,7 @@ const AddExpense = () => {
                 setAllEmployeesList(employeeArray);
                 setProjectsList(projRes.data);
                 setVendorsList(venRes.data);
+                setUnbilledInventory(Array.isArray(unbilledRes.data) ? unbilledRes.data : []);
                 
                 if(settingsRes.data) {
                     setSystemSettings({
@@ -141,7 +149,7 @@ const AddExpense = () => {
         if (field === 'inventoryItemStatus') {
             if (value === 'Available') updatedList[index].inventoryAssignedTo = '';
             if (value === 'Assigned') updatedList[index].storageLocation = '';
-            if (value === 'Do Not Track') {
+            if (value === 'Do Not Track' || value === 'Linked') {
                 updatedList[index].storageLocation = '';
                 updatedList[index].inventoryAssignedTo = '';
             }
@@ -166,6 +174,41 @@ const AddExpense = () => {
         }
     };
 
+    // 👇 NEW: Modal Logic for Linking Unbilled Inventory
+    const openUnbilledModal = () => {
+        if (unbilledInventory.length === 0) {
+            return Swal.fire('All Clear!', 'There are no unbilled inventory items waiting in the system.', 'info');
+        }
+        const initialSelections = {};
+        unbilledInventory.forEach(item => {
+            initialSelections[item.itemName] = { selected: false, qty: item.totalUnbilledQty };
+        });
+        setUnbilledSelections(initialSelections);
+        setShowUnbilledModal(true);
+    };
+
+    const handleConfirmLink = () => {
+        const newLinkedProducts = [];
+        Object.keys(unbilledSelections).forEach(itemName => {
+            if (unbilledSelections[itemName].selected) {
+                newLinkedProducts.push({
+                    ...defaultProduct,
+                    productName: itemName,
+                    quantity: unbilledSelections[itemName].qty,
+                    isLinkedItem: true,
+                    inventoryItemStatus: 'Linked' // Custom status to hide unnecessary fields
+                });
+            }
+        });
+
+        if (newLinkedProducts.length > 0) {
+            const currentList = productList.length === 1 && !productList[0].productName ? [] : productList;
+            setProductList([...currentList, ...newLinkedProducts]);
+            setExpandedItemIndex(currentList.length); 
+        }
+        setShowUnbilledModal(false);
+    };
+
     const getPaymentSourceOptions = () => {
         const optionsPool = (userRole === 'ADMIN' || userRole === 'ACCOUNTS') ? allEmployeesList : usersList;
         const currentUserId = currentUser.id || currentUser._id;
@@ -186,8 +229,7 @@ const AddExpense = () => {
             const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif)$/i);
             const isPdf = file.type === 'application/pdf';
 
-            // 👇 NEW: Immediate frontend warning if a non-image file is heavily oversized
-            if (isPdf && file.size > 5 * 1024 * 1024) { // Warns if PDF is over 5MB
+            if (isPdf && file.size > 5 * 1024 * 1024) { 
                 Swal.fire('Large File Detected', `The PDF "${file.name}" is quite large and might be rejected by the server. Consider compressing it first.`, 'warning');
             }
 
@@ -263,17 +305,25 @@ const AddExpense = () => {
             return Swal.fire('Missing Vendor', 'Please select a Vendor for this payment.', 'warning');
         }
 
+        let hasLinkedItems = false; // 👇 NEW: Track if we are submitting linked items
+
         if (formData.category === 'Product / Item Purchase') {
             for (let i = 0; i < productList.length; i++) {
                 const prod = productList[i];
+                if (prod.isLinkedItem) hasLinkedItems = true;
+
                 if (!prod.productName || !prod.unitPrice || !prod.quantity) {
                     return Swal.fire('Missing Details', `Please fill Product Name, Quantity, and Price for Item #${i + 1}`, 'warning');
                 }
-                if (prod.inventoryItemStatus === 'Assigned' && !prod.inventoryAssignedTo) {
-                    return Swal.fire('Missing Employee', `Please select who Item #${i + 1} is assigned to.`, 'warning');
-                }
-                if (prod.inventoryItemStatus === 'Available' && !prod.storageLocation) {
-                    return Swal.fire('Missing Location', `Please provide a storage location for Item #${i + 1}.`, 'warning');
+                
+                // Bypass assignee/location validation if it's already a linked item
+                if (!prod.isLinkedItem) {
+                    if (prod.inventoryItemStatus === 'Assigned' && !prod.inventoryAssignedTo) {
+                        return Swal.fire('Missing Employee', `Please select who Item #${i + 1} is assigned to.`, 'warning');
+                    }
+                    if (prod.inventoryItemStatus === 'Available' && !prod.storageLocation) {
+                        return Swal.fire('Missing Location', `Please provide a storage location for Item #${i + 1}.`, 'warning');
+                    }
                 }
 
                 const unitCost = Number(prod.unitPrice);
@@ -297,6 +347,9 @@ const AddExpense = () => {
             const data = new FormData();
             Object.keys(formData).forEach(key => data.append(key, formData[key]));
             
+            // 👇 NEW: Send the boolean flag to the backend so it bypasses inventory double-creation
+            data.append('isLinkedToExistingInventory', hasLinkedItems);
+
             let relevantDetails = {};
             const d = expenseDetails;
             
@@ -337,18 +390,15 @@ const AddExpense = () => {
             Swal.fire({ icon: 'success', title: 'Expense Logged for Approval', timer: 1500, showConfirmButton: false });
             navigate('/expenses');
             
-        // 👇 FIXED: Deep error handling to explicitly catch 413 and backend errors
         } catch (err) {
             console.error("Upload error:", err);
             
             let errorMessage = 'Failed to save expense. Please check your connection and try again.';
             
             if (err.response) {
-                // If the server blocked the payload due to file size limits
                 if (err.response.status === 413) {
                     errorMessage = 'File Too Large! The server rejected the upload because your PDF or document exceeds the maximum allowed size. Please upload a smaller file.';
                 } 
-                // If the backend actively returned a specific error message
                 else if (err.response.data && err.response.data.message) {
                     errorMessage = err.response.data.message;
                 }
@@ -439,8 +489,10 @@ const AddExpense = () => {
                                         }}
                                     >
                                         <div>
-                                            <h4 style={{ margin: 0, color: '#0f172a', fontSize: '15px' }}>
+                                            <h4 style={{ margin: 0, color: '#0f172a', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                 Item #{index + 1} {prod.productName ? <span style={{ color: '#64748b', fontWeight: 'normal' }}>— {prod.productName}</span> : ''}
+                                                {/* 👇 NEW: Visual indicator if item is linked */}
+                                                {prod.isLinkedItem && <span style={{ background: '#dcfce7', color: '#16a34a', fontSize: '10px', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}><FontAwesomeIcon icon={faLink} /> Linked to Office DB</span>}
                                             </h4>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -456,52 +508,67 @@ const AddExpense = () => {
                                     {isExpanded && (
                                         <div style={{ padding: '20px' }}>
                                             <div className="expense-grid">
-                                                <div className="form-group grid-span-2"><label className="input-label">Product Name *</label><input className="custom-input" value={prod.productName} onChange={(e) => handleProductChange(index, 'productName', e.target.value)} required /></div>
+                                                {/* If it's a linked item, we lock the name so they don't break the DB link */}
+                                                <div className="form-group grid-span-2">
+                                                    <label className="input-label">Product Name *</label>
+                                                    <input className="custom-input" value={prod.productName} onChange={(e) => handleProductChange(index, 'productName', e.target.value)} disabled={prod.isLinkedItem} required />
+                                                </div>
                                                 <div className="form-group"><label className="input-label">Quantity *</label><input className="custom-input" type="number" min="1" value={prod.quantity} onChange={(e) => handleProductChange(index, 'quantity', e.target.value)} required /></div>
                                                 <div className="form-group"><label className="input-label">Unit Price (₹) *</label><input className="custom-input" type="number" value={prod.unitPrice} onChange={(e) => handleProductChange(index, 'unitPrice', e.target.value)} required /></div>
                                                 
-                                                <div className="form-group grid-span-2">
-                                                    <label className="input-label" style={{ color: '#0f172a' }}>Will this item be added to Company Inventory?</label>
-                                                    <div className="expense-type-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                        <label className={prod.inventoryItemStatus === 'Available' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
-                                                            <input type="radio" value="Available" checked={prod.inventoryItemStatus === 'Available'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> Yes, Keep in Office (Available)
-                                                        </label>
-                                                        <label className={prod.inventoryItemStatus === 'Assigned' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
-                                                            <input type="radio" value="Assigned" checked={prod.inventoryItemStatus === 'Assigned'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> Yes, Assign to Employee
-                                                        </label>
-                                                        <label className={prod.inventoryItemStatus === 'Do Not Track' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start', background: prod.inventoryItemStatus === 'Do Not Track' ? '#f1f5f9' : '', color: prod.inventoryItemStatus === 'Do Not Track' ? '#64748b' : '' }}>
-                                                            <input type="radio" value="Do Not Track" checked={prod.inventoryItemStatus === 'Do Not Track'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> No, Consumable / Do Not Track
-                                                        </label>
-                                                    </div>
-                                                </div>
-
-                                                <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: 0 }}>
-                                                    {prod.inventoryItemStatus === 'Available' && (
-                                                        <div style={{ flex: 1, minWidth: '200px' }}>
-                                                            <label className="input-label">Storage Location *</label>
-                                                            <input className="custom-input" value={prod.storageLocation} onChange={(e) => handleProductChange(index, 'storageLocation', e.target.value)} placeholder="e.g. Office Room A" required />
+                                                {/* 👇 UPDATED: Hide inventory logic if it's already a linked item */}
+                                                {!prod.isLinkedItem ? (
+                                                    <>
+                                                        <div className="form-group grid-span-2">
+                                                            <label className="input-label" style={{ color: '#0f172a' }}>Will this item be added to Company Inventory?</label>
+                                                            <div className="expense-type-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                <label className={prod.inventoryItemStatus === 'Available' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
+                                                                    <input type="radio" value="Available" checked={prod.inventoryItemStatus === 'Available'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> Yes, Keep in Office (Available)
+                                                                </label>
+                                                                <label className={prod.inventoryItemStatus === 'Assigned' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start' }}>
+                                                                    <input type="radio" value="Assigned" checked={prod.inventoryItemStatus === 'Assigned'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> Yes, Assign to Employee
+                                                                </label>
+                                                                <label className={prod.inventoryItemStatus === 'Do Not Track' ? 'active' : ''} style={{ width: '100%', justifyContent: 'flex-start', background: prod.inventoryItemStatus === 'Do Not Track' ? '#f1f5f9' : '', color: prod.inventoryItemStatus === 'Do Not Track' ? '#64748b' : '' }}>
+                                                                    <input type="radio" value="Do Not Track" checked={prod.inventoryItemStatus === 'Do Not Track'} onChange={(e) => handleProductChange(index, 'inventoryItemStatus', e.target.value)} /> No, Consumable / Do Not Track
+                                                                </label>
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                    
-                                                    {prod.inventoryItemStatus === 'Assigned' && (
-                                                        <div style={{ flex: 1, minWidth: '200px' }}>
-                                                            <label className="input-label">Assign To Employee *</label>
-                                                            <SearchSelect 
-                                                                options={allEmployeesList}
-                                                                value={prod.inventoryAssignedTo}
-                                                                onChange={(val) => handleProductChange(index, 'inventoryAssignedTo', val)}
-                                                                placeholder="Search by name or role..."
-                                                                secondaryKey="role"
-                                                                icon={faUser}
-                                                            />
-                                                        </div>
-                                                    )}
 
-                                                    <div style={{ flex: 1, minWidth: '200px' }}>
-                                                        <label className="input-label">Expiry Date (If applicable)</label>
-                                                        <input className="custom-input" type="date" value={prod.expiryDate} onChange={(e) => handleProductChange(index, 'expiryDate', e.target.value)} />
+                                                        <div className="form-group grid-span-2" style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: 0 }}>
+                                                            {prod.inventoryItemStatus === 'Available' && (
+                                                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                                                    <label className="input-label">Storage Location *</label>
+                                                                    <input className="custom-input" value={prod.storageLocation} onChange={(e) => handleProductChange(index, 'storageLocation', e.target.value)} placeholder="e.g. Office Room A" required />
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {prod.inventoryItemStatus === 'Assigned' && (
+                                                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                                                    <label className="input-label">Assign To Employee *</label>
+                                                                    <SearchSelect 
+                                                                        options={allEmployeesList}
+                                                                        value={prod.inventoryAssignedTo}
+                                                                        onChange={(val) => handleProductChange(index, 'inventoryAssignedTo', val)}
+                                                                        placeholder="Search by name or role..."
+                                                                        secondaryKey="role"
+                                                                        icon={faUser}
+                                                                    />
+                                                                </div>
+                                                            )}
+
+                                                            <div style={{ flex: 1, minWidth: '200px' }}>
+                                                                <label className="input-label">Expiry Date (If applicable)</label>
+                                                                <input className="custom-input" type="date" value={prod.expiryDate} onChange={(e) => handleProductChange(index, 'expiryDate', e.target.value)} />
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="form-group grid-span-2">
+                                                        <div style={{ background: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px dashed #22c55e', color: '#16a34a', fontWeight: '600', fontSize: '13px' }}>
+                                                            <FontAwesomeIcon icon={faCheckCircle} /> This item's physical location is already tracked in the database. No further inventory details are needed.
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -509,10 +576,17 @@ const AddExpense = () => {
                             );
                         })}
 
-                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px', gap: '15px', flexWrap: 'wrap' }}>
                             <button type="button" className="gts-btn doc-btn" style={{ background: '#eff6ff', color: '#2563eb', border: '1px dashed #bfdbfe' }} onClick={addProduct}>
-                                <FontAwesomeIcon icon={faPlus} /> Add Another Product to this Bill
+                                <FontAwesomeIcon icon={faPlus} /> Add New Product
                             </button>
+                            
+                            {/* 👇 NEW: Link Unbilled Button */}
+                            {(userRole === 'ADMIN' || userRole === 'ACCOUNTS' || userRole === 'HR') && (
+                                <button type="button" className="gts-btn doc-btn" style={{ background: '#fdf2f8', color: '#db2777', border: '1px dashed #fbcfe8' }} onClick={openUnbilledModal}>
+                                    <FontAwesomeIcon icon={faBoxOpen} /> Link Unbilled Inventory
+                                </button>
+                            )}
                         </div>
                     </div>
                 );
@@ -774,6 +848,67 @@ const AddExpense = () => {
 
                 </form>
             </div>
+
+            {/* 👇 NEW: Unbilled Inventory Modal overlay */}
+            {showUnbilledModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                    <div className="fade-in" style={{ background: '#fff', borderRadius: '12px', width: '90%', maxWidth: '600px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '1px solid #e2e8f0' }}>
+                            <h2 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}><FontAwesomeIcon icon={faBoxOpen} style={{ color: '#db2777', marginRight: '8px' }}/> Link Existing Office Items</h2>
+                            <button onClick={() => setShowUnbilledModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', color: '#64748b' }}>
+                                <FontAwesomeIcon icon={faTimes}/>
+                            </button>
+                        </div>
+                        
+                        <div style={{ overflowY: 'auto', padding: '20px', flex: 1 }}>
+                            <p style={{ fontSize: '13px', color: '#64748b', marginTop: 0, marginBottom: '20px' }}>
+                                Below are items currently in your database that have not yet been linked to an expense bill. Select the items you are paying for now.
+                            </p>
+                            
+                            {unbilledInventory.map(item => (
+                                <div key={item.itemName} style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '15px', background: unbilledSelections[item.itemName]?.selected ? '#fdf2f8' : '#f8fafc', border: `1px solid ${unbilledSelections[item.itemName]?.selected ? '#fbcfe8' : '#e2e8f0'}`, borderRadius: '8px', marginBottom: '10px', transition: 'background 0.2s' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', margin: 0, fontWeight: 'bold', color: '#0f172a' }}>
+                                        <input 
+                                            type="checkbox" 
+                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                            checked={unbilledSelections[item.itemName]?.selected} 
+                                            onChange={(e) => setUnbilledSelections({
+                                                ...unbilledSelections, 
+                                                [item.itemName]: { ...unbilledSelections[item.itemName], selected: e.target.checked }
+                                            })}
+                                        />
+                                        {item.itemName}
+                                    </label>
+                                    
+                                    {unbilledSelections[item.itemName]?.selected && (
+                                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginLeft: '28px', marginTop: '5px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="text-small text-muted d-block mb-5">Qty being Billed (Max: {item.totalUnbilledQty})</label>
+                                                <input 
+                                                    type="number" 
+                                                    className="custom-input m-0" 
+                                                    min="1" 
+                                                    max={item.totalUnbilledQty}
+                                                    value={unbilledSelections[item.itemName].qty}
+                                                    onChange={(e) => setUnbilledSelections({
+                                                        ...unbilledSelections, 
+                                                        [item.itemName]: { ...unbilledSelections[item.itemName], qty: Math.min(Number(e.target.value), item.totalUnbilledQty) }
+                                                    })}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div style={{ padding: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button className="gts-btn warning" onClick={() => setShowUnbilledModal(false)}>Cancel</button>
+                            <button className="gts-btn success" onClick={handleConfirmLink} style={{ background: '#db2777', color: 'white' }}>Add to Bill Form</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
