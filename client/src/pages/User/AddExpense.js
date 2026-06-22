@@ -200,6 +200,13 @@ const AddExpense = () => {
         ];
     };
 
+    const removeNewFile = (fieldName, index) => {
+        setFiles(prev => ({
+            ...prev,
+            [fieldName]: prev[fieldName].filter((_, i) => i !== index)
+        }));
+    };
+
     const handleFileChange = async (e, fieldName) => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
@@ -794,7 +801,14 @@ const AddExpense = () => {
                                 {isCompressing ? (
                                     <p className="file-success-text" style={{ color: '#d97706', marginTop: '5px', fontWeight: '600' }}><FontAwesomeIcon icon={faSpinner} spin /> Compressing images...</p>
                                 ) : files.paymentScreenshots.length > 0 && (
-                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}><FontAwesomeIcon icon={faCheckCircle} /> {files.paymentScreenshots.length} proof file(s) ready</p>
+                                    <div className="file-chips-list">
+                                        {files.paymentScreenshots.map((f, i) => (
+                                            <div key={i} className="file-chip">
+                                                <span className="file-chip-name">{f.name}</span>
+                                                <button type="button" className="file-chip-remove" onClick={() => removeNewFile('paymentScreenshots', i)}>✕</button>
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
 
@@ -807,7 +821,14 @@ const AddExpense = () => {
                                 {isCompressing ? (
                                     <p className="file-success-text" style={{ color: '#d97706', marginTop: '5px', fontWeight: '600' }}><FontAwesomeIcon icon={faSpinner} spin /> Compressing images...</p>
                                 ) : files.expenseMedia.length > 0 && (
-                                    <p className="file-success-text" style={{ fontSize: '12px', color: '#16a34a', marginTop: '5px', fontWeight: '600' }}><FontAwesomeIcon icon={faCheckCircle} /> {files.expenseMedia.length} media file(s) ready</p>
+                                    <div className="file-chips-list">
+                                        {files.expenseMedia.map((f, i) => (
+                                            <div key={i} className="file-chip">
+                                                <span className="file-chip-name">{f.name}</span>
+                                                <button type="button" className="file-chip-remove" onClick={() => removeNewFile('expenseMedia', i)}>✕</button>
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
                         </div>

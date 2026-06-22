@@ -172,6 +172,20 @@ const EditExpense = () => {
         return [ { _id: currentUserId, name: 'Myself (Reimburse Me)', role: userRole }, ...filteredPool ];
     };
 
+    const removeExistingFile = (fieldName, index) => {
+        setExistingFiles(prev => ({
+            ...prev,
+            [fieldName]: prev[fieldName].filter((_, i) => i !== index)
+        }));
+    };
+
+    const removeNewFile = (fieldName, index) => {
+        setNewFiles(prev => ({
+            ...prev,
+            [fieldName]: prev[fieldName].filter((_, i) => i !== index)
+        }));
+    };
+
     const handleFileChange = async (e, fieldName) => {
         const selectedFiles = Array.from(e.target.files);
         const processedFiles = [];
@@ -297,6 +311,9 @@ const EditExpense = () => {
 
             data.append('expenseDetails', JSON.stringify(relevantDetails));
 
+            data.append('keepPaymentUrls', JSON.stringify(existingFiles.paymentScreenshotUrls));
+            data.append('keepMediaUrls', JSON.stringify(existingFiles.expenseMediaUrls));
+
             if (newFiles.paymentScreenshots && newFiles.paymentScreenshots.length > 0) {
                 for (let i = 0; i < newFiles.paymentScreenshots.length; i++) data.append('paymentScreenshots', newFiles.paymentScreenshots[i]);
             }
@@ -338,26 +355,38 @@ const EditExpense = () => {
         }
     };
 
-    const renderThumbnail = (url, index, titlePrefix) => {
+    const renderThumbnail = (url, index, titlePrefix, onRemove) => {
         const fullUrl = getFileUrl(url);
         const isPdf = url.toLowerCase().endsWith('.pdf');
         const isVideo = url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/);
 
-        let iconContent;
-        if (isPdf) {
-            iconContent = <FontAwesomeIcon icon={faFilePdf} style={{ fontSize: '32px', color: '#dc2626' }} />;
-        } else if (isVideo) {
-            iconContent = <FontAwesomeIcon icon={faFileVideo} style={{ fontSize: '32px', color: '#2563eb' }} />;
-        } else {
+        const removeBtn = (
+            <button
+                type="button"
+                className="file-remove-btn"
+                onClick={(e) => { e.stopPropagation(); onRemove(index); }}
+                title="Remove file"
+            >
+                ✕
+            </button>
+        );
+
+        if (!isPdf && !isVideo) {
             return (
-                <div key={index} className="existing-file-card" onClick={() => viewSingleFile(url, `${titlePrefix} ${index + 1}`)}>
-                    <img src={fullUrl} alt="Thumbnail" className="existing-file-thumb" />
+                <div key={index} className="existing-file-card">
+                    {removeBtn}
+                    <img src={fullUrl} alt="Thumbnail" className="existing-file-thumb" onClick={() => viewSingleFile(url, `${titlePrefix} ${index + 1}`)} />
                 </div>
             );
         }
 
+        const iconContent = isPdf
+            ? <FontAwesomeIcon icon={faFilePdf} style={{ fontSize: '32px', color: '#dc2626' }} />
+            : <FontAwesomeIcon icon={faFileVideo} style={{ fontSize: '32px', color: '#2563eb' }} />;
+
         return (
             <div key={index} className="existing-file-card icon-card" onClick={() => viewSingleFile(url, `${titlePrefix} ${index + 1}`)}>
+                {removeBtn}
                 {iconContent}
                 <span className="file-type-label">{isPdf ? 'PDF' : 'VIDEO'}</span>
             </div>
@@ -696,7 +725,7 @@ const EditExpense = () => {
 
                         {(existingFiles.paymentScreenshotUrls.length > 0 || existingFiles.expenseMediaUrls.length > 0) && (
                             <div className="alert-message warning mb-20" style={{ padding: '12px', borderRadius: '8px', fontSize: '13px', background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309' }}>
-                                <FontAwesomeIcon icon={faInfoCircle} /> <strong>Note:</strong> Uploading new files will overwrite your existing attachments. Leave the upload fields empty to keep your current files.
+                                <FontAwesomeIcon icon={faInfoCircle} /> <strong>Note:</strong> Click the red ✕ on a file to remove it. New uploads will be added alongside any remaining files.
                             </div>
                         )}
 
@@ -710,7 +739,7 @@ const EditExpense = () => {
                                     <div className="mb-15">
                                         <div className="text-small text-muted mb-10 fw-600">Currently Saved Files:</div>
                                         <div className="existing-file-gallery">
-                                            {existingFiles.paymentScreenshotUrls.map((url, idx) => renderThumbnail(url, idx, 'Proof'))}
+                                            {existingFiles.paymentScreenshotUrls.map((url, idx) => renderThumbnail(url, idx, 'Proof', (i) => removeExistingFile('paymentScreenshotUrls', i)))}
                                         </div>
                                     </div>
                                 )}
@@ -730,8 +759,13 @@ const EditExpense = () => {
                                             <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
                                         </div>
                                     ) : newFiles.paymentScreenshots.length > 0 && (
-                                        <div className="file-success-badge mt-10">
-                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.paymentScreenshots.length} new file(s) ready
+                                        <div className="file-chips-list">
+                                            {newFiles.paymentScreenshots.map((f, i) => (
+                                                <div key={i} className="file-chip">
+                                                    <span className="file-chip-name">{f.name}</span>
+                                                    <button type="button" className="file-chip-remove" onClick={() => removeNewFile('paymentScreenshots', i)}>✕</button>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
                                 </div>
@@ -746,7 +780,7 @@ const EditExpense = () => {
                                     <div className="mb-15">
                                         <div className="text-small text-muted mb-10 fw-600">Currently Saved Files:</div>
                                         <div className="existing-file-gallery">
-                                            {existingFiles.expenseMediaUrls.map((url, idx) => renderThumbnail(url, idx, 'Media'))}
+                                            {existingFiles.expenseMediaUrls.map((url, idx) => renderThumbnail(url, idx, 'Media', (i) => removeExistingFile('expenseMediaUrls', i)))}
                                         </div>
                                     </div>
                                 )}
@@ -767,8 +801,13 @@ const EditExpense = () => {
                                             <FontAwesomeIcon icon={faSpinner} spin /> Compressing...
                                         </div>
                                     ) : newFiles.expenseMedia.length > 0 && (
-                                        <div className="file-success-badge mt-10">
-                                            <FontAwesomeIcon icon={faCheckCircle} /> {newFiles.expenseMedia.length} new file(s) ready
+                                        <div className="file-chips-list">
+                                            {newFiles.expenseMedia.map((f, i) => (
+                                                <div key={i} className="file-chip">
+                                                    <span className="file-chip-name">{f.name}</span>
+                                                    <button type="button" className="file-chip-remove" onClick={() => removeNewFile('expenseMedia', i)}>✕</button>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
                                 </div>
