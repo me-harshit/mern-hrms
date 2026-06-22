@@ -671,13 +671,24 @@ router.put('/:id', auth, upload.fields([
             catch (e) { console.error("Error parsing expenseDetails"); }
         }
 
+        // Use the remaining existing URLs sent from the client (respects individual removals)
+        const keepPaymentUrls = req.body.keepPaymentUrls ? JSON.parse(req.body.keepPaymentUrls) : expense.paymentScreenshotUrls;
+        const keepMediaUrls = req.body.keepMediaUrls ? JSON.parse(req.body.keepMediaUrls) : expense.expenseMediaUrls;
+
         if (req.files && req.files['paymentScreenshots']) {
             const proofPromises = req.files['paymentScreenshots'].map(file => uploadToS3(file));
-            expense.paymentScreenshotUrls = await Promise.all(proofPromises);
+            const newUrls = await Promise.all(proofPromises);
+            expense.paymentScreenshotUrls = [...keepPaymentUrls, ...newUrls];
+        } else {
+            expense.paymentScreenshotUrls = keepPaymentUrls;
         }
+
         if (req.files && req.files['expenseMedia']) {
             const uploadPromises = req.files['expenseMedia'].map(file => uploadToS3(file));
-            expense.expenseMediaUrls = await Promise.all(uploadPromises);
+            const newUrls = await Promise.all(uploadPromises);
+            expense.expenseMediaUrls = [...keepMediaUrls, ...newUrls];
+        } else {
+            expense.expenseMediaUrls = keepMediaUrls;
         }
 
         if (expense.status === 'Pending' || expense.status === 'Returned') {
