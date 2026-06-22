@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../../utils/api';
@@ -20,22 +20,16 @@ const AddExpense = () => {
 
     const [loading, setLoading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [isCompressing, setIsCompressing] = useState(false); 
+    const [isCompressing, setIsCompressing] = useState(false);
 
-    const [usersList, setUsersList] = useState([]);
-    const [allEmployeesList, setAllEmployeesList] = useState([]); 
+    const [allEmployeesList, setAllEmployeesList] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
-    const [vendorsList, setVendorsList] = useState([]); 
-    
+    const [vendorsList, setVendorsList] = useState([]);
+
     // Unbilled Inventory States
     const [unbilledInventory, setUnbilledInventory] = useState([]);
     const [showUnbilledModal, setShowUnbilledModal] = useState(false);
     const [unbilledSelections, setUnbilledSelections] = useState({});
-    
-    const [systemSettings, setSystemSettings] = useState({
-        inventoryCatAThreshold: 500,
-        inventoryCatBThreshold: 100
-    });
 
     const [formData, setFormData] = useState({
         expenseType: 'Project Expense',
@@ -73,28 +67,18 @@ const AddExpense = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [userRes, allEmpRes, projRes, venRes, settingsRes, unbilledRes] = await Promise.all([
-                    api.get('/employees/payment-sources'),
+                const [allEmpRes, projRes, venRes, unbilledRes] = await Promise.all([
                     api.get('/employees/directory').catch(() => ({ data: [] })),
                     api.get('/projects'),
                     api.get('/vendors').catch(() => ({ data: [] })),
-                    api.get('/settings').catch(() => ({ data: {} })),
                     api.get('/inventory/unbilled').catch(() => ({ data: [] }))
                 ]);
 
-                setUsersList(userRes.data);
                 const employeeArray = Array.isArray(allEmpRes.data) ? allEmpRes.data : (allEmpRes.data?.data || []);
                 setAllEmployeesList(employeeArray);
                 setProjectsList(projRes.data);
                 setVendorsList(venRes.data);
                 setUnbilledInventory(Array.isArray(unbilledRes.data) ? unbilledRes.data : []);
-                
-                if(settingsRes.data) {
-                    setSystemSettings({
-                        inventoryCatAThreshold: settingsRes.data.inventoryCatAThreshold || 500,
-                        inventoryCatBThreshold: settingsRes.data.inventoryCatBThreshold || 100
-                    });
-                }
             } catch (err) {
                 console.error("Could not fetch dropdown data", err);
             }
