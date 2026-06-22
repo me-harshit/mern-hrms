@@ -81,28 +81,11 @@ router.get('/directory', auth, async (req, res) => {
 });
 
 // @route   GET /api/employees/payment-sources
-// @desc    Get allowed payment sources for an employee (Themselves, Manager, HR)
+// @desc    Get full list of all employees as payment sources for expense forms
 router.get('/payment-sources', auth, async (req, res) => {
     try {
-        const currentUser = await User.findById(req.user.id);
-
-        let allowedUsers = [];
-
-        // 1. Add their specific manager
-        if (currentUser.reportingManagerEmail) {
-            const manager = await User.findOne({ email: currentUser.reportingManagerEmail.toLowerCase() }).select('name role');
-            if (manager) allowedUsers.push(manager);
-        }
-
-        // 2. Add all HRs and Admins
-        const hrAdmins = await User.find({ role: { $in: ['HR'] } }).select('name role');
-
-        // Combine and filter out duplicates (in case Manager is also an Admin)
-        const combined = [...allowedUsers, ...hrAdmins];
-        const uniqueUsers = Array.from(new Set(combined.map(u => u._id.toString())))
-            .map(id => combined.find(u => u._id.toString() === id));
-
-        res.json(uniqueUsers);
+        const allEmployees = await User.find({}).select('name role employeeId').sort({ name: 1 });
+        res.json(allEmployees);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

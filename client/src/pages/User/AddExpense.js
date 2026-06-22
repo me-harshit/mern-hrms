@@ -208,9 +208,8 @@ const AddExpense = () => {
     };
 
     const getPaymentSourceOptions = () => {
-        const optionsPool = (userRole === 'ADMIN' || userRole === 'ACCOUNTS') ? allEmployeesList : usersList;
         const currentUserId = currentUser.id || currentUser._id;
-        const filteredPool = optionsPool.filter(u => String(u._id) !== String(currentUserId));
+        const filteredPool = allEmployeesList.filter(u => String(u._id) !== String(currentUserId));
         return [
             { _id: currentUserId, name: 'Myself (Reimburse Me)', role: userRole },
             ...filteredPool
