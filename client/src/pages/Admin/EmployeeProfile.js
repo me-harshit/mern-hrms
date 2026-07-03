@@ -6,7 +6,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faUser, faArrowLeft, faClock, faPlaneDeparture, faEdit, faEnvelope, faPhone,
     faWallet, faHistory, faUserSecret, faBoxOpen, faFileInvoice, faImage,
-    faCheckCircle, faTimesCircle, faUndo, faEye, faTimes, faBuilding, faCut
+    faCheckCircle, faTimesCircle, faUndo, faEye, faTimes, faBuilding, faCut,
+    faFingerprint, faSignInAlt, faSignOutAlt
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
@@ -35,6 +36,11 @@ const EmployeeProfile = () => {
     const [attTotalPages, setAttTotalPages] = useState(1);
     const [attTotalRecords, setAttTotalRecords] = useState(0);
     const [attLimit, setAttLimit] = useState(10);
+
+    // --- RAW PUNCHES MODAL STATES ---
+    const [rawModalDate, setRawModalDate] = useState(null); // shiftDate string; null = closed
+    const [rawPunches, setRawPunches] = useState([]);
+    const [rawLoading, setRawLoading] = useState(false);
 
     // --- EXPENSES PAGINATION & STATS STATES ---
     const [expenses, setExpenses] = useState([]);
@@ -125,6 +131,29 @@ const EmployeeProfile = () => {
         } finally {
             setAttLoading(false);
         }
+    };
+
+    // 👇 NEW: Open raw biometric punches for a specific date in a modal
+    const openRawPunches = async (shiftDate) => {
+        setRawModalDate(shiftDate);
+        setRawLoading(true);
+        setRawPunches([]);
+        try {
+            const res = await api.get(`/attendance/user-raw-logs/${id}`, {
+                params: { shiftDate }
+            });
+            setRawPunches(res.data.data || []);
+        } catch (err) {
+            console.error("Failed to load raw punches", err);
+            Swal.fire('Error', 'Failed to load raw punches for this date', 'error');
+        } finally {
+            setRawLoading(false);
+        }
+    };
+
+    const closeRawPunches = () => {
+        setRawModalDate(null);
+        setRawPunches([]);
     };
 
     // 👇 UPDATED: Added status filter & capturing stats
@@ -617,7 +646,16 @@ const EmployeeProfile = () => {
                             ) : attendanceLogs.length > 0 ? (
                                 attendanceLogs.map(log => (
                                     <tr key={log._id}>
-                                        <td data-label="Date" className="fw-500 text-dark-blue">{log.date}</td>
+                                        <td data-label="Date">
+                                            <button
+                                                className="link-button fw-500 text-primary"
+                                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}
+                                                onClick={() => openRawPunches(log.date)}
+                                                title="View raw biometric punches for this date"
+                                            >
+                                                <FontAwesomeIcon icon={faFingerprint} className="btn-icon" /> {log.date}
+                                            </button>
+                                        </td>
                                         <td data-label="Check In">
                                             {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </td>
@@ -937,6 +975,62 @@ const EmployeeProfile = () => {
                     </>
                 )}
             </div>
+
+            {/* RAW PUNCHES MODAL */}
+            {rawModalDate && (
+                <div
+                    onClick={closeRawPunches}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px' }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="fade-in"
+                        style={{ background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '520px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 45px rgba(0,0,0,0.25)' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <FontAwesomeIcon icon={faFingerprint} style={{ color: '#215D7B' }} /> Raw Punches
+                                </h3>
+                                <span className="text-small text-muted">{user.name} &middot; {rawModalDate}</span>
+                            </div>
+                            <button className="sidebar-close-btn" onClick={closeRawPunches} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}>
+                                <FontAwesomeIcon icon={faTimes} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '10px 20px 20px', overflowY: 'auto' }}>
+                            {rawLoading ? (
+                                <p className="empty-table-message">Loading raw punches...</p>
+                            ) : rawPunches.length === 0 ? (
+                                <p className="empty-table-message">No biometric punches recorded for this date.</p>
+                            ) : (
+                                <table className="employee-table mt-15">
+                                    <thead>
+                                        <tr><th>Time</th><th>Direction</th><th>Device</th><th>Bio ID</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {rawPunches.map(p => (
+                                            <tr key={p._id}>
+                                                <td data-label="Time" className="fw-600 text-dark-gray">
+                                                    {new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                </td>
+                                                <td data-label="Direction">
+                                                    <span className={`status-badge ${p.direction === 'IN' ? 'success' : 'danger'}`} style={{ padding: '4px 10px', fontSize: '11px' }}>
+                                                        <FontAwesomeIcon icon={p.direction === 'IN' ? faSignInAlt : faSignOutAlt} className="btn-icon" /> {p.direction}
+                                                    </span>
+                                                </td>
+                                                <td data-label="Device" className="text-small text-dark-gray">{p.deviceId}</td>
+                                                <td data-label="Bio ID" className="text-small text-muted">{p.employeeId}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

@@ -496,6 +496,37 @@ router.get('/raw-logs', auth, async (req, res) => {
 });
 
 // ==========================================
+// 6b. GET RAW PUNCHES FOR ONE USER ON ONE DAY
+// ==========================================
+// @route   GET /api/attendance/user-raw-logs/:userId?shiftDate=D/M/YYYY
+// @desc    Raw biometric punches for a single employee on a specific shift date (for modal)
+router.get('/user-raw-logs/:userId', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        const { shiftDate } = req.query;
+        if (!shiftDate) return res.status(400).json({ message: 'shiftDate is required' });
+
+        // Managers can only view punches for members of their own team
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const target = await User.findById(req.params.userId).select('reportingManagerEmail');
+            if (!target || target.reportingManagerEmail !== manager.email.toLowerCase()) {
+                return res.status(403).json({ message: 'Access Denied' });
+            }
+        }
+
+        const logs = await AttendanceLog.find({ userId: req.params.userId, shiftDate })
+            .sort({ timestamp: 1 });
+
+        res.json({ data: logs });
+    } catch (err) {
+        console.error("User Raw Logs Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
 // 7. GET LOGS BY USER ID (Paginated)
 // ==========================================
 router.get('/admin/user-logs/:id', auth, async (req, res) => {
