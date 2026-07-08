@@ -22,3 +22,9 @@ Thumbs.db
 
 # Uploads
 server/uploads/
+
+# Employee data imports (contain PII — never commit)
+Employee_Details_Form*.csv
+Employee_ID_Mapping.csv
+*_Employees_To_Add.csv
+reconciliation_report.json

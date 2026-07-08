@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faUser, faSave, faArrowLeft, faClock, faPlaneDeparture,
-    faEdit, faWallet, faHistory, faTimes, faUserEdit, faCog, faMoneyBillWave, faKey
+    faEdit, faWallet, faHistory, faTimes, faUserEdit, faCog, faMoneyBillWave, faKey, faBriefcase
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
@@ -320,14 +320,27 @@ const EditEmployee = () => {
                         {/* 👇 UPDATED: using the new CSS Grid class */}
                         <div className="form-grid-2-col mt-15 mb-30">
                             <div className="form-group"><label className="input-label">Full Name</label><input className="custom-input" value={user.name || ''} onChange={e => setUser({ ...user, name: e.target.value })} /></div>
-                            <div className="form-group"><label className="input-label">Email</label><input className="custom-input" value={user.email || ''} onChange={e => setUser({ ...user, email: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Login Email</label><input className="custom-input" value={user.email || ''} onChange={e => setUser({ ...user, email: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Work Email</label><input className="custom-input" placeholder="name@gts.ai" value={user.workEmail || ''} onChange={e => setUser({ ...user, workEmail: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label text-primary fw-bold">Employee / Biometric ID</label><input className="custom-input" placeholder="e.g. GTS003" value={user.employeeId || ''} onChange={e => setUser({ ...user, employeeId: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Phone Number</label><input className="custom-input" placeholder="+91..." value={user.phoneNumber || ''} onChange={e => setUser({ ...user, phoneNumber: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Date of Birth</label><input type="date" className="custom-input" value={user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : ''} onChange={e => setUser({ ...user, dateOfBirth: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Blood Group</label><input className="custom-input" placeholder="e.g. B+" value={user.bloodGroup || ''} onChange={e => setUser({ ...user, bloodGroup: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Joining Date</label><input type="date" className="custom-input" value={user.joiningDate ? new Date(user.joiningDate).toISOString().split('T')[0] : ''} onChange={e => setUser({ ...user, joiningDate: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Aadhaar Number</label><input className="custom-input" value={user.aadhaar || ''} onChange={e => setUser({ ...user, aadhaar: e.target.value })} /></div>
-                            <div className="form-group"><label className="input-label">Emergency Contact</label><input className="custom-input" value={user.emergencyContact || ''} onChange={e => setUser({ ...user, emergencyContact: e.target.value })} /></div>
-                            <div className="form-group col-span-full"><label className="input-label">Address</label><input className="custom-input" value={user.address || ''} onChange={e => setUser({ ...user, address: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Emergency Contact Phone</label><input className="custom-input" value={user.emergencyContact || ''} onChange={e => setUser({ ...user, emergencyContact: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Emergency Contact Name</label><input className="custom-input" value={user.emergencyContactName || ''} onChange={e => setUser({ ...user, emergencyContactName: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Emergency Contact Relationship</label><input className="custom-input" placeholder="e.g. Parent" value={user.emergencyContactRelation || ''} onChange={e => setUser({ ...user, emergencyContactRelation: e.target.value })} /></div>
+                            <div className="form-group col-span-full"><label className="input-label">Current Address</label><input className="custom-input" value={user.currentAddress || ''} onChange={e => setUser({ ...user, currentAddress: e.target.value })} /></div>
+                            <div className="form-group col-span-full"><label className="input-label">Permanent Address</label><input className="custom-input" value={user.permanentAddress || ''} onChange={e => setUser({ ...user, permanentAddress: e.target.value })} /></div>
+                        </div>
+
+                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faBriefcase} className="mr-5 text-muted" /> Job & Organization</h3>
+                        <div className="form-grid-2-col mt-15 mb-30">
+                            <div className="form-group"><label className="input-label">Job Title</label><input className="custom-input" placeholder="e.g. Data Entry Operator" value={user.jobTitle || ''} onChange={e => setUser({ ...user, jobTitle: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Department / Business Unit</label><input className="custom-input" placeholder="e.g. Data Operations" value={user.department || ''} onChange={e => setUser({ ...user, department: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Work Location</label><select className="swal2-select custom-input" value={user.workLocation || ''} onChange={e => setUser({ ...user, workLocation: e.target.value })}><option value="">— Not set —</option><option value="WFO">WFO (Work From Office)</option><option value="WFH">WFH (Work From Home)</option><option value="HYBRID">Hybrid</option></select></div>
+                            <div className="form-group"><label className="input-label">Employment Type</label><select className="swal2-select custom-input" value={user.employmentType || ''} onChange={e => setUser({ ...user, employmentType: e.target.value })}><option value="">— Not set —</option><option value="Full-time">Full-time</option><option value="Internship">Internship</option><option value="Part-time">Part-time</option><option value="Contract">Contract</option></select></div>
                         </div>
 
                         <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted" /> System Configuration</h3>

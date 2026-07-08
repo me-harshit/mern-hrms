@@ -5,7 +5,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faUser, faEnvelope, faPhone, faMapMarkerAlt,
     faEdit, faSave, faTimes, faCamera,
-    faIdCard, faFirstAid, faUserTie
+    faIdCard, faFirstAid, faUserTie,
+    faBriefcase, faBuilding, faLaptopHouse, faTint, faHome
 } from '@fortawesome/free-solid-svg-icons';
 
 const Profile = () => {
@@ -172,12 +173,28 @@ const Profile = () => {
                 ) : (
                     <div className="profile-details-grid fade-in">
                         <div className="detail-item">
+                            <FontAwesomeIcon icon={faBriefcase} className="detail-icon" />
+                            <div><label>Job Title</label><p>{user.jobTitle || 'Not provided'}</p></div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faBuilding} className="detail-icon" />
+                            <div><label>Department</label><p>{user.department || 'Not provided'}</p></div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faLaptopHouse} className="detail-icon" />
+                            <div><label>Work Location</label><p>{user.workLocation || 'Not set'}{user.employmentType ? ` · ${user.employmentType}` : ''}</p></div>
+                        </div>
+                        <div className="detail-item">
                             <FontAwesomeIcon icon={faEnvelope} className="detail-icon" />
-                            <div><label>Email Address</label><p>{user.email}</p></div>
+                            <div><label>Email Address</label><p>{user.email}{user.workEmail ? <><br /><span className="text-small text-muted">{user.workEmail}</span></> : ''}</p></div>
                         </div>
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faPhone} className="detail-icon" />
                             <div><label>Phone Number</label><p>{user.phoneNumber || 'Not provided'}</p></div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faTint} className="detail-icon" />
+                            <div><label>Blood Group</label><p>{user.bloodGroup || 'Not provided'}</p></div>
                         </div>
 
                         <div className="detail-item">
@@ -193,7 +210,10 @@ const Profile = () => {
                             <FontAwesomeIcon icon={faFirstAid} className="detail-icon" />
                             <div>
                                 <label>Emergency Contact</label>
-                                <p className="tracking-wide fw-600">{user.emergencyContact || 'Not provided'}</p>
+                                <p className="tracking-wide fw-600">
+                                    {user.emergencyContactName ? `${user.emergencyContactName}${user.emergencyContactRelation ? ` (${user.emergencyContactRelation})` : ''}` : ''}
+                                    {user.emergencyContact ? <><br /><span className="text-small text-muted fw-normal">{user.emergencyContact}</span></> : (!user.emergencyContactName && 'Not provided')}
+                                </p>
                             </div>
                         </div>
 
@@ -215,7 +235,11 @@ const Profile = () => {
 
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faMapMarkerAlt} className="detail-icon" />
-                            <div><label>Address</label><p>{user.address || 'Not provided'}</p></div>
+                            <div><label>Current Address</label><p>{user.currentAddress || user.address || 'Not provided'}</p></div>
+                        </div>
+                        <div className="detail-item">
+                            <FontAwesomeIcon icon={faHome} className="detail-icon" />
+                            <div><label>Permanent Address</label><p>{user.permanentAddress || 'Not provided'}</p></div>
                         </div>
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faUser} className="detail-icon" />

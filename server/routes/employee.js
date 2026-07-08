@@ -127,8 +127,11 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/add', auth, async (req, res) => {
     try {
         const {
-            name, email, password, role, shiftType,
-            joiningDate, dateOfBirth, aadhaar, emergencyContact,
+            name, email, workEmail, password, role, shiftType,
+            joiningDate, dateOfBirth, bloodGroup, aadhaar, phoneNumber,
+            emergencyContact, emergencyContactName, emergencyContactRelation,
+            address, permanentAddress, currentAddress,
+            jobTitle, department, workLocation, employmentType,
             reportingManagerName, reportingManagerEmail,
             employeeId, isPurchaser
         } = req.body;
@@ -139,13 +142,25 @@ router.post('/add', auth, async (req, res) => {
         user = new User({
             name,
             email,
+            workEmail,
             password,
             role,
             shiftType: shiftType || 'DAY',
             joiningDate,
             dateOfBirth,
+            bloodGroup,
             aadhaar,
+            phoneNumber,
             emergencyContact,
+            emergencyContactName,
+            emergencyContactRelation,
+            address: address || currentAddress,
+            permanentAddress,
+            currentAddress,
+            jobTitle,
+            department,
+            workLocation,
+            employmentType,
             reportingManagerName,
             reportingManagerEmail,
             employeeId,
@@ -169,8 +184,10 @@ router.put('/:id', auth, async (req, res) => {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Denied' });
 
         const {
-            name, email, role, shiftType, status, joiningDate, dateOfBirth, password,
-            aadhaar, emergencyContact, phoneNumber, address,
+            name, email, workEmail, role, shiftType, status, joiningDate, dateOfBirth, bloodGroup, password,
+            aadhaar, emergencyContact, emergencyContactName, emergencyContactRelation, phoneNumber,
+            address, permanentAddress, currentAddress,
+            jobTitle, department, workLocation, employmentType,
             salary, casualLeaveBalance, earnedLeaveBalance,
             reportingManagerName, reportingManagerEmail,
             employeeId, isPurchaser
@@ -179,16 +196,27 @@ router.put('/:id', auth, async (req, res) => {
         let updateData = {};
         if (name) updateData.name = name;
         if (email) updateData.email = email;
+        if (workEmail !== undefined) updateData.workEmail = workEmail;
         if (role) updateData.role = role;
         if (shiftType) updateData.shiftType = shiftType;
         if (status) updateData.status = status;
         if (joiningDate) updateData.joiningDate = joiningDate;
         if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
+        if (bloodGroup !== undefined) updateData.bloodGroup = bloodGroup;
 
         if (aadhaar !== undefined) updateData.aadhaar = aadhaar;
         if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
+        if (emergencyContactName !== undefined) updateData.emergencyContactName = emergencyContactName;
+        if (emergencyContactRelation !== undefined) updateData.emergencyContactRelation = emergencyContactRelation;
         if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
         if (address !== undefined) updateData.address = address;
+        if (permanentAddress !== undefined) updateData.permanentAddress = permanentAddress;
+        if (currentAddress !== undefined) updateData.currentAddress = currentAddress;
+
+        if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
+        if (department !== undefined) updateData.department = department;
+        if (workLocation !== undefined) updateData.workLocation = workLocation;
+        if (employmentType !== undefined) updateData.employmentType = employmentType;
 
         if (salary !== undefined) updateData.salary = salary;
         if (casualLeaveBalance !== undefined) updateData.casualLeaveBalance = casualLeaveBalance;

@@ -449,9 +449,11 @@ const EmployeeProfile = () => {
                 </div>
                 <div style={{ flex: 1 }}>
                     <h2 style={{ margin: '0 0 5px 0', fontSize: '22px' }}>{user.name}</h2>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
                         <span className={`role-tag ${user.role?.toLowerCase()}`}>{user.role}</span>
                         <span className="text-muted fw-600 text-small">ID: {user.employeeId}</span>
+                        {user.workLocation && <span className="status-badge primary" style={{ padding: '2px 8px', fontSize: '10px' }}>{user.workLocation}</span>}
+                        {user.jobTitle && <span className="text-muted text-small">{user.jobTitle}{user.department ? ` · ${user.department}` : ''}</span>}
                     </div>
                     <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#475569' }}>
                         <div><FontAwesomeIcon icon={faEnvelope} className="text-primary mr-5" /> {user.email}</div>
@@ -490,13 +492,24 @@ const EmployeeProfile = () => {
             {/* --- TAB CONTENT: DETAILS (VIEW ONLY) --- */}
             {activeTab === 'details' && (
                 <div className="control-card p-30 fade-in d-block">
-                    <h3 className="section-title border-bottom pb-10 mb-20">Personal & Employment Overview</h3>
+                    <h3 className="section-title border-bottom pb-10 mb-20">Job & Organization</h3>
+                    <div className="detail-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '25px' }}>
+                        <div><label className="text-muted text-small d-block mb-5">Job Title</label><div className="fw-600">{user.jobTitle || 'N/A'}</div></div>
+                        <div><label className="text-muted text-small d-block mb-5">Department</label><div className="fw-600">{user.department || 'N/A'}</div></div>
+                        <div><label className="text-muted text-small d-block mb-5">Work Location</label><div className="fw-600 text-primary">{user.workLocation || 'N/A'}</div></div>
+                        <div><label className="text-muted text-small d-block mb-5">Employment Type</label><div className="fw-600">{user.employmentType || 'N/A'}</div></div>
+                    </div>
+
+                    <h3 className="section-title border-bottom pb-10 mb-20 mt-30">Personal & Contact</h3>
                     <div className="detail-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '25px' }}>
                         <div><label className="text-muted text-small d-block mb-5">Date of Birth</label><div className="fw-600">{user.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString('en-GB') : 'N/A'}</div></div>
+                        <div><label className="text-muted text-small d-block mb-5">Blood Group</label><div className="fw-600">{user.bloodGroup || 'N/A'}</div></div>
                         <div><label className="text-muted text-small d-block mb-5">Joining Date</label><div className="fw-600">{user.joiningDate ? new Date(user.joiningDate).toLocaleDateString('en-GB') : 'N/A'}</div></div>
+                        <div><label className="text-muted text-small d-block mb-5">Work Email</label><div className="fw-600">{user.workEmail || 'N/A'}</div></div>
                         <div><label className="text-muted text-small d-block mb-5">Aadhaar Number</label><div className="fw-600">{user.aadhaar || 'N/A'}</div></div>
-                        <div><label className="text-muted text-small d-block mb-5">Emergency Contact</label><div className="fw-600">{user.emergencyContact || 'N/A'}</div></div>
-                        <div style={{ gridColumn: '1 / -1' }}><label className="text-muted text-small d-block mb-5">Address</label><div className="fw-600">{user.address || 'N/A'}</div></div>
+                        <div><label className="text-muted text-small d-block mb-5">Emergency Contact</label><div className="fw-600">{user.emergencyContactName || 'N/A'}{user.emergencyContactRelation ? ` (${user.emergencyContactRelation})` : ''}</div><div className="text-small text-muted">{user.emergencyContact || ''}</div></div>
+                        <div style={{ gridColumn: '1 / -1' }}><label className="text-muted text-small d-block mb-5">Current Address</label><div className="fw-600">{user.currentAddress || user.address || 'N/A'}</div></div>
+                        <div style={{ gridColumn: '1 / -1' }}><label className="text-muted text-small d-block mb-5">Permanent Address</label><div className="fw-600">{user.permanentAddress || 'N/A'}</div></div>
                     </div>
 
                     <h3 className="section-title border-bottom pb-10 mb-20 mt-30">System Configuration</h3>
