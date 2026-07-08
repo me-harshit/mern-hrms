@@ -23,6 +23,18 @@ const leaveSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    // Half-day support: only the first and last day of a range (or the single day)
+    // can be a half day. FULL = whole day, FIRST_HALF / SECOND_HALF = 0.5 day.
+    startHalf: {
+        type: String,
+        enum: ['FULL', 'FIRST_HALF', 'SECOND_HALF'],
+        default: 'FULL'
+    },
+    endHalf: {
+        type: String,
+        enum: ['FULL', 'FIRST_HALF', 'SECOND_HALF'],
+        default: 'FULL'
+    },
     reason: {
         type: String,
         required: true

@@ -65,7 +65,23 @@ router.post('/apply', auth, async (req, res) => {
         const start = new Date(fromDate);
         const end = new Date(toDate);
         const diffTime = Math.abs(end - start);
-        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        const baseDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        // --- HALF-DAY HANDLING ---
+        const validHalf = (v) => (['FULL', 'FIRST_HALF', 'SECOND_HALF'].includes(v) ? v : 'FULL');
+        let startHalf = validHalf(req.body.startHalf);
+        let endHalf = validHalf(req.body.endHalf);
+
+        let days;
+        if (baseDays === 1) {
+            // Single day: only the start selection matters; keep end in sync for clarity.
+            endHalf = startHalf;
+            days = startHalf === 'FULL' ? 1 : 0.5;
+        } else {
+            days = baseDays
+                - (startHalf !== 'FULL' ? 0.5 : 0)
+                - (endHalf !== 'FULL' ? 0.5 : 0);
+        }
 
         const user = await User.findById(userId);
 
@@ -85,7 +101,7 @@ router.post('/apply', auth, async (req, res) => {
         }
 
         const newLeave = new Leave({
-            userId, leaveType, fromDate, toDate, days, reason, status: 'Pending'
+            userId, leaveType, fromDate, toDate, days, startHalf, endHalf, reason, status: 'Pending'
         });
 
         await newLeave.save();
@@ -101,6 +117,12 @@ router.post('/apply', auth, async (req, res) => {
 
             const approveLink = `${backendUrl}/api/leaves/email-action?token=${approveToken}`;
             const rejectLink = `${backendUrl}/api/leaves/email-action?token=${rejectToken}`;
+
+            const halfLabel = (h) => (h === 'FIRST_HALF' ? '1st half' : h === 'SECOND_HALF' ? '2nd half' : '');
+            const halfParts = [];
+            if (startHalf !== 'FULL') halfParts.push(`${start.toLocaleDateString('en-GB')} (${halfLabel(startHalf)})`);
+            if (baseDays > 1 && endHalf !== 'FULL') halfParts.push(`${end.toLocaleDateString('en-GB')} (${halfLabel(endHalf)})`);
+            const halfNote = halfParts.length ? ` <span style="color:#d97706; font-size:12px;">&mdash; Half day: ${halfParts.join(', ')}</span>` : '';
 
             const subject = `New Leave Request: ${user.name}`;
             const message = `
@@ -124,7 +146,7 @@ router.post('/apply', auth, async (req, res) => {
                             </tr>
                             <tr>
                                 <td style="padding: 12px 15px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600; font-size: 14px;">Total Days</td>
-                                <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #A6477F; font-weight: 700; font-size: 15px;">${days} Day(s)</td>
+                                <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #A6477F; font-weight: 700; font-size: 15px;">${days} Day(s)${halfNote}</td>
                             </tr>
                             <tr>
                                 <td style="padding: 12px 15px; background-color: #f8fafc; color: #64748b; font-weight: 600; font-size: 14px; vertical-align: top;">Reason</td>
