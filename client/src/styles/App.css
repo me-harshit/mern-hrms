@@ -1605,3 +1605,21 @@ html {
 }
 
 /* END OF APP.CSS */
+/* --- GTS Documents: PDF viewer modal --- */
+.doc-viewer-popup {
+  max-width: 1400px;
+}
+
+.doc-viewer-popup .swal2-html-container {
+  margin: 0.5rem 0 0;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .doc-viewer-popup {
+    width: 98vw !important;
+  }
+  .doc-viewer-popup iframe {
+    height: 70vh !important;
+  }
+}

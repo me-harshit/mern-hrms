@@ -28,3 +28,6 @@ Employee_Details_Form*.csv
 Employee_ID_Mapping.csv
 *_Employees_To_Add.csv
 reconciliation_report.json
+
+# Company policy documents (upload via the GTS Documents admin page instead)
+*.pdf

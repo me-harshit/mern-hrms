@@ -17,7 +17,8 @@ import {
     faBoxes,
     faRobot,
     faLaptopHouse,
-    faWallet
+    faWallet,
+    faFileContract
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -27,6 +28,8 @@ const Sidebar = ({ isOpen, onClose }) => {
 
     // State to check if the user has inventory assigned
     const [hasInventory, setHasInventory] = useState(false);
+    // Count of GTS Documents this user still needs to acknowledge
+    const [pendingDocs, setPendingDocs] = useState(0);
 
     useEffect(() => {
         if (userRole === 'EMPLOYEE' || userRole === 'MANAGER') {
@@ -39,6 +42,12 @@ const Sidebar = ({ isOpen, onClose }) => {
                 .catch(err => console.error("Could not check inventory:", err));
         }
     }, [userRole]);
+
+    useEffect(() => {
+        api.get('/documents/pending-count')
+            .then(res => setPendingDocs(res.data.pending || 0))
+            .catch(() => setPendingDocs(0));
+    }, []);
 
     // Auto-close sidebar on mobile after clicking a link
     const handleLinkClick = () => {
@@ -66,6 +75,16 @@ const Sidebar = ({ isOpen, onClose }) => {
             <nav className="sidebar-menu">
                 <Link to="/dashboard" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}>
                     <FontAwesomeIcon icon={faThLarge} className="nav-icon" /> <span>Dashboard</span>
+                </Link>
+
+                {/* Visible to EVERY role, including ADMIN */}
+                <Link to="/documents" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/documents' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faFileContract} className="nav-icon" /> <span>GTS Documents</span>
+                    {pendingDocs > 0 && (
+                        <span style={{ marginLeft: 'auto', background: '#dc2626', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 700 }}>
+                            {pendingDocs}
+                        </span>
+                    )}
                 </Link>
 
                 {/* 👇 FIXED: Hidden personal employee links for the ADMIN role */}

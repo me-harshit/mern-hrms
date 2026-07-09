@@ -12,6 +12,7 @@ import Attendance from './pages/User/Attendance';
 import Employees from './pages/Admin/Employees';
 import AddEmployee from './pages/Admin/AddEmployee';
 import Leaves from './pages/User/Leaves';
+import Documents from './pages/User/Documents';
 import EmployeeRequests from './pages/Admin/EmployeeRequests';
 import WorkFromHome from './pages/User/WorkFromHome';
 import CalendarPage from './pages/CalendarPage';
@@ -160,6 +161,7 @@ function App() {
             <Route path="/my-inventory" element={<MyInventory />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/leaves" element={<Leaves />} />
+            <Route path="/documents" element={<Documents />} />
             <Route path="/wfh" element={<WorkFromHome />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/add-expense" element={<AddExpense />} />
