@@ -1,4 +1,11 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const {
+    S3Client,
+    PutObjectCommand,
+    ListObjectsV2Command,
+    GetObjectCommand
+} = require('@aws-sdk/client-s3');
+
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const sharp = require('sharp');
 const crypto = require('crypto');
 const path = require('path');
@@ -40,4 +47,50 @@ const uploadToS3 = async (file, subFolder = 'Default') => {
     return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
 };
 
-module.exports = { uploadToS3 };
+const listForeverBeginsFiles = async () => {
+
+    const PREFIX = "tempzips/";
+
+    const response = await s3Client.send(
+        new ListObjectsV2Command({
+            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Prefix: PREFIX
+        })
+    );
+
+    const files = [];
+
+    for (const file of response.Contents || []) {
+
+        if (file.Key.endsWith("/")) {
+            continue;
+        }
+
+        const signedUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+                Bucket: process.env.AWS_S3_BUCKET_NAME,
+                Key: file.Key
+            }),
+            {
+                expiresIn: 60 * 60 * 24 * 7 // 7 Days
+            }
+        );
+
+        files.push({
+            name: file.Key.replace(PREFIX, ""),
+            size: file.Size,
+            lastModified: file.LastModified,
+            url: signedUrl
+        });
+    }
+
+    files.sort((a, b) => a.name.localeCompare(b.name));
+
+    return files;
+};
+
+module.exports = {
+    uploadToS3,
+    listForeverBeginsFiles
+};

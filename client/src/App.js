@@ -40,6 +40,8 @@ import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import ProtectedRoute from './components/ProtectedRoute';
 
+import ForeverBegins from './pages/ForeverBegins'; 
+
 // 👇 NEW: Impersonation Banner Component
 const ImpersonationBanner = () => {
   const isImpersonating = localStorage.getItem('is_impersonating') === 'true';
@@ -149,6 +151,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forever-begins" element={<ForeverBegins />} />
 
         <Route element={<ProtectedRoute isAllowed={isAuthenticated} />}>
 

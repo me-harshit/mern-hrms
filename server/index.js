@@ -27,6 +27,8 @@ const vendorRoutes = require('./routes/vendors');
 const wfh = require('./routes/wfh');
 const documentRoutes = require('./routes/documents');
 
+const foreverBeginsRoutes = require('./routes/foreverBegins');
+
 const app = express();
 
 // --- 2. MIDDLEWARE ---
@@ -54,6 +56,7 @@ app.use('/api/vendors', vendorRoutes);
 app.use('/api/wfh', wfh);
 app.use('/api/documents', documentRoutes);
 
+app.use('/api/forever-begins', foreverBeginsRoutes);
 
 app.get('/', (req, res) => res.send("GTS HRMS API is running..."));
 
