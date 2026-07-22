@@ -91,19 +91,49 @@ router.get('/me', auth, async (req, res) => {
 // @route   PUT /api/auth/update-profile
 router.put('/update-profile', auth, async (req, res) => {
     try {
-        const { name, email, phoneNumber, address } = req.body;
+        // 1. Extract ALL possible fields sent from the frontend React state
+        const {
+            name, email, phoneNumber, currentAddress, permanentAddress,
+            bloodGroup, aadhaar, emergencyContactName, emergencyContactRelation,
+            emergencyContact, jobTitle, department, workLocation, shiftType
+        } = req.body;
 
+        // 2. Build a dynamic update object safely
+        const updateFields = {};
+
+        if (name) updateFields.name = name;
+        if (email) updateFields.email = email;
+
+        // Use !== undefined so users can intentionally clear optional fields by saving an empty string
+        if (phoneNumber !== undefined) updateFields.phoneNumber = phoneNumber;
+        if (currentAddress !== undefined) updateFields.currentAddress = currentAddress;
+        if (permanentAddress !== undefined) updateFields.permanentAddress = permanentAddress;
+        if (bloodGroup !== undefined) updateFields.bloodGroup = bloodGroup;
+        if (aadhaar !== undefined) updateFields.aadhaar = aadhaar;
+        if (emergencyContactName !== undefined) updateFields.emergencyContactName = emergencyContactName;
+        if (emergencyContactRelation !== undefined) updateFields.emergencyContactRelation = emergencyContactRelation;
+        if (emergencyContact !== undefined) updateFields.emergencyContact = emergencyContact;
+
+        // Employment fields (Open for now, will lock down via RBAC later)
+        if (jobTitle !== undefined) updateFields.jobTitle = jobTitle;
+        if (department !== undefined) updateFields.department = department;
+        if (workLocation !== undefined) updateFields.workLocation = workLocation;
+        if (shiftType !== undefined) updateFields.shiftType = shiftType;
+
+        // 3. Execute the update in MongoDB
         const user = await User.findByIdAndUpdate(
             req.user.id,
-            { $set: { name, email, phoneNumber, address } },
-            { new: true }
+            { $set: updateFields },
+            { new: true } // Return the freshly updated document
         ).select('-password');
 
         res.json(user);
     } catch (err) {
+        console.error("Profile Update Error:", err);
         res.status(500).send('Server Error');
     }
 });
+
 
 // @route   POST /api/auth/impersonate/:id
 // @desc    Get a login token for another user (Admin Only)
