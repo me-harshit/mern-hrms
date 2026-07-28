@@ -77,7 +77,8 @@ router.post('/login', async (req, res) => {
                         name: user.name,
                         role: user.role,
                         isPurchaser: user.isPurchaser,
-                        profilePic: user.profilePic
+                        profilePic: user.profilePic,
+                        workLocation: user.workLocation
                     }
                 });
             }
