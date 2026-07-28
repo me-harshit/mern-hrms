@@ -35,7 +35,17 @@ router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await User.findOne({ email });
+        // 1. Data Sanitization: Strip spaces and force lowercase
+        const sanitizedEmail = email.trim().toLowerCase();
+
+        // 2. The $or Query: Check both personal and work email fields
+        const user = await User.findOne({
+            $or: [
+                { email: sanitizedEmail },
+                { workEmail: sanitizedEmail }
+            ]
+        });
+
         if (!user) {
             return res.status(400).json({ message: 'Invalid Email' });
         }
@@ -53,6 +63,7 @@ router.post('/login', async (req, res) => {
             }
         };
 
+        const jwt = require('jsonwebtoken'); // Ensure jwt is imported at the top of your file
         jwt.sign(
             payload,
             process.env.JWT_SECRET,

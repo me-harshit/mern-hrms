@@ -822,4 +822,212 @@ router.put('/update/:id', auth, async (req, res) => {
     }
 });
 
+// ==========================================
+// 10. WFH PUNCH ROUTE (Manual Check In / Out)
+// ==========================================
+router.post('/wfh-punch', auth, async (req, res) => {
+    try {
+        const { direction } = req.body; // 'IN' or 'OUT'
+        if (!['IN', 'OUT'].includes(direction)) return res.status(400).json({ message: 'Invalid punch direction' });
+
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        
+        const punchTime = new Date();
+        const userShift = user.shiftType || 'DAY';
+        const shiftDate = getShiftDate(punchTime, userShift);
+        const deviceId = 'WEB_PORTAL';
+
+        // 1. Log the punch in AttendanceLog
+        await AttendanceLog.create({
+            userId: user._id, 
+            employeeId: user.employeeId || 'WFH', 
+            timestamp: punchTime, 
+            direction, 
+            deviceId, 
+            shiftDate
+        });
+
+        // 2. Fetch all logs for today and recalculate attendance
+        const shiftLogs = await AttendanceLog.find({ userId: user._id, shiftDate }).sort({ timestamp: 1 });
+
+        let settings = await Settings.findOne() || {
+            dayShiftStartTime: "09:30", dayShiftEndTime: "18:00",
+            nightShiftStartTime: "19:30", nightShiftEndTime: "04:00",
+            gracePeriod: 15, halfDayThreshold: 30
+        };
+
+        const isNight = userShift === 'NIGHT';
+        const shiftStartStr = isNight ? (settings.nightShiftStartTime || "19:30") : (settings.dayShiftStartTime || "09:30");
+        const shiftEndStr = isNight ? (settings.nightShiftEndTime || "04:00") : (settings.dayShiftEndTime || "18:00");
+
+        const [startHour, startMin] = shiftStartStr.split(':').map(Number);
+        const [endHour, endMin] = shiftEndStr.split(':').map(Number);
+        const [d, m, y] = shiftDate.split('/').map(Number);
+
+        const shiftStartObj = new Date(y, m - 1, d, startHour, startMin, 0, 0);
+        const shiftEndObj = new Date(y, m - 1, d, endHour, endMin, 0, 0);
+        if (endHour < startHour) shiftEndObj.setDate(shiftEndObj.getDate() + 1);
+
+        let firstIn = null;
+        let lastOut = null;
+
+        shiftLogs.forEach(log => {
+            if (log.direction === 'IN') {
+                if (!firstIn) firstIn = log.timestamp;
+            } else if (log.direction === 'OUT') {
+                lastOut = log.timestamp;
+            }
+        });
+
+        // --- Calculate break time from BREAK_START/BREAK_END pairs ---
+        let totalBreakMs = 0;
+        let breakStartTime = null;
+        shiftLogs.forEach(log => {
+            if (log.direction === 'BREAK_START') {
+                breakStartTime = log.timestamp;
+            } else if (log.direction === 'BREAK_END' && breakStartTime) {
+                totalBreakMs += (log.timestamp.getTime() - breakStartTime.getTime());
+                breakStartTime = null;
+            }
+        });
+        // If punching OUT while on break, auto-close the break
+        if (direction === 'OUT' && breakStartTime) {
+            totalBreakMs += (punchTime.getTime() - breakStartTime.getTime());
+            // Also create a BREAK_END log to keep the data consistent
+            await AttendanceLog.create({
+                userId: user._id, employeeId: user.employeeId || 'WFH',
+                timestamp: punchTime, direction: 'BREAK_END', deviceId, shiftDate
+            });
+        }
+        const calculatedBreakMinutes = Math.floor(totalBreakMs / 60000);
+
+        let calculatedGrossHours = 0;
+        if (firstIn && lastOut && lastOut > firstIn) {
+            const grossMs = lastOut.getTime() - firstIn.getTime();
+            calculatedGrossHours = Number((grossMs / 3600000).toFixed(2));
+        }
+
+        let determinedStatus = 'Present';
+        let determinedNote = 'Manual WFH Punch';
+
+        if (firstIn) {
+            const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
+            if (diffMinutes > (settings.halfDayThreshold || 30)) {
+                determinedStatus = 'Half Day';
+                determinedNote = `Late by ${formatLateTime(diffMinutes)} (WFH)`;
+            } else if (diffMinutes > (settings.gracePeriod || 15)) {
+                determinedStatus = 'Late';
+                determinedNote = `Late by ${formatLateTime(diffMinutes)} (WFH)`;
+            } else {
+                determinedStatus = 'Present';
+                determinedNote = 'WFH';
+            }
+        }
+
+        let record = await Attendance.findOne({ userId: user._id, date: shiftDate });
+
+        if (!record) {
+            if (firstIn) {
+                record = new Attendance({
+                    userId: user._id, date: shiftDate, checkIn: firstIn, checkOut: lastOut,
+                    status: determinedStatus, note: determinedNote,
+                    totalHours: calculatedGrossHours,
+                    breakTimeTaken: calculatedBreakMinutes,
+                    isOnBreak: false
+                });
+                await record.save();
+            }
+        } else {
+            record.checkIn = firstIn || record.checkIn;
+            record.checkOut = lastOut || record.checkOut;
+            record.totalHours = calculatedGrossHours;
+            record.breakTimeTaken = calculatedBreakMinutes;
+            if (direction === 'OUT') record.isOnBreak = false;
+            
+            if (record.status === 'Pending' || record.status === 'Absent') {
+                record.status = determinedStatus;
+                record.note = determinedNote;
+            }
+            await record.save();
+        }
+
+        res.status(200).json({ message: "Punch successful", record });
+    } catch (error) {
+        console.error("WFH Punch Error:", error);
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+// ==========================================
+// 11. WFH BREAK ROUTE (Start / End Break)
+// ==========================================
+router.post('/wfh-break', auth, async (req, res) => {
+    try {
+        const { action } = req.body; // 'start' or 'end'
+        if (!['start', 'end'].includes(action)) return res.status(400).json({ message: 'Invalid break action' });
+
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const breakTime = new Date();
+        const userShift = user.shiftType || 'DAY';
+        const shiftDate = getShiftDate(breakTime, userShift);
+        const deviceId = 'WEB_PORTAL';
+
+        // Verify user is checked in today
+        let record = await Attendance.findOne({ userId: user._id, date: shiftDate });
+        if (!record || !record.checkIn || record.checkOut) {
+            return res.status(400).json({ message: 'You must be checked in (and not checked out) to take a break.' });
+        }
+
+        const direction = action === 'start' ? 'BREAK_START' : 'BREAK_END';
+
+        if (action === 'start') {
+            if (record.isOnBreak) {
+                return res.status(400).json({ message: 'You are already on a break.' });
+            }
+            // Create BREAK_START log
+            await AttendanceLog.create({
+                userId: user._id, employeeId: user.employeeId || 'WFH',
+                timestamp: breakTime, direction, deviceId, shiftDate
+            });
+            record.isOnBreak = true;
+            await record.save();
+        } else {
+            // action === 'end'
+            if (!record.isOnBreak) {
+                return res.status(400).json({ message: 'You are not currently on a break.' });
+            }
+            // Create BREAK_END log
+            await AttendanceLog.create({
+                userId: user._id, employeeId: user.employeeId || 'WFH',
+                timestamp: breakTime, direction, deviceId, shiftDate
+            });
+
+            // Recalculate total break time from all BREAK_START/BREAK_END pairs
+            const shiftLogs = await AttendanceLog.find({ userId: user._id, shiftDate }).sort({ timestamp: 1 });
+            let totalBreakMs = 0;
+            let breakStartTs = null;
+            shiftLogs.forEach(log => {
+                if (log.direction === 'BREAK_START') {
+                    breakStartTs = log.timestamp;
+                } else if (log.direction === 'BREAK_END' && breakStartTs) {
+                    totalBreakMs += (log.timestamp.getTime() - breakStartTs.getTime());
+                    breakStartTs = null;
+                }
+            });
+
+            record.breakTimeTaken = Math.floor(totalBreakMs / 60000);
+            record.isOnBreak = false;
+            await record.save();
+        }
+
+        res.status(200).json({ message: `Break ${action === 'start' ? 'started' : 'ended'} successfully`, record });
+    } catch (error) {
+        console.error("WFH Break Error:", error);
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
 module.exports = router;

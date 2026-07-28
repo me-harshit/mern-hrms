@@ -17,7 +17,10 @@ const Login = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            const res = await api.post('/auth/login', { email, password });
+            const res = await api.post('/auth/login', { 
+                email: email.trim(), 
+                password 
+            });
             
             localStorage.setItem('token', res.data.token);
             localStorage.setItem('user', JSON.stringify(res.data.user));

@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faSave, faArrowLeft, faCog, faMoneyBillWave, faBriefcase } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/App.css';
-import '../../styles/expenses.css'; 
+import '../../styles/expenses.css';
 
 const AddEmployee = () => {
     const navigate = useNavigate();
@@ -25,11 +25,21 @@ const AddEmployee = () => {
 
     const handleAddProfile = async (e) => {
         e.preventDefault();
+
+        const cleanedEmail = user.email ? user.email.trim().toLowerCase() : '';
+        const cleanedWorkEmail = user.workEmail ? user.workEmail.trim().toLowerCase() : '';
+
+        const payloadToSubmit = {
+            ...user,
+            email: cleanedEmail,
+            workEmail: cleanedWorkEmail
+        };
+
         setLoading(true);
         try {
-            await api.post('/employees/add', user);
+            await api.post('/employees/add', payloadToSubmit);
             Swal.fire('Success', 'New Employee Registered Successfully!', 'success');
-            navigate('/employees'); 
+            navigate('/employees');
         } catch (err) {
             Swal.fire('Error', err.response?.data?.message || 'Failed to add employee', 'error');
         } finally {
@@ -48,8 +58,8 @@ const AddEmployee = () => {
 
             <div className="control-card p-30 fade-in d-block">
                 <form onSubmit={handleAddProfile}>
-                    
-                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faUser} className="mr-5 text-muted"/> Personal Details</h3>
+
+                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faUser} className="mr-5 text-muted" /> Personal Details</h3>
                     <div className="form-grid mt-15 mb-30" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                         <div className="form-group"><label className="input-label">Full Name *</label><input className="custom-input" required value={user.name} onChange={e => setUser({ ...user, name: e.target.value })} /></div>
                         <div className="form-group"><label className="input-label">Login Email *</label><input type="email" required className="custom-input" value={user.email} onChange={e => setUser({ ...user, email: e.target.value })} /></div>
@@ -68,7 +78,7 @@ const AddEmployee = () => {
                         <div className="form-group" style={{ gridColumn: '1 / -1' }}><label className="input-label">Permanent Address</label><input className="custom-input" value={user.permanentAddress} onChange={e => setUser({ ...user, permanentAddress: e.target.value })} /></div>
                     </div>
 
-                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faBriefcase} className="mr-5 text-muted"/> Job & Organization</h3>
+                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faBriefcase} className="mr-5 text-muted" /> Job & Organization</h3>
                     <div className="form-grid mt-15 mb-30" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                         <div className="form-group"><label className="input-label">Job Title</label><input className="custom-input" placeholder="e.g. Data Entry Operator" value={user.jobTitle} onChange={e => setUser({ ...user, jobTitle: e.target.value })} /></div>
                         <div className="form-group"><label className="input-label">Department / Business Unit</label><input className="custom-input" placeholder="e.g. Data Operations" value={user.department} onChange={e => setUser({ ...user, department: e.target.value })} /></div>
@@ -76,7 +86,7 @@ const AddEmployee = () => {
                         <div className="form-group"><label className="input-label">Employment Type</label><select className="swal2-select custom-input" value={user.employmentType} onChange={e => setUser({ ...user, employmentType: e.target.value })}><option value="Full-time">Full-time</option><option value="Internship">Internship</option><option value="Part-time">Part-time</option><option value="Contract">Contract</option></select></div>
                     </div>
 
-                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted"/> System Configuration</h3>
+                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted" /> System Configuration</h3>
                     <div className="form-grid mt-15 mb-30" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                         <div className="form-group">
                             <label className="input-label">System Role *</label>
@@ -95,7 +105,7 @@ const AddEmployee = () => {
                         <div className="form-group checkbox-container" style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center' }}><label className="checkbox-label" style={{ fontWeight: '600', color: '#0f172a', margin: 0 }}><input type="checkbox" className="custom-checkbox" checked={user.isPurchaser} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} />Grant Purchaser Access</label></div>
                     </div>
 
-                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faMoneyBillWave} className="mr-5 text-muted"/> Payroll</h3>
+                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faMoneyBillWave} className="mr-5 text-muted" /> Payroll</h3>
                     <div className="form-grid mt-15" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                         <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary} onChange={e => setUser({ ...user, salary: e.target.value ? Number(e.target.value) : '' })} /></div>
                     </div>

@@ -136,13 +136,16 @@ router.post('/add', auth, async (req, res) => {
             employeeId, isPurchaser
         } = req.body;
 
-        let user = await User.findOne({ email });
+        const sanitizedEmail = email ? email.trim().toLowerCase() : '';
+        const sanitizedWorkEmail = workEmail ? workEmail.trim().toLowerCase() : '';
+
+        let user = await User.findOne({ email: sanitizedEmail });
         if (user) return res.status(400).json({ message: 'User already exists' });
 
         user = new User({
             name,
-            email,
-            workEmail,
+            email: sanitizedEmail,
+            workEmail: sanitizedWorkEmail, 
             password,
             role,
             shiftType: shiftType || 'DAY',

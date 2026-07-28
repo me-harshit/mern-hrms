@@ -79,6 +79,7 @@ const Leaves = () => {
                     const fromV = document.getElementById('date-from').value;
                     const toV = document.getElementById('date-to').value;
                     if (!fromV || !toV) { totalEl.innerHTML = ''; return; }
+                    
                     const from = new Date(fromV), to = new Date(toV);
                     if (isNaN(from) || isNaN(to) || to < from) { totalEl.innerHTML = ''; return; }
                     const base = Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
@@ -92,7 +93,19 @@ const Leaves = () => {
                         if (startSel && startSel.value !== 'FULL') days -= 0.5;
                         if (endSel && endSel.value !== 'FULL') days -= 0.5;
                     }
-                    totalEl.innerHTML = `Total: <b>${days}</b> day(s)`;
+                    
+                    let displayHtml = `Total: <b>${days}</b> day(s)`;
+                    const selectedType = document.getElementById('leave-type').value;
+                    
+                    if (selectedType === 'CL' && days > balances.CL) {
+                        const extra = days - balances.CL;
+                        displayHtml += `<br><span style="color:#d97706; font-size:12px;">(Will be applied as ${balances.CL} CL + ${extra} UL)</span>`;
+                    } else if (selectedType === 'EL' && days > balances.EL) {
+                        const extra = days - balances.EL;
+                        displayHtml += `<br><span style="color:#d97706; font-size:12px;">(Will be applied as ${balances.EL} EL + ${extra} UL)</span>`;
+                    }
+                    
+                    totalEl.innerHTML = displayHtml;
                 };
 
                 const renderDayParts = () => {
@@ -130,6 +143,7 @@ const Leaves = () => {
 
                 document.getElementById('date-from').addEventListener('change', renderDayParts);
                 document.getElementById('date-to').addEventListener('change', renderDayParts);
+                document.getElementById('leave-type').addEventListener('change', updateTotal);
             },
             preConfirm: () => {
                 const type = document.getElementById('leave-type').value;

@@ -32,6 +32,10 @@ const attendanceSchema = new mongoose.Schema({
         type: Number, // In minutes
         default: 0
     },
+    isOnBreak: {
+        type: Boolean, // Tracks if WFH employee is currently on break
+        default: false
+    },
     note: {
         type: String, // For "Late by 30 mins" or admin overrides
         default: ""

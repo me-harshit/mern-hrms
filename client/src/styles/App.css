@@ -304,6 +304,30 @@ html {
   background: #fde68a;
 }
 
+.gts-btn.wfh-break-btn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.gts-btn.wfh-break-btn:hover {
+  background: #fde68a;
+}
+
+.gts-btn.wfh-resume-btn {
+  background: #d1fae5;
+  color: #059669;
+  animation: pulse-break 2s ease-in-out infinite;
+}
+
+.gts-btn.wfh-resume-btn:hover {
+  background: #a7f3d0;
+}
+
+@keyframes pulse-break {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(5, 150, 105, 0); }
+}
+
 .action-btn-primary {
   background-color: var(--primary);
   color: white;

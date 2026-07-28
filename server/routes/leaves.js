@@ -59,7 +59,7 @@ router.get('/my-leaves', auth, async (req, res) => {
 // @route   POST /api/leaves/apply
 router.post('/apply', auth, async (req, res) => {
     try {
-        const { leaveType, fromDate, toDate, reason } = req.body;
+        let { leaveType, fromDate, toDate, reason, startHalf, endHalf } = req.body;
         const userId = req.user.id;
 
         const start = new Date(fromDate);
@@ -69,21 +69,23 @@ router.post('/apply', auth, async (req, res) => {
 
         // --- HALF-DAY HANDLING ---
         const validHalf = (v) => (['FULL', 'FIRST_HALF', 'SECOND_HALF'].includes(v) ? v : 'FULL');
-        let startHalf = validHalf(req.body.startHalf);
-        let endHalf = validHalf(req.body.endHalf);
+        startHalf = validHalf(startHalf);
+        endHalf = validHalf(endHalf);
 
-        let days;
+        let totalDaysRequested;
         if (baseDays === 1) {
-            // Single day: only the start selection matters; keep end in sync for clarity.
             endHalf = startHalf;
-            days = startHalf === 'FULL' ? 1 : 0.5;
+            totalDaysRequested = startHalf === 'FULL' ? 1 : 0.5;
         } else {
-            days = baseDays
+            totalDaysRequested = baseDays
                 - (startHalf !== 'FULL' ? 0.5 : 0)
                 - (endHalf !== 'FULL' ? 0.5 : 0);
         }
 
         const user = await User.findById(userId);
+
+        // Prepare an array of leaves to create (in case of a split)
+        let leavesToCreate = [];
 
         // --- VALIDATION: Check Stored Balance ---
         if (leaveType === 'CL' || leaveType === 'EL') {
@@ -93,102 +95,135 @@ router.post('/apply', auth, async (req, res) => {
             let dbBalance = (leaveType === 'CL') ? user.casualLeaveBalance : user.earnedLeaveBalance;
             let actualAvailable = dbBalance - pendingDays;
 
-            if (days > actualAvailable) {
-                return res.status(400).json({
-                    message: `Insufficient ${leaveType} balance. You have ${actualAvailable} days available.`
+            if (totalDaysRequested > actualAvailable) {
+                if (actualAvailable <= 0) {
+                    // 0 balance -> entirely UL
+                    leavesToCreate.push({
+                        leaveType: 'UL',
+                        days: totalDaysRequested,
+                        reason: reason + ' (Auto-converted to UL due to 0 balance)'
+                    });
+                } else {
+                    // Split into available balance + remaining as UL
+                    leavesToCreate.push({
+                        leaveType: leaveType,
+                        days: actualAvailable,
+                        reason: reason + ` (Auto-split: ${actualAvailable} ${leaveType})`
+                    });
+                    leavesToCreate.push({
+                        leaveType: 'UL',
+                        days: totalDaysRequested - actualAvailable,
+                        reason: reason + ` (Auto-split: ${totalDaysRequested - actualAvailable} UL)`
+                    });
+                }
+            } else {
+                // Has enough balance
+                leavesToCreate.push({ leaveType, days: totalDaysRequested, reason });
+            }
+        } else {
+            // Already UL or other types
+            leavesToCreate.push({ leaveType, days: totalDaysRequested, reason });
+        }
+
+        const backendUrl = `${req.protocol}://${req.get('host')}`;
+        let savedLeaves = [];
+
+        for (let l of leavesToCreate) {
+            const newLeave = new Leave({
+                userId,
+                leaveType: l.leaveType,
+                fromDate,
+                toDate,
+                days: l.days,
+                startHalf,
+                endHalf,
+                reason: l.reason,
+                status: 'Pending'
+            });
+
+            await newLeave.save();
+            savedLeaves.push(newLeave);
+
+            // --- EMAIL LOGIC: Generate Secure Magic Links ---
+            if (user.reportingManagerEmail) {
+                const approveToken = jwt.sign({ leaveId: newLeave._id, status: 'Approved' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+                const rejectToken = jwt.sign({ leaveId: newLeave._id, status: 'Rejected' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+                const approveLink = `${backendUrl}/api/leaves/email-action?token=${approveToken}`;
+                const rejectLink = `${backendUrl}/api/leaves/email-action?token=${rejectToken}`;
+
+                const halfLabel = (h) => (h === 'FIRST_HALF' ? '1st half' : h === 'SECOND_HALF' ? '2nd half' : '');
+                const halfParts = [];
+                if (startHalf !== 'FULL') halfParts.push(`${start.toLocaleDateString('en-GB')} (${halfLabel(startHalf)})`);
+                if (baseDays > 1 && endHalf !== 'FULL') halfParts.push(`${end.toLocaleDateString('en-GB')} (${halfLabel(endHalf)})`);
+                const halfNote = halfParts.length ? ` <span style="color:#d97706; font-size:12px;">&mdash; Half day: ${halfParts.join(', ')}</span>` : '';
+
+                const subject = `New Leave Request: ${user.name} (${l.leaveType})`;
+                const message = `
+                    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                        
+                        <div style="background-color: #215D7B; padding: 25px; text-align: center;">
+                            <h2 style="color: #ffffff; margin: 0; font-size: 22px; letter-spacing: 0.5px;">New Leave Request</h2>
+                        </div>
+                        
+                        <div style="padding: 30px; text-align: center;">
+                            <p style="font-size: 16px; color: #475569; margin-top: 0;"><strong>${user.name}</strong> has requested time off.</p>
+                            
+                            <table style="width: 100%; max-width: 450px; border-collapse: separate; border-spacing: 0; margin: 25px auto; border: 1px solid #e2e8f0; border-radius: 8px; text-align: left; overflow: hidden;">
+                                <tr>
+                                    <td style="padding: 12px 15px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; width: 35%; color: #64748b; font-weight: 600; font-size: 14px;">Leave Type</td>
+                                    <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; font-size: 14px;">${l.leaveType}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 15px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600; font-size: 14px;">Duration</td>
+                                    <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-size: 14px;">${start.toLocaleDateString('en-GB')} <span style="color: #94a3b8;">&rarr;</span> ${end.toLocaleDateString('en-GB')}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 15px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600; font-size: 14px;">Total Days</td>
+                                    <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #A6477F; font-weight: 700; font-size: 15px;">${l.days} Day(s)${halfNote}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 15px; background-color: #f8fafc; color: #64748b; font-weight: 600; font-size: 14px; vertical-align: top;">Reason</td>
+                                    <td style="padding: 12px 15px; color: #475569; font-size: 14px; line-height: 1.5;">${l.reason}</td>
+                                </tr>
+                            </table>
+
+                            <p style="font-size: 14px; color: #64748b; margin-bottom: 20px;">You can process this request instantly using the buttons below:</p>
+                            
+                            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 10px; margin-bottom: 20px;">
+                                <tr>
+                                    <td align="center">
+                                        <table border="0" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td align="center" style="border-radius: 6px;" bgcolor="#16a34a">
+                                                    <a href="${approveLink}" target="_blank" style="font-size: 15px; font-family: Arial, sans-serif; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 25px; border-radius: 6px; display: inline-block;">Approve</a>
+                                                </td>
+                                                
+                                                <td width="15"></td> 
+                                                
+                                                <td align="center" style="border-radius: 6px;" bgcolor="#A6477F">
+                                                    <a href="${rejectLink}" target="_blank" style="font-size: 15px; font-family: Arial, sans-serif; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 25px; border-radius: 6px; display: inline-block;">Reject</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                        </div>
+                    </div>
+                `;
+
+                await sendEmail({
+                    email: user.reportingManagerEmail,
+                    cc: process.env.HR_EMAIL || 'hr@gts.ai',
+                    subject,
+                    message
                 });
             }
         }
 
-        const newLeave = new Leave({
-            userId, leaveType, fromDate, toDate, days, startHalf, endHalf, reason, status: 'Pending'
-        });
-
-        await newLeave.save();
-
-        // --- EMAIL LOGIC: Generate Secure Magic Links ---
-        if (user.reportingManagerEmail) {
-            // Determine backend URL dynamically for the links
-            const backendUrl = `${req.protocol}://${req.get('host')}`;
-
-            // Create Secure Tokens (Expires in 7 days)
-            const approveToken = jwt.sign({ leaveId: newLeave._id, status: 'Approved' }, process.env.JWT_SECRET, { expiresIn: '7d' });
-            const rejectToken = jwt.sign({ leaveId: newLeave._id, status: 'Rejected' }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-            const approveLink = `${backendUrl}/api/leaves/email-action?token=${approveToken}`;
-            const rejectLink = `${backendUrl}/api/leaves/email-action?token=${rejectToken}`;
-
-            const halfLabel = (h) => (h === 'FIRST_HALF' ? '1st half' : h === 'SECOND_HALF' ? '2nd half' : '');
-            const halfParts = [];
-            if (startHalf !== 'FULL') halfParts.push(`${start.toLocaleDateString('en-GB')} (${halfLabel(startHalf)})`);
-            if (baseDays > 1 && endHalf !== 'FULL') halfParts.push(`${end.toLocaleDateString('en-GB')} (${halfLabel(endHalf)})`);
-            const halfNote = halfParts.length ? ` <span style="color:#d97706; font-size:12px;">&mdash; Half day: ${halfParts.join(', ')}</span>` : '';
-
-            const subject = `New Leave Request: ${user.name}`;
-            const message = `
-                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                    
-                    <div style="background-color: #215D7B; padding: 25px; text-align: center;">
-                        <h2 style="color: #ffffff; margin: 0; font-size: 22px; letter-spacing: 0.5px;">New Leave Request</h2>
-                    </div>
-                    
-                    <div style="padding: 30px; text-align: center;">
-                        <p style="font-size: 16px; color: #475569; margin-top: 0;"><strong>${user.name}</strong> has requested time off.</p>
-                        
-                        <table style="width: 100%; max-width: 450px; border-collapse: separate; border-spacing: 0; margin: 25px auto; border: 1px solid #e2e8f0; border-radius: 8px; text-align: left; overflow: hidden;">
-                            <tr>
-                                <td style="padding: 12px 15px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; width: 35%; color: #64748b; font-weight: 600; font-size: 14px;">Leave Type</td>
-                                <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; font-size: 14px;">${leaveType}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px 15px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600; font-size: 14px;">Duration</td>
-                                <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-size: 14px;">${start.toLocaleDateString('en-GB')} <span style="color: #94a3b8;">&rarr;</span> ${end.toLocaleDateString('en-GB')}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px 15px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600; font-size: 14px;">Total Days</td>
-                                <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #A6477F; font-weight: 700; font-size: 15px;">${days} Day(s)${halfNote}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 12px 15px; background-color: #f8fafc; color: #64748b; font-weight: 600; font-size: 14px; vertical-align: top;">Reason</td>
-                                <td style="padding: 12px 15px; color: #475569; font-size: 14px; line-height: 1.5;">${reason}</td>
-                            </tr>
-                        </table>
-
-                        <p style="font-size: 14px; color: #64748b; margin-bottom: 20px;">You can process this request instantly using the buttons below:</p>
-                        
-                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 10px; margin-bottom: 20px;">
-                            <tr>
-                                <td align="center">
-                                    <table border="0" cellspacing="0" cellpadding="0">
-                                        <tr>
-                                            <td align="center" style="border-radius: 6px;" bgcolor="#16a34a">
-                                                <a href="${approveLink}" target="_blank" style="font-size: 15px; font-family: Arial, sans-serif; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 25px; border-radius: 6px; display: inline-block;">Approve</a>
-                                            </td>
-                                            
-                                            <td width="15"></td> 
-                                            
-                                            <td align="center" style="border-radius: 6px;" bgcolor="#A6477F">
-                                                <a href="${rejectLink}" target="_blank" style="font-size: 15px; font-family: Arial, sans-serif; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 25px; border-radius: 6px; display: inline-block;">Reject</a>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </td>
-                            </tr>
-                        </table>
-                        
-                    </div>
-                </div>
-            `;
-
-            await sendEmail({
-                email: user.reportingManagerEmail,
-                cc: process.env.HR_EMAIL || 'hr@gts.ai',
-                subject,
-                message
-            });
-        }
-
-        res.json(newLeave);
+        res.json({ message: "Leave applied successfully", leaves: savedLeaves });
 
     } catch (err) {
         console.error(err.message);
