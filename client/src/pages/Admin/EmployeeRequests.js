@@ -48,7 +48,11 @@ const EmployeeRequests = () => {
     const fetchRequests = async (pageToFetch) => {
         setLoading(true);
         try {
-            const endpoint = activeTab === 'Leaves' ? '/leaves/all-requests' : '/wfh/all-requests';
+            let endpoint = '';
+            if (activeTab === 'Leaves') endpoint = '/leaves/all-requests';
+            else if (activeTab === 'WFH') endpoint = '/wfh/all-requests';
+            else if (activeTab === 'ShortLeave') endpoint = '/attendance/short-leaves/all-requests';
+
             const params = {
                 page: pageToFetch,
                 limit: itemsPerPage,
@@ -71,8 +75,15 @@ const EmployeeRequests = () => {
     };
 
     const handleAction = async (id, status, empName) => {
-        const actionType = activeTab === 'Leaves' ? 'leave' : 'WFH';
-        const endpointPrefix = activeTab === 'Leaves' ? '/leaves' : '/wfh';
+        let actionType = 'request';
+        if (activeTab === 'Leaves') actionType = 'leave';
+        else if (activeTab === 'WFH') actionType = 'WFH';
+        else if (activeTab === 'ShortLeave') actionType = 'short leave';
+
+        let endpointPrefix = '';
+        if (activeTab === 'Leaves') endpointPrefix = '/leaves';
+        else if (activeTab === 'WFH') endpointPrefix = '/wfh';
+        else if (activeTab === 'ShortLeave') endpointPrefix = '/attendance/short-leave';
 
         const result = await Swal.fire({
             title: `Confirm ${status}?`,
@@ -138,6 +149,13 @@ const EmployeeRequests = () => {
                 >
                     <FontAwesomeIcon icon={faLaptopHouse} /> Work From Home
                 </button>
+
+                <button 
+                    onClick={() => setActiveTab('ShortLeave')} 
+                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: activeTab === 'ShortLeave' ? '#215D7B' : '#fff', color: activeTab === 'ShortLeave' ? '#fff' : '#64748b', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                    <FontAwesomeIcon icon={faEye} /> Short Leaves
+                </button>
             </div>
 
             {/* --- FILTER & SEARCH BAR --- */}
@@ -173,7 +191,7 @@ const EmployeeRequests = () => {
                     <thead>
                         <tr>
                             <th>Employee</th>
-                            {activeTab === 'Leaves' && <th>Leave Type</th>}
+                            {(activeTab === 'Leaves' || activeTab === 'ShortLeave') && <th>Leave Type</th>}
                             <th>Dates</th>
                             <th>Duration</th>
                             <th>Status</th>
@@ -182,11 +200,11 @@ const EmployeeRequests = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={activeTab === 'Leaves' ? "6" : "5"} className="empty-table-message">Loading Requests...</td></tr>
+                            <tr><td colSpan={activeTab === 'Leaves' || activeTab === 'ShortLeave' ? "6" : "5"} className="empty-table-message">Loading Requests...</td></tr>
                         ) : requests.length === 0 ? (
                             <tr>
-                                <td colSpan={activeTab === 'Leaves' ? "6" : "5"} className="empty-table-message">
-                                    No {filterStatus !== 'All' ? filterStatus.toLowerCase() : ''} {activeTab === 'Leaves' ? 'leave' : 'WFH'} requests found.
+                                <td colSpan={activeTab === 'Leaves' || activeTab === 'ShortLeave' ? "6" : "5"} className="empty-table-message">
+                                    No {filterStatus !== 'All' ? filterStatus.toLowerCase() : ''} {activeTab === 'Leaves' ? 'leave' : activeTab === 'ShortLeave' ? 'short leave' : 'WFH'} requests found.
                                 </td>
                             </tr>
                         ) : (
@@ -204,7 +222,7 @@ const EmployeeRequests = () => {
                                         </div>
                                     </td>
 
-                                    {activeTab === 'Leaves' && (
+                                    {(activeTab === 'Leaves' || activeTab === 'ShortLeave') && (
                                         <td data-label="Leave Type">
                                             <span className="role-tag employee text-small">{req.leaveType}</span>
                                         </td>
@@ -287,7 +305,7 @@ const EmployeeRequests = () => {
                     <>
                         <div className="sidebar-header">
                             <div>
-                                <h2 className="sidebar-title">{activeTab === 'Leaves' ? 'Leave Request' : 'WFH Request'}</h2>
+                                <h2 className="sidebar-title">{activeTab === 'Leaves' ? 'Leave Request' : activeTab === 'ShortLeave' ? 'Short Leave Request' : 'WFH Request'}</h2>
                                 <span className={`status-badge ${selectedRequest.status === 'Approved' ? 'success' : selectedRequest.status === 'Rejected' ? 'danger' : 'warning'}`} style={{ padding: '4px 8px', fontSize: '10px' }}>
                                     {selectedRequest.status}
                                 </span>
@@ -320,7 +338,7 @@ const EmployeeRequests = () => {
                                     <span className="detail-value">{selectedRequest.days} Days</span>
                                 </div>
                                 
-                                {activeTab === 'Leaves' && (
+                                {(activeTab === 'Leaves' || activeTab === 'ShortLeave') && (
                                     <div className="detail-group" style={{ gridColumn: 'span 2' }}>
                                         <span className="detail-label">Leave Type</span>
                                         <span className="detail-value">{selectedRequest.leaveType}</span>

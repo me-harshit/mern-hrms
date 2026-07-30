@@ -329,9 +329,36 @@ const AttendanceLogs = () => {
                                             }`}>
                                             {log.status}
                                         </span>
+                                        {log.shortLeaveStatus === 'Pending' && (
+                                            <div style={{marginTop: '5px'}}>
+                                                <span className="text-small text-warning fw-bold">Short Leave Pending</span><br/>
+                                                <button className="gts-btn success btn-small" style={{fontSize: '0.7rem', padding: '2px 5px', marginRight: '5px', marginTop: '3px'}} onClick={() => handleEdit(log)}>Review & Approve</button>
+                                                <button className="gts-btn danger btn-small" style={{fontSize: '0.7rem', padding: '2px 5px'}} onClick={async () => {
+                                                    try {
+                                                        await api.put(`/attendance/update/${log._id}`, { status: log.status, note: log.note, shortLeaveStatus: 'Rejected' });
+                                                        fetchLogs(currentPage);
+                                                    } catch(e) { Swal.fire('Error', 'Failed to reject', 'error'); }
+                                                }}>Reject</button>
+                                            </div>
+                                        )}
+                                        {log.shortLeaveStatus === 'Approved' && (
+                                            <div style={{marginTop: '5px'}}>
+                                                <span className="text-small text-success fw-bold">Short Leave Approved</span>
+                                            </div>
+                                        )}
+                                        {log.shortLeaveStatus === 'Rejected' && (
+                                            <div style={{marginTop: '5px'}}>
+                                                <span className="text-small text-danger fw-bold">Short Leave Rejected</span>
+                                            </div>
+                                        )}
                                     </td>
                                     <td data-label="Note" className="text-small text-muted note-cell">
                                         {log.note || '-'}
+                                        {log.shortLeaveReason && (
+                                            <div style={{marginTop: '5px', color: '#854d0e', backgroundColor: '#fef3c7', padding: '2px 5px', borderRadius: '4px'}}>
+                                                <strong>Reason:</strong> {log.shortLeaveReason}
+                                            </div>
+                                        )}
                                     </td>
                                     <td data-label="Action">
                                         <button className="gts-btn primary btn-small" onClick={() => handleEdit(log)}>

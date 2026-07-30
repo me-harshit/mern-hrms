@@ -137,6 +137,17 @@ router.post('/upload', upload.any(), async (req, res) => {
             } else {
                 determinedStatus = 'Present';
             }
+
+            // Hourly Overrides
+            if (lastOut && calculatedGrossHours > 0) {
+                if (calculatedGrossHours < 6) {
+                    determinedStatus = 'Half Day';
+                    determinedNote = (determinedNote === 'Biometric Punch' ? '' : determinedNote + ' | ') + 'Worked < 6 hrs';
+                } else if (calculatedGrossHours >= 8.33) {
+                    determinedStatus = 'Present';
+                    determinedNote = 'Present (Worked >= 8h 20m)';
+                }
+            }
         }
 
         // --- Database Update ---
@@ -157,7 +168,7 @@ router.post('/upload', upload.any(), async (req, res) => {
             record.totalHours = calculatedGrossHours;
             record.breakTimeTaken = calculatedBreakMinutes;
 
-            if (record.status === 'Pending' || record.status === 'Absent') {
+            if (record.status === 'Pending' || record.status === 'Absent' || lastOut) {
                 record.status = determinedStatus;
                 record.note = record.status === 'Absent' ? determinedNote + ' (Recovered from Absent)' : determinedNote;
             }
@@ -326,7 +337,40 @@ router.get('/my-logs', auth, async (req, res) => {
         }
 
         const logs = await Attendance.find({ userId: req.user.id }).sort({ createdAt: -1 }).limit(30);
-        res.json(logs);
+
+        // Check for leaves and dynamically update Absent statuses
+        const Leave = require('../models/Leave');
+        const leaves = await Leave.find({ userId: req.user.id });
+
+        const mappedLogs = logs.map(log => {
+            if (log.status === 'Absent' || log.status === 'Pending') {
+                const [d, m, y] = log.date.split('/').map(Number);
+                const logDate = new Date(y, m - 1, d);
+                
+                const matchingLeave = leaves.find(l => {
+                    const from = new Date(l.fromDate);
+                    from.setHours(0,0,0,0);
+                    const to = new Date(l.toDate);
+                    to.setHours(23,59,59,999);
+                    return logDate >= from && logDate <= to;
+                });
+
+                if (matchingLeave) {
+                    const updatedLog = log.toObject ? log.toObject() : { ...log };
+                    if (matchingLeave.status === 'Approved') {
+                        updatedLog.status = 'On Leave';
+                        updatedLog.note = 'Approved Leave';
+                    } else if (matchingLeave.status === 'Pending') {
+                        updatedLog.status = 'On Leave'; // Or Leave Pending, but UI expects primary for On Leave
+                        updatedLog.note = 'Leave Request Pending';
+                    }
+                    return updatedLog;
+                }
+            }
+            return log;
+        });
+
+        res.json(mappedLogs);
     } catch (err) {
         res.status(500).send('Server Error');
     }
@@ -779,7 +823,7 @@ router.put('/update/:id', auth, async (req, res) => {
             }
         }
 
-        const { checkIn, checkOut, status, note } = req.body;
+        const { checkIn, checkOut, status, note, shortLeaveStatus } = req.body;
         let newStatus = status;
 
         if (status === 'Auto') {
@@ -801,15 +845,33 @@ router.put('/update/:id', auth, async (req, res) => {
             if (lateMinutes > (settings.halfDayThreshold || 30)) newStatus = 'Half Day';
             else if (lateMinutes > (settings.gracePeriod || 15)) newStatus = 'Late';
             else newStatus = 'Present';
+
+            // Hourly Overrides for Auto
+            if (checkIn && checkOut) {
+                const cIn = new Date(checkIn);
+                const cOut = new Date(checkOut);
+                if (cOut > cIn) {
+                    const hrs = Number(((cOut - cIn) / 3600000).toFixed(2));
+                    if (hrs < 6) newStatus = 'Half Day';
+                    else if (hrs >= 8.33) newStatus = 'Present';
+                }
+            }
         }
 
         let updatePayload = { checkIn, checkOut, status: newStatus, note };
+        if (shortLeaveStatus) updatePayload.shortLeaveStatus = shortLeaveStatus;
         if (checkIn && checkOut) {
             const cIn = new Date(checkIn);
             const cOut = new Date(checkOut);
             if (cOut > cIn) {
                 updatePayload.totalHours = Number(((cOut - cIn) / 3600000).toFixed(2));
             }
+        }
+
+        // If manually updated to Present, clear Short Leave request if it was pending
+        if (newStatus === 'Present' && currentRecord.shortLeaveStatus === 'Pending') {
+            updatePayload.shortLeaveStatus = 'Approved';
+            updatePayload.note = (note ? note + ' | ' : '') + 'Short Leave Approved';
         }
 
         const updatedLog = await Attendance.findByIdAndUpdate(
@@ -1027,6 +1089,130 @@ router.post('/wfh-break', auth, async (req, res) => {
     } catch (error) {
         console.error("WFH Break Error:", error);
         res.status(500).json({ message: "Server Error" });
+    }
+});
+
+// ==========================================
+// 12. SHORT LEAVE ROUTE (Employee Apply)
+// ==========================================
+router.post('/short-leave/:id', auth, async (req, res) => {
+    try {
+        const { reason } = req.body;
+        const record = await Attendance.findOne({ _id: req.params.id, userId: req.user.id });
+        if (!record) return res.status(404).json({ message: 'Attendance record not found' });
+        if (record.status !== 'Half Day') return res.status(400).json({ message: 'Short Leave can only be applied on Half Day records' });
+        
+        record.shortLeaveStatus = 'Pending';
+        record.shortLeaveReason = reason;
+        await record.save();
+
+        res.json({ message: 'Short Leave Request submitted successfully', record });
+    } catch (err) {
+        console.error("Short Leave Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 13. ALL SHORT LEAVE REQUESTS (Admin/HR)
+// ==========================================
+router.get('/short-leaves/all-requests', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        let andConditions = [
+            { shortLeaveStatus: { $in: ['Pending', 'Approved', 'Rejected'] } }
+        ];
+
+        if (req.query.status) {
+            andConditions.push({ shortLeaveStatus: req.query.status });
+        }
+
+        if (req.user.role === 'MANAGER') {
+            const manager = await User.findById(req.user.id);
+            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            andConditions.push({ userId: { $in: teamIds } });
+        }
+
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            const matchingUsers = await User.find({ name: searchRegex }).distinct('_id');
+            andConditions.push({
+                $or: [
+                    { userId: { $in: matchingUsers } },
+                    { shortLeaveReason: searchRegex }
+                ]
+            });
+        }
+
+        let query = { $and: andConditions };
+
+        const totalRecords = await Attendance.countDocuments(query);
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        const records = await Attendance.find(query)
+            .populate('userId', 'name email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        // Format to match Leaves/WFH structure for the UI
+        const formattedData = records.map(record => {
+            const [d, m, y] = record.date.split('/').map(Number);
+            const isoDate = new Date(y, m - 1, d).toISOString();
+            
+            return {
+                _id: record._id,
+                userId: record.userId,
+                fromDate: isoDate,
+                toDate: isoDate,
+                days: 0.5, 
+                status: record.shortLeaveStatus,
+                reason: record.shortLeaveReason,
+                leaveType: 'Short Leave'
+            };
+        });
+
+        res.json({
+            data: formattedData,
+            pagination: { totalRecords, totalPages, currentPage: page, limit }
+        });
+    } catch (err) {
+        console.error("Short Leaves Pagination Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 14. SHORT LEAVE ACTION (Admin/HR)
+// ==========================================
+router.put('/short-leave/action/:id', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+
+        const { status } = req.body;
+        const record = await Attendance.findById(req.params.id);
+
+        if (!record) return res.status(404).json({ message: 'Record not found' });
+
+        record.shortLeaveStatus = status;
+        
+        // If approved, fix the main attendance status to Present
+        if (status === 'Approved') {
+            record.status = 'Present';
+        } else if (status === 'Rejected') {
+            record.status = 'Half Day';
+        }
+
+        await record.save();
+        res.json({ message: 'Short Leave updated successfully', record });
+
+    } catch (err) {
+        res.status(500).send('Server Error');
     }
 });
 

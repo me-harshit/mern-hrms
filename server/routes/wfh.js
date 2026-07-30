@@ -283,4 +283,23 @@ router.get('/all-requests', auth, async (req, res) => {
     }
 });
 
+// @route   DELETE /api/wfh/:id (Delete WFH request for testing)
+router.delete('/:id', auth, async (req, res) => {
+    try {
+        const wfhRequest = await Wfh.findById(req.params.id);
+        if (!wfhRequest) return res.status(404).json({ message: 'Request not found' });
+        
+        // Optional: restrict so users can only delete their own pending leaves
+        if (wfhRequest.userId.toString() !== req.user.id && req.user.role === 'EMPLOYEE') {
+            return res.status(403).json({ message: 'Not authorized to delete this request' });
+        }
+
+        await Wfh.findByIdAndDelete(req.params.id);
+        res.json({ message: 'WFH request deleted successfully' });
+    } catch (err) { 
+        console.error("Delete WFH Error:", err);
+        res.status(500).send('Server Error'); 
+    }
+});
+
 module.exports = router;

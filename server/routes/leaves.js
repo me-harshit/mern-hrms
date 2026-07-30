@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken'); // 👇 NEW: Required for secure email link
 const auth = require('../middleware/authMiddleware');
 const Leave = require('../models/Leave');
 const User = require('../models/User');
+const Attendance = require('../models/Attendance');
 const sendEmail = require('../utils/sendEmail');
 
 // @route   GET /api/leaves/my-leaves
@@ -333,6 +334,22 @@ router.put('/action/:id', auth, async (req, res) => {
                 user.earnedLeaveBalance -= leave.days;
             }
             await user.save();
+
+            // Update Attendance Records directly
+            const from = new Date(leave.fromDate);
+            const to = new Date(leave.toDate);
+            for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+                const dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+                await Attendance.updateOne(
+                    { userId: user._id, date: dateStr },
+                    { 
+                        $set: { 
+                            status: 'On Leave', 
+                            note: `Approved Leave (${leave.leaveType})` 
+                        } 
+                    }
+                );
+            }
         }
 
         leave.status = status;
@@ -453,6 +470,25 @@ router.get('/admin/user-leaves/:id', auth, async (req, res) => {
         const leaves = await Leave.find({ userId: req.params.id }).sort({ createdAt: -1 });
         res.json({ history: leaves });
     } catch (err) { res.status(500).send('Server Error'); }
+});
+
+// @route   DELETE /api/leaves/:id (Delete leave request for testing)
+router.delete('/:id', auth, async (req, res) => {
+    try {
+        const leave = await Leave.findById(req.params.id);
+        if (!leave) return res.status(404).json({ message: 'Leave not found' });
+        
+        // Optional: you can restrict so users can only delete their own pending leaves
+        if (leave.userId.toString() !== req.user.id && req.user.role === 'EMPLOYEE') {
+            return res.status(403).json({ message: 'Not authorized to delete this leave' });
+        }
+
+        await Leave.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Leave request deleted successfully' });
+    } catch (err) { 
+        console.error("Delete Leave Error:", err);
+        res.status(500).send('Server Error'); 
+    }
 });
 
 module.exports = router;

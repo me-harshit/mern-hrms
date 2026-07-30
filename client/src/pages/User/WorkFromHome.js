@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import api from '../../utils/api';
-import { faPlus, faLaptopHouse, faCheckCircle, faTimesCircle, faClock } from '@fortawesome/free-solid-svg-icons';
+import { faPlus, faLaptopHouse, faCheckCircle, faTimesCircle, faClock, faTrash } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/App.css';
 
 const WorkFromHome = () => {
@@ -87,6 +87,28 @@ const WorkFromHome = () => {
         }
     };
 
+    const handleDeleteWfh = async (id) => {
+        const result = await Swal.fire({
+            title: 'Are you sure?',
+            text: "This will permanently delete this WFH request.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                await api.delete(`/wfh/${id}`);
+                Swal.fire('Deleted!', 'WFH request has been deleted.', 'success');
+                fetchWfhRequests();
+            } catch (err) {
+                Swal.fire('Error', 'Failed to delete request.', 'error');
+            }
+        }
+    };
+
     const getStatusBadge = (status) => {
         switch (status) {
             case 'Approved': return <span className="status-badge success"><FontAwesomeIcon icon={faCheckCircle} /> Approved</span>;
@@ -119,6 +141,7 @@ const WorkFromHome = () => {
                             <th>Reason & Work Plan</th>
                             <th>Admin Comment</th>
                             <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -142,6 +165,19 @@ const WorkFromHome = () => {
                                         {req.adminComment || '-'}
                                     </td>
                                     <td data-label="Status">{getStatusBadge(req.status)}</td>
+                                    <td data-label="Actions">
+                                        {req.status === 'Pending' ? (
+                                            <button 
+                                                className="action-btn-danger" 
+                                                onClick={() => handleDeleteWfh(req._id)}
+                                                style={{ padding: '5px 10px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                            >
+                                                <FontAwesomeIcon icon={faTrash} />
+                                            </button>
+                                        ) : (
+                                            <span className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Processed</span>
+                                        )}
+                                    </td>
                                 </tr>
                             ))
                         )}

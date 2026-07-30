@@ -68,6 +68,34 @@ const Attendance = () => {
         }
     };
 
+    // --- API: SHORT LEAVE ---
+    const handleShortLeave = async (logId) => {
+        const { value: reason } = await Swal.fire({
+            title: 'Apply for Short Leave',
+            input: 'text',
+            inputLabel: 'Reason for short leave (e.g. Train delayed, Left early for doctor)',
+            inputPlaceholder: 'Enter reason...',
+            showCancelButton: true,
+            confirmButtonColor: '#215D7B',
+            inputValidator: (value) => {
+                if (!value) return 'You need to write something!'
+            }
+        });
+
+        if (reason) {
+            try {
+                setPunchLoading(true);
+                await api.post(`/attendance/short-leave/${logId}`, { reason });
+                Swal.fire('Submitted', 'Your short leave request has been submitted for approval.', 'success');
+                fetchLogs();
+            } catch (error) {
+                Swal.fire('Error', error.response?.data?.message || 'Failed to submit request', 'error');
+            } finally {
+                setPunchLoading(false);
+            }
+        }
+    };
+
     // --- HELPER: PARSE DD/MM/YYYY TO JS DATE ---
     const parseDateStr = (dateStr) => {
         if (!dateStr) return new Date();
@@ -291,6 +319,7 @@ const Attendance = () => {
                             <th>Break Time</th>
                             <th>Status</th>
                             <th>Note</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -321,7 +350,6 @@ const Attendance = () => {
                                     </td>
 
                                     <td data-label="Status">
-                                        {/* 👇 Apply red (danger) for Absent */}
                                         <span className={`status-badge ${
                                             log.status === 'Absent' ? 'danger' :
                                             log.status === 'On Leave' ? 'primary' :
@@ -333,6 +361,36 @@ const Attendance = () => {
                                     </td>
                                     <td data-label="Note" className="text-small text-muted">
                                         {log.note || '-'}
+                                    </td>
+                                    <td data-label="Action" style={{ whiteSpace: 'nowrap' }}>
+                                        {log.status === 'Half Day' && (!log.shortLeaveStatus || log.shortLeaveStatus === 'None') ? (
+                                            <button 
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: '1px solid #0284c7',
+                                                    color: '#0284c7',
+                                                    padding: '2px 8px',
+                                                    fontSize: '0.7rem',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                    fontWeight: '500',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseOver={(e) => { e.target.style.background = '#e0f2fe'; }}
+                                                onMouseOut={(e) => { e.target.style.background = 'transparent'; }}
+                                                onClick={() => handleShortLeave(log._id)}
+                                            >
+                                                Apply Short Leave
+                                            </button>
+                                        ) : log.shortLeaveStatus === 'Pending' ? (
+                                            <span className="text-small text-warning fw-bold">Short Leave Pending</span>
+                                        ) : log.shortLeaveStatus === 'Approved' ? (
+                                            <span className="text-small text-success fw-bold">Short Leave Approved</span>
+                                        ) : log.shortLeaveStatus === 'Rejected' ? (
+                                            <span className="text-small text-danger fw-bold">Short Leave Rejected</span>
+                                        ) : (
+                                            <span className="text-small text-muted" style={{ fontStyle: 'italic' }}>No action needed</span>
+                                        )}
                                     </td>
                                 </tr>
                             ))

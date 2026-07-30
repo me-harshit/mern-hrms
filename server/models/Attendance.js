@@ -39,6 +39,16 @@ const attendanceSchema = new mongoose.Schema({
     note: {
         type: String, // For "Late by 30 mins" or admin overrides
         default: ""
+    },
+    // --- Short Leave Feature ---
+    shortLeaveStatus: {
+        type: String,
+        enum: ['None', 'Pending', 'Approved', 'Rejected'],
+        default: 'None'
+    },
+    shortLeaveReason: {
+        type: String,
+        default: ""
     }
 }, { timestamps: true });
 

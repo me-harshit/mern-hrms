@@ -18,7 +18,8 @@ import {
     faRobot,
     faLaptopHouse,
     faWallet,
-    faFileContract
+    faFileContract,
+    faFileInvoiceDollar
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -175,9 +176,14 @@ const Sidebar = ({ isOpen, onClose }) => {
                 )}
 
                 {(userRole === 'HR' || userRole === 'ADMIN') && (
-                    <Link to="/admin-chat" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-chat' ? 'active' : ''}`}>
-                        <FontAwesomeIcon icon={faRobot} className="nav-icon" /> <span>AI Assistant</span>
-                    </Link>
+                    <>
+                        <Link to="/admin-chat" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-chat' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faRobot} className="nav-icon" /> <span>AI Assistant</span>
+                        </Link>
+                        <Link to="/payroll" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/payroll' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faFileInvoiceDollar} className="nav-icon" /> <span>Payroll</span>
+                        </Link>
+                    </>
                 )}
 
                 {/* Visible to Admins ONLY */}

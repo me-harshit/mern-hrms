@@ -26,6 +26,7 @@ const reimbursementRoutes = require('./routes/reimbursements');
 const vendorRoutes = require('./routes/vendors');
 const wfh = require('./routes/wfh');
 const documentRoutes = require('./routes/documents');
+const payrollRoutes = require('./routes/payroll');
 
 const foreverBeginsRoutes = require('./routes/foreverBegins');
 
@@ -55,6 +56,7 @@ app.use('/api/reimbursements', reimbursementRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/wfh', wfh);
 app.use('/api/documents', documentRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 app.use('/api/forever-begins', foreverBeginsRoutes);
 
