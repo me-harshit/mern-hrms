@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCalculator, faCheck, faDownload, faFileInvoiceDollar, faSearch } from '@fortawesome/free-solid-svg-icons';
+import { faCalculator, faCheck, faFileInvoiceDollar, faSearch } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/App.css';
 
 const Payroll = () => {
