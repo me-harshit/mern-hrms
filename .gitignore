@@ -31,3 +31,5 @@ reconciliation_report.json
 
 # Company policy documents (upload via the GTS Documents admin page instead)
 *.pdf
+KNOWLEDGE_BASE.md
+PROJECT_PLAN.md

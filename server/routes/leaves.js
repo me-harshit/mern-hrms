@@ -459,6 +459,9 @@ router.post('/admin/update-balance', auth, async (req, res) => {
         if (el !== undefined) user.earnedLeaveBalance = Number(el);
         if (salary !== undefined) user.salary = Number(salary);
 
+        // Reset the auto-accrual timer so the system doesn't immediately give them back past leaves
+        user.leavesLastReset = new Date();
+
         await user.save();
         res.json({ message: 'User profile updated successfully', user });
     } catch (err) { res.status(500).send('Server Error'); }
