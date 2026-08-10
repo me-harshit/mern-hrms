@@ -123,17 +123,20 @@ router.post('/upload', upload.any(), async (req, res) => {
         const calculatedBreakMinutes = Math.floor(breakMs / 60000);
 
         // --- Determine Status Based on Punch ---
+        const firstInLog = shiftLogs.find(l => l.timestamp === firstIn && l.direction === 'IN');
+        const isRemoteIn = firstInLog && firstInLog.deviceId === 'WEB_PORTAL';
+        
         let determinedStatus = 'Pending';
-        let determinedNote = 'Biometric Punch';
+        let determinedNote = isRemoteIn ? 'Remote Punch In' : 'Biometric Punch';
 
         if (firstIn) {
             const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
             if (diffMinutes > (settings.halfDayThreshold || 30)) {
                 determinedStatus = 'Half Day';
-                determinedNote = `Late by ${formatLateTime(diffMinutes)}`;
+                determinedNote = `Late by ${formatLateTime(diffMinutes)} ${isRemoteIn ? '(Remote Punch In)' : ''}`.trim();
             } else if (diffMinutes > (settings.gracePeriod || 15)) {
                 determinedStatus = 'Late';
-                determinedNote = `Late by ${formatLateTime(diffMinutes)}`;
+                determinedNote = `Late by ${formatLateTime(diffMinutes)} ${isRemoteIn ? '(Remote Punch In)' : ''}`.trim();
             } else {
                 determinedStatus = 'Present';
             }
@@ -977,13 +980,13 @@ router.post('/wfh-punch', auth, async (req, res) => {
             const diffMinutes = Math.floor((firstIn - shiftStartObj) / 60000);
             if (diffMinutes > (settings.halfDayThreshold || 30)) {
                 determinedStatus = 'Half Day';
-                determinedNote = `Late by ${formatLateTime(diffMinutes)} (WFH)`;
+                determinedNote = `Late by ${formatLateTime(diffMinutes)} (Remote Punch In)`;
             } else if (diffMinutes > (settings.gracePeriod || 15)) {
                 determinedStatus = 'Late';
-                determinedNote = `Late by ${formatLateTime(diffMinutes)} (WFH)`;
+                determinedNote = `Late by ${formatLateTime(diffMinutes)} (Remote Punch In)`;
             } else {
                 determinedStatus = 'Present';
-                determinedNote = 'WFH';
+                determinedNote = 'Remote Punch In';
             }
         }
 
@@ -1101,7 +1104,23 @@ router.post('/short-leave/:id', auth, async (req, res) => {
         const record = await Attendance.findOne({ _id: req.params.id, userId: req.user.id });
         if (!record) return res.status(404).json({ message: 'Attendance record not found' });
         if (record.status !== 'Half Day') return res.status(400).json({ message: 'Short Leave can only be applied on Half Day records' });
-        
+        // 1. Get the month and year of this attendance record
+        const dateParts = record.date.split('/');
+        const month = dateParts[1];
+        const year = dateParts[2];
+        const monthRegex = new RegExp(`^\\d{1,2}/${month}/${year}$`);
+
+        // 2. Count existing short leaves (Pending or Approved) for this month
+        const shortLeavesThisMonth = await Attendance.countDocuments({
+            userId: req.user.id,
+            date: monthRegex,
+            shortLeaveStatus: { $in: ['Pending', 'Approved'] }
+        });
+
+        if (shortLeavesThisMonth >= 2) {
+            return res.status(400).json({ message: 'Limit reached: You can only apply for 2 Short Leaves per month.' });
+        }
+
         record.shortLeaveStatus = 'Pending';
         record.shortLeaveReason = reason;
         await record.save();
@@ -1209,9 +1228,41 @@ router.put('/short-leave/action/:id', auth, async (req, res) => {
         }
 
         await record.save();
+
+        const Notification = require('../models/Notification');
+        await Notification.create({
+            recipient: record.userId,
+            title: `Short Leave ${status}`,
+            message: `Your Short Leave request on ${record.date} has been ${status.toLowerCase()}.`,
+            type: 'SHORT_LEAVE'
+        });
+
         res.json({ message: 'Short Leave updated successfully', record });
 
     } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   DELETE /api/attendance/short-leave/:id (Testing)
+router.delete('/short-leave/:id', auth, async (req, res) => {
+    try {
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
+        
+        const record = await Attendance.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: 'Record not found' });
+
+        // Wipe the short leave fields
+        record.shortLeaveStatus = undefined;
+        record.shortLeaveReason = undefined;
+        record.shortLeaveTime = undefined;
+        // Optionally revert status to something default, but we'll leave it or set to Half Day
+        if (record.status === 'Present') record.status = 'Half Day';
+        
+        await record.save();
+        res.json({ message: 'Short leave request deleted' });
+    } catch (err) {
+        console.error(err);
         res.status(500).send('Server Error');
     }
 });

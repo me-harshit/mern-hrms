@@ -99,7 +99,7 @@ const Reimbursements = () => {
         try {
             const res = await api.get(`/reimbursements/unpaid/${wallet.userId._id}`);
             setUnpaidExpenses(res.data);
-            setSelectedExpenseIds(res.data.map(exp => exp._id));
+            setSelectedExpenseIds([]); // FIX: Do not auto-select all expenses!
         } catch (err) {
             Swal.fire('Error', 'Failed to load specific unpaid expenses.', 'error');
             setSelectedEmployee(null);

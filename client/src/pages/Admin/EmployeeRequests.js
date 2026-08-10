@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'; // 👇 NEW: Imported useNavigat
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faTimes, faSearch, faFilter, faFileAlt, faLaptopHouse, faEye } from '@fortawesome/free-solid-svg-icons';
+import { faCheck, faTimes, faSearch, faFilter, faFileAlt, faLaptopHouse, faEye, faTrash } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 
@@ -115,6 +115,42 @@ const EmployeeRequests = () => {
                 fetchRequests(currentPage);
             } catch (err) {
                 Swal.fire('Error', err.response?.data?.message || 'Action failed', 'error');
+            }
+        }
+    };
+
+    const handleDelete = async (id, empName) => {
+        let actionType = 'request';
+        let endpointPrefix = '';
+        if (activeTab === 'Leaves') { actionType = 'leave'; endpointPrefix = '/leaves'; }
+        else if (activeTab === 'WFH') { actionType = 'WFH'; endpointPrefix = '/wfh'; }
+        else if (activeTab === 'ShortLeave') { actionType = 'short leave'; endpointPrefix = '/attendance/short-leave'; }
+
+        const result = await Swal.fire({
+            title: `Delete ${actionType}?`,
+            text: `Are you sure you want to permanently delete this ${actionType} request for ${empName}? This action cannot be undone.`,
+            icon: 'error',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, Delete'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                Swal.fire({
+                    title: 'Deleting...',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                await api.delete(`${endpointPrefix}/${id}`);
+                
+                Swal.fire('Deleted!', 'Request has been deleted.', 'success');
+                setIsSidebarOpen(false);
+                fetchRequests(currentPage);
+            } catch (err) {
+                Swal.fire('Error', err.response?.data?.message || 'Delete failed', 'error');
             }
         }
     };
@@ -276,6 +312,15 @@ const EmployeeRequests = () => {
                                                     </button>
                                                 </>
                                             )}
+
+                                            <button
+                                                className="gts-btn btn-small"
+                                                style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}
+                                                onClick={() => handleDelete(req._id, req.userId?.name)}
+                                                title="Delete Request"
+                                            >
+                                                <FontAwesomeIcon icon={faTrash} />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>

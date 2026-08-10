@@ -19,7 +19,6 @@ const Attendance = () => {
 
     // --- USER DATA ---
     const user = JSON.parse(localStorage.getItem('user'));
-    const isWFH = user?.workLocation === 'WFH';
 
     // --- INITIAL LOAD & CLOCK ---
     useEffect(() => {
@@ -181,8 +180,8 @@ const Attendance = () => {
 
     if (loading) return <div className="main-content">Loading Attendance...</div>;
 
-    const d = new Date();
-    const todayStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    const today = new Date();
+    const todayStr = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
     const todayLog = logs.find(log => log.date === todayStr);
     
     // Simple state checking: if they have a checkIn but no checkOut, they are working.
@@ -190,6 +189,15 @@ const Attendance = () => {
     const isPunchedIn = todayLog && todayLog.checkIn && !todayLog.checkOut;
     const isCheckedOut = todayLog && todayLog.checkOut;
     const isOnBreak = todayLog && todayLog.isOnBreak;
+
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
+    const shortLeavesUsedThisMonth = logs.filter(log => {
+        if (!log.date) return false;
+        const [, m, y] = log.date.split('/');
+        return parseInt(m) === currentMonth && parseInt(y) === currentYear && (log.shortLeaveStatus === 'Pending' || log.shortLeaveStatus === 'Approved');
+    }).length;
+    const hasReachedLimit = shortLeavesUsedThisMonth >= 2;
 
     return (
         <div className="attendance-container">
@@ -204,50 +212,48 @@ const Attendance = () => {
                     </div>
                 </div>
 
-                {/* WFH Manual Punch Widget */}
-                {isWFH && (
-                    <div className="wfh-punch-widget" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        {!isPunchedIn && !isCheckedOut && (
-                            <button 
-                                className="gts-btn success" 
-                                onClick={() => handlePunch('IN')}
-                                disabled={punchLoading}
-                            >
-                                <FontAwesomeIcon icon={faSignInAlt} /> Check In
-                            </button>
-                        )}
-                        {isPunchedIn && !isOnBreak && (
-                            <button 
-                                className="gts-btn wfh-break-btn" 
-                                onClick={() => handleBreak('start')}
-                                disabled={punchLoading}
-                            >
-                                <FontAwesomeIcon icon={faPause} /> Take Break
-                            </button>
-                        )}
-                        {isPunchedIn && isOnBreak && (
-                            <button 
-                                className="gts-btn wfh-resume-btn" 
-                                onClick={() => handleBreak('end')}
-                                disabled={punchLoading}
-                            >
-                                <FontAwesomeIcon icon={faPlay} /> End Break
-                            </button>
-                        )}
-                        {isPunchedIn && (
-                            <button 
-                                className="gts-btn danger" 
-                                onClick={() => handlePunch('OUT')}
-                                disabled={punchLoading}
-                            >
-                                <FontAwesomeIcon icon={faSignOutAlt} /> Check Out
-                            </button>
-                        )}
-                        {isCheckedOut && (
-                            <span className="status-badge success">Checked out for today</span>
-                        )}
-                    </div>
-                )}
+                {/* Remote Manual Punch Widget (Available to all) */}
+                <div className="wfh-punch-widget" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    {!isPunchedIn && !isCheckedOut && (
+                        <button 
+                            className="gts-btn success" 
+                            onClick={() => handlePunch('IN')}
+                            disabled={punchLoading}
+                        >
+                            <FontAwesomeIcon icon={faSignInAlt} /> Check In
+                        </button>
+                    )}
+                    {isPunchedIn && !isOnBreak && (
+                        <button 
+                            className="gts-btn wfh-break-btn" 
+                            onClick={() => handleBreak('start')}
+                            disabled={punchLoading}
+                        >
+                            <FontAwesomeIcon icon={faPause} /> Take Break
+                        </button>
+                    )}
+                    {isPunchedIn && isOnBreak && (
+                        <button 
+                            className="gts-btn wfh-resume-btn" 
+                            onClick={() => handleBreak('end')}
+                            disabled={punchLoading}
+                        >
+                            <FontAwesomeIcon icon={faPlay} /> End Break
+                        </button>
+                    )}
+                    {isPunchedIn && (
+                        <button 
+                            className="gts-btn danger" 
+                            onClick={() => handlePunch('OUT')}
+                            disabled={punchLoading}
+                        >
+                            <FontAwesomeIcon icon={faSignOutAlt} /> Check Out
+                        </button>
+                    )}
+                    {isCheckedOut && (
+                        <span className="status-badge success">Checked out for today</span>
+                    )}
+                </div>
             </div>
 
             {/* FILTER CONTROLS */}
@@ -366,19 +372,21 @@ const Attendance = () => {
                                         {log.status === 'Half Day' && (!log.shortLeaveStatus || log.shortLeaveStatus === 'None') ? (
                                             <button 
                                                 style={{
-                                                    background: 'transparent',
-                                                    border: '1px solid #0284c7',
-                                                    color: '#0284c7',
+                                                    background: hasReachedLimit ? '#f1f5f9' : 'transparent',
+                                                    border: `1px solid ${hasReachedLimit ? '#cbd5e1' : '#0284c7'}`,
+                                                    color: hasReachedLimit ? '#94a3b8' : '#0284c7',
                                                     padding: '2px 8px',
                                                     fontSize: '0.7rem',
                                                     borderRadius: '4px',
-                                                    cursor: 'pointer',
+                                                    cursor: hasReachedLimit ? 'not-allowed' : 'pointer',
                                                     fontWeight: '500',
                                                     transition: 'all 0.2s'
                                                 }}
-                                                onMouseOver={(e) => { e.target.style.background = '#e0f2fe'; }}
-                                                onMouseOut={(e) => { e.target.style.background = 'transparent'; }}
-                                                onClick={() => handleShortLeave(log._id)}
+                                                title={hasReachedLimit ? "You have reached the limit of 2 short leaves this month." : ""}
+                                                onMouseOver={(e) => { if(!hasReachedLimit) e.target.style.background = '#e0f2fe'; }}
+                                                onMouseOut={(e) => { if(!hasReachedLimit) e.target.style.background = 'transparent'; }}
+                                                onClick={() => !hasReachedLimit && handleShortLeave(log._id)}
+                                                disabled={hasReachedLimit}
                                             >
                                                 Apply Short Leave
                                             </button>

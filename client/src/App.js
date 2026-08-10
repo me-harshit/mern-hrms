@@ -35,6 +35,7 @@ import AddInventory from './pages/Admin/AddInventory';
 import EditInventory from './pages/Admin/EditInventory';
 import Reimbursements from './pages/Admin/Reimbursements';
 import Payroll from './pages/Admin/Payroll';
+import Notifications from './pages/User/Notifications';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -171,6 +172,7 @@ function App() {
             <Route path="/add-expense" element={<AddExpense />} />
             <Route path="/edit-expense/:id" element={<EditExpense />} />
             <Route path="/reimbursements" element={<Reimbursements />} />
+            <Route path="/notifications" element={<Notifications />} />
 
             {/* 👇 Management Routes (Admin, HR, Manager, Accounts) */}
             <Route path="/employees" element={isManagement ? <Employees /> : <Navigate to="/dashboard" />} />
@@ -195,7 +197,7 @@ function App() {
 
             {/* LOCKED TO HR & ADMIN */}
             <Route path="/admin-chat" element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminChat /> : <Navigate to="/dashboard" />} />
-            <Route path="/payroll" element={(userRole === 'HR' || userRole === 'ADMIN') ? <Payroll /> : <Navigate to="/dashboard" />} />
+            <Route path="/payroll" element={<Payroll />} />
 
           </Route>
         </Route>

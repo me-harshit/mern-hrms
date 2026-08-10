@@ -147,6 +147,7 @@ router.post('/finalize', auth, async (req, res) => {
             return res.status(400).json({ message: 'Invalid data' });
         }
 
+        const Notification = require('../models/Notification');
         let savedCount = 0;
 
         for (const data of payrollData) {
@@ -163,6 +164,16 @@ router.post('/finalize', auth, async (req, res) => {
                 },
                 { upsert: true, new: true }
             );
+
+            // Send notification to employee
+            const monthName = new Date(year, month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
+            await Notification.create({
+                recipient: data.user._id,
+                title: 'Salary Finalized',
+                message: `Your salary for ${monthName} has been finalized: ₹${data.calculatedSalary.toLocaleString()}.`,
+                type: 'SALARY'
+            });
+
             savedCount++;
         }
 
@@ -170,6 +181,36 @@ router.post('/finalize', auth, async (req, res) => {
 
     } catch (err) {
         console.error("Payroll Finalize Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST /api/payroll/revert
+// @desc    Revert (delete) a generated payslip
+router.post('/revert', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'ADMIN' && req.user.role !== 'HR') {
+            return res.status(403).json({ message: 'Access Denied' });
+        }
+
+        const { month, year, userId } = req.body;
+        if (!month || !year || !userId) {
+            return res.status(400).json({ message: 'Invalid data' });
+        }
+
+        await Payslip.findOneAndDelete({ userId, month, year });
+        
+        const Notification = require('../models/Notification');
+        const monthName = new Date(year, month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
+        await Notification.findOneAndDelete({
+            recipient: userId,
+            title: 'Salary Finalized',
+            type: 'SALARY'
+        }); // Best effort removal
+
+        res.json({ message: 'Successfully reverted payroll.' });
+    } catch (err) {
+        console.error("Payroll Revert Error:", err);
         res.status(500).send('Server Error');
     }
 });

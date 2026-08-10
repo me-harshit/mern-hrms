@@ -107,6 +107,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                             <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Leave Management</span>
                         </Link>
 
+                        <Link to="/payroll" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/payroll' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faFileInvoiceDollar} className="nav-icon" /> <span>My Payroll</span>
+                        </Link>
+
                         <Link to="/wfh" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/wfh' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faLaptopHouse} className="nav-icon" /> <span>Work From Home</span>
                         </Link>

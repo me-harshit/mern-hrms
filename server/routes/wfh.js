@@ -160,6 +160,14 @@ router.get('/email-action', async (req, res) => {
 
         await sendEmail({ email: user.email, cc: process.env.HR_EMAIL || 'hr@gts.ai', subject, message });
 
+        const Notification = require('../models/Notification');
+        await Notification.create({
+            recipient: user._id,
+            title: `WFH ${status}`,
+            message: `Your Work From Home request for ${wfhRequest.days} day(s) has been ${status.toLowerCase()}.`,
+            type: 'WFH'
+        });
+
         res.send(`
             <div style="text-align:center; padding: 60px; font-family: 'Segoe UI', sans-serif; color: #0f172a;">
                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 400px; margin: 0 auto; padding: 40px;">
@@ -210,6 +218,14 @@ router.put('/action/:id', auth, async (req, res) => {
         `;
 
         await sendEmail({ email: user.email, cc: process.env.HR_EMAIL || 'hr@gts.ai', subject, message });
+
+        const Notification = require('../models/Notification');
+        await Notification.create({
+            recipient: user._id,
+            title: `WFH ${status}`,
+            message: `Your Work From Home request for ${wfhRequest.days} day(s) has been ${status.toLowerCase()}.`,
+            type: 'WFH'
+        });
 
         res.json(wfhRequest);
 
