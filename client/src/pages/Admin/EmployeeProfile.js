@@ -516,7 +516,7 @@ const EmployeeProfile = () => {
                     <div className="detail-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '25px' }}>
                         <div><label className="text-muted text-small d-block mb-5">Shift Timing</label><div className="fw-600 text-primary">{user.shiftType || 'DAY'} Shift</div></div>
                         <div><label className="text-muted text-small d-block mb-5">Account Status</label><span className={`status-badge ${user.status === 'ACTIVE' ? 'success' : 'danger'}`} style={{ padding: '2px 6px', fontSize: '10px' }}>{user.status || 'ACTIVE'}</span></div>
-                        <div><label className="text-muted text-small d-block mb-5">Reporting Manager</label><div className="fw-600">{user.reportingManagerName || 'None'}</div><div className="text-small text-muted">{user.reportingManagerEmail}</div></div>
+                        <div><label className="text-muted text-small d-block mb-5">Reporting Managers</label><div className="fw-600">{(user.reportingManagerName && user.reportingManagerName.length > 0) ? user.reportingManagerName.join(', ') : 'None'}</div><div className="text-small text-muted">{(user.reportingManagerEmail || []).join(', ')}</div></div>
                         <div><label className="text-muted text-small d-block mb-5">Purchaser Access</label><div className={`fw-600 ${user.isPurchaser ? 'text-success' : 'text-muted'}`}>{user.isPurchaser ? 'Authorized' : 'Not Authorized'}</div></div>
                         <div><label className="text-muted text-small d-block mb-5">Monthly Salary</label><div className="fw-bold" style={{ fontSize: '18px' }}>₹ {user.salary ? user.salary.toLocaleString('en-IN') : '0'}</div></div>
                     </div>

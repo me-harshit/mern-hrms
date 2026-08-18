@@ -33,3 +33,9 @@ reconciliation_report.json
 *.pdf
 KNOWLEDGE_BASE.md
 PROJECT_PLAN.md
+
+# Temporary Scripts
+server/scripts/
+
+# AI Agent Configs
+.agents/

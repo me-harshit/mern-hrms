@@ -354,7 +354,14 @@ html {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(calc(50% - 15px), 1fr));
     gap: 20px 15px; /* 20px vertical gap, 15px horizontal gap */
-    align-items: end; /* Keeps labels and inputs aligned nicely */
+    align-items: start; /* Fix alignment */
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-bottom: 15px;
 }
 
 /* Optional: Utility to force an input to span the whole row (like an Address field) */
@@ -1796,3 +1803,8 @@ html {
   border-right: 1px solid #e2e8f0;
 }
 
+.p-20 { padding: 20px !important; }
+.p-25 { padding: 25px !important; }
+.p-30 { padding: 30px !important; }
+.mt-25 { margin-top: 25px !important; }
+.mb-25 { margin-bottom: 25px !important; }

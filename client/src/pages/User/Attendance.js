@@ -67,6 +67,30 @@ const Attendance = () => {
         }
     };
 
+    // --- HELPER: CHECK SHORT LEAVE ELIGIBILITY ---
+    const isShortLeaveEligible = (log) => {
+        if (log.status !== 'Half Day') return false;
+        if (!log.checkIn) return false;
+
+        // If checked out, they must have worked at least 6.33 hours (since 8.33 is Present)
+        // 8.33 - 2 hours = 6.33 hours minimum for a 2-hour short leave
+        if (log.checkOut) {
+            return (log.totalHours || 0) >= 6.33;
+        }
+
+        // If not checked out yet, check if they arrived <= 2 hours late
+        const inTime = new Date(log.checkIn);
+        const shiftStartHour = user?.shiftType === 'NIGHT' ? 19 : 9;
+        const shiftStartMin = user?.shiftType === 'NIGHT' ? 0 : 30; 
+        
+        const shiftStartObj = new Date(inTime.getFullYear(), inTime.getMonth(), inTime.getDate(), shiftStartHour, shiftStartMin, 0, 0);
+        
+        const lateMs = inTime.getTime() - shiftStartObj.getTime();
+        const lateHours = lateMs / 3600000;
+        
+        return lateHours <= 2.0 && lateHours >= 0; 
+    };
+
     // --- API: SHORT LEAVE ---
     const handleShortLeave = async (logId) => {
         const { value: reason } = await Swal.fire({
@@ -369,7 +393,7 @@ const Attendance = () => {
                                         {log.note || '-'}
                                     </td>
                                     <td data-label="Action" style={{ whiteSpace: 'nowrap' }}>
-                                        {log.status === 'Half Day' && (!log.shortLeaveStatus || log.shortLeaveStatus === 'None') ? (
+                                        {isShortLeaveEligible(log) && (!log.shortLeaveStatus || log.shortLeaveStatus === 'None') ? (
                                             <button 
                                                 style={{
                                                     background: hasReachedLimit ? '#f1f5f9' : 'transparent',

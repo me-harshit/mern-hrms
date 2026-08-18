@@ -25,6 +25,7 @@ const importUsers = async () => {
     }
 
     try {
+        
         await mongoose.connect(process.env.MONGO_URI);
         console.log('✅ Connected to MongoDB');
         console.log(`📂 Reading CSV file: ${filePath}...`);

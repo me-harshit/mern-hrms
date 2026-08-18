@@ -58,7 +58,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     };
 
     // Helper for Management Roles
-    const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS'].includes(userRole);
+    const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS', 'TEAM LEAD'].includes(userRole);
 
     return (
         <div className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
@@ -140,29 +140,34 @@ const Sidebar = ({ isOpen, onClose }) => {
                 {isManagement && (
                     <>
                         <div className="sidebar-section-label">
-                            {userRole === 'MANAGER' ? 'Team Management' : userRole === 'ACCOUNTS' ? 'Finance & Ops' : 'HR Management'}
+                            {['MANAGER', 'TEAM LEAD'].includes(userRole) ? 'Team Management' : userRole === 'ACCOUNTS' ? 'Finance & Ops' : 'HR Management'}
                         </div>
 
                         <Link to="/employees" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/employees' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faUsers} className="nav-icon" />
-                            <span>{userRole === 'MANAGER' ? 'My Team' : 'Employees'}</span>
+                            <span>{['MANAGER', 'TEAM LEAD'].includes(userRole) ? 'My Team' : 'Employees'}</span>
                         </Link>
 
-                        <Link to="/attendance-logs" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/attendance-logs' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faCalendarCheck} className="nav-icon" /> <span>Attendance Logs</span>
-                        </Link>
+                        {userRole !== 'TEAM LEAD' && (
+                            <Link to="/attendance-logs" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/attendance-logs' ? 'active' : ''}`}>
+                                <FontAwesomeIcon icon={faCalendarCheck} className="nav-icon" /> <span>Attendance Logs</span>
+                            </Link>
+                        )}
 
                         <Link to="/Employee-requests" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/Employee-requests' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> <span>Employee Requests</span>
+                            <FontAwesomeIcon icon={faFileAlt} className="nav-icon" /> 
+                            <span>{['MANAGER', 'TEAM LEAD'].includes(userRole) ? 'Team Requests' : 'Employee Requests'}</span>
                         </Link>
 
-                        <Link to="/projects" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/projects' ? 'active' : ''}`}>
-                            <FontAwesomeIcon icon={faFolderOpen} className="nav-icon" /> <span>Projects</span>
-                        </Link>
+                        {userRole !== 'TEAM LEAD' && (
+                            <Link to="/projects" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/projects' ? 'active' : ''}`}>
+                                <FontAwesomeIcon icon={faFolderOpen} className="nav-icon" /> <span>Projects</span>
+                            </Link>
+                        )}
 
                         <Link to="/admin-expenses" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-expenses' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" />
-                            <span>{userRole === 'MANAGER' ? 'Team Expenses' : 'All Expenses'}</span>
+                            <span>{['MANAGER', 'TEAM LEAD'].includes(userRole) ? 'Team Expenses' : 'All Expenses'}</span>
                         </Link>
 
                         <Link to="/absent-employees" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/absent-employees' ? 'active' : ''}`}>

@@ -258,9 +258,14 @@ router.get('/admin-charts', auth, async (req, res) => {
 
         // Base Match Condition (Respects Manager's Scope)
         let baseMatch = {};
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const teamIds = await User.find({
+                $or: [
+                    { reportingManagerEmail: manager.email.toLowerCase() },
+                    { teamLeadsEmail: manager.email.toLowerCase() }
+                ]
+            }).distinct('_id');
             const myProjects = await Project.find({
                 $or: [
                     { leadEmail: manager.email.toLowerCase() },
@@ -388,9 +393,14 @@ router.get('/all', auth, async (req, res) => {
         const Project = mongoose.model('Project');
         const Vendor = mongoose.model('Vendor');
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const teamIds = await User.find({
+                $or: [
+                    { reportingManagerEmail: manager.email.toLowerCase() },
+                    { teamLeadsEmail: manager.email.toLowerCase() }
+                ]
+            }).distinct('_id');
 
             const myProjects = await Project.find({
                 $or: [
@@ -586,7 +596,9 @@ router.get('/:id', auth, async (req, res) => {
             isAuthorized = true;
         } else if (role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
-            if (expense.submittedBy.reportingManagerEmail?.toLowerCase() === manager.email.toLowerCase()) {
+            const rme = expense.submittedBy.reportingManagerEmail || [];
+            const rmeLower = rme.map(e => e.toLowerCase());
+            if (rmeLower.includes(manager.email.toLowerCase())) {
                 isAuthorized = true;
             }
             if (!isAuthorized && expense.expenseType === 'Project Expense' && expense.projectName) {
@@ -627,7 +639,9 @@ router.put('/:id', auth, upload.fields([
             isAuthorized = true;
         } else if (role === 'MANAGER') {
             const manager = await User.findById(req.user.id);
-            if (expense.submittedBy.reportingManagerEmail?.toLowerCase() === manager.email.toLowerCase()) {
+            const rme = expense.submittedBy.reportingManagerEmail || [];
+            const rmeLower = rme.map(e => e.toLowerCase());
+            if (rmeLower.includes(manager.email.toLowerCase())) {
                 isAuthorized = true;
             }
             if (!isAuthorized && expense.expenseType === 'Project Expense' && expense.projectName) {

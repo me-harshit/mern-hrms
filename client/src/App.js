@@ -145,8 +145,8 @@ function App() {
   }
   const userRole = user?.role;
 
-  // Helper to check management roles (Now includes ACCOUNTS)
-  const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS'].includes(userRole);
+  // Helper to check management roles
+  const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS', 'TEAM LEAD'].includes(userRole);
 
   return (
     <Router>

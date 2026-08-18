@@ -4,6 +4,34 @@ const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
 const bcrypt = require('bcryptjs');
 
+// @route   GET /api/employees/managers
+// @desc    Get all users who can be assigned as reporting managers
+router.get('/managers', auth, async (req, res) => {
+    try {
+        const managers = await User.find({ role: { $in: ['MANAGER', 'TEAM LEAD', 'ADMIN', 'HR'] } })
+            .select('name email role')
+            .sort({ name: 1 });
+        res.json(managers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET /api/employees/teamleads
+// @desc    Get all users who can be assigned as team leads
+router.get('/teamleads', auth, async (req, res) => {
+    try {
+        const leads = await User.find({ role: { $in: ['TEAM LEAD', 'MANAGER', 'ADMIN', 'HR'] } })
+            .select('name email role')
+            .sort({ name: 1 });
+        res.json(leads);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET /api/employees (or /api/users depending on your setup)
 // @desc    Get all employees (Paginated & Filtered)
 router.get('/', auth, async (req, res) => {
@@ -22,6 +50,11 @@ router.get('/', auth, async (req, res) => {
             const manager = await User.findById(req.user.id);
             if (manager) {
                 andConditions.push({ reportingManagerEmail: manager.email.toLowerCase() });
+            }
+        } else if (req.user.role === 'TEAM LEAD') {
+            const lead = await User.findById(req.user.id);
+            if (lead) {
+                andConditions.push({ teamLeadsEmail: lead.email.toLowerCase() });
             }
         }
 
@@ -133,6 +166,7 @@ router.post('/add', auth, async (req, res) => {
             address, permanentAddress, currentAddress,
             jobTitle, department, workLocation, employmentType,
             reportingManagerName, reportingManagerEmail,
+            teamLeadsName, teamLeadsEmail,
             employeeId, isPurchaser
         } = req.body;
 
@@ -166,6 +200,8 @@ router.post('/add', auth, async (req, res) => {
             employmentType,
             reportingManagerName,
             reportingManagerEmail,
+            teamLeadsName,
+            teamLeadsEmail,
             employeeId,
             isPurchaser: isPurchaser || false
         });
@@ -193,6 +229,7 @@ router.put('/:id', auth, async (req, res) => {
             jobTitle, department, workLocation, employmentType,
             salary, casualLeaveBalance, earnedLeaveBalance,
             reportingManagerName, reportingManagerEmail,
+            teamLeadsName, teamLeadsEmail,
             employeeId, isPurchaser
         } = req.body;
 
@@ -227,6 +264,8 @@ router.put('/:id', auth, async (req, res) => {
 
         if (reportingManagerName !== undefined) updateData.reportingManagerName = reportingManagerName;
         if (reportingManagerEmail !== undefined) updateData.reportingManagerEmail = reportingManagerEmail;
+        if (teamLeadsName !== undefined) updateData.teamLeadsName = teamLeadsName;
+        if (teamLeadsEmail !== undefined) updateData.teamLeadsEmail = teamLeadsEmail;
 
         if (employeeId !== undefined) updateData.employeeId = employeeId;
         if (isPurchaser !== undefined) updateData.isPurchaser = isPurchaser;

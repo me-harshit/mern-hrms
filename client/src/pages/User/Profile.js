@@ -300,15 +300,15 @@ const Profile = () => {
                         {/* --- REPORTING MANAGER FIELD (Still static as it references another user) --- */}
                         <div className="detail-item">
                             <FontAwesomeIcon icon={faUserTie} className="detail-icon text-primary" />
-                            <div>
-                                <label>Reporting Manager</label>
-                                {user.reportingManagerName ? (
-                                    <p className="fw-500">
-                                        {user.reportingManagerName} <br />
-                                        <span className="text-small text-muted fw-normal">{user.reportingManagerEmail}</span>
-                                    </p>
+                            <div className="info-group">
+                                <label className="text-muted text-small d-block mb-5">Reporting Managers</label>
+                                {user.reportingManagerName && user.reportingManagerName.length > 0 ? (
+                                    <div className="fw-600">
+                                        {user.reportingManagerName.join(', ')} <br />
+                                        <span className="text-small text-muted fw-normal">{(user.reportingManagerEmail || []).join(', ')}</span>
+                                    </div>
                                 ) : (
-                                    <p className="text-muted italic">Not Assigned</p>
+                                    <div className="fw-600 text-muted">Not Assigned</div>
                                 )}
                             </div>
                         </div>

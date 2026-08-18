@@ -146,7 +146,8 @@ router.post('/apply', auth, async (req, res) => {
             savedLeaves.push(newLeave);
 
             // --- EMAIL LOGIC: Generate Secure Magic Links ---
-            if (user.reportingManagerEmail) {
+            const targetEmails = [...(user.reportingManagerEmail || []), ...(user.teamLeadsEmail || [])];
+            if (targetEmails.length > 0) {
                 const approveToken = jwt.sign({ leaveId: newLeave._id, status: 'Approved' }, process.env.JWT_SECRET, { expiresIn: '7d' });
                 const rejectToken = jwt.sign({ leaveId: newLeave._id, status: 'Rejected' }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -216,7 +217,7 @@ router.post('/apply', auth, async (req, res) => {
                 `;
 
                 await sendEmail({
-                    email: user.reportingManagerEmail,
+                    email: targetEmails,
                     cc: process.env.HR_EMAIL || 'hr@gts.ai',
                     subject,
                     message
@@ -416,10 +417,15 @@ router.get('/all-requests', auth, async (req, res) => {
             andConditions.push({ status: req.query.status });
         }
 
-        // --- 3. MANAGER SCOPE ---
-        if (req.user.role === 'MANAGER') {
+        // --- 3. MANAGER OR TEAM LEAD SCOPE ---
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const teamIds = await User.find({
+                $or: [
+                    { reportingManagerEmail: manager.email.toLowerCase() },
+                    { teamLeadsEmail: manager.email.toLowerCase() }
+                ]
+            }).distinct('_id');
             andConditions.push({ userId: { $in: teamIds } });
         }
 

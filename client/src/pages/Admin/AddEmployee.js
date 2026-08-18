@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faSave, faArrowLeft, faCog, faMoneyBillWave, faBriefcase } from '@fortawesome/free-solid-svg-icons';
+import Select from 'react-select';
 import '../../styles/App.css';
 import '../../styles/expenses.css';
 
 const AddEmployee = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [managersList, setManagersList] = useState([]);
+    const [teamLeadsList, setTeamLeadsList] = useState([]);
 
     const [user, setUser] = useState({
         name: '', email: '', workEmail: '', employeeId: '', password: '', phoneNumber: '',
@@ -19,9 +22,26 @@ const AddEmployee = () => {
         permanentAddress: '', currentAddress: '', address: '',
         jobTitle: '', department: '', workLocation: 'WFO', employmentType: 'Full-time',
         role: 'EMPLOYEE', shiftType: 'DAY', status: 'ACTIVE',
-        reportingManagerName: '', reportingManagerEmail: '',
+        reportingManagerName: [], reportingManagerEmail: [],
+        teamLeadsName: [], teamLeadsEmail: [],
         isPurchaser: false, salary: ''
     });
+
+    useEffect(() => {
+        const fetchLists = async () => {
+            try {
+                const [mgrRes, tlRes] = await Promise.all([
+                    api.get('/employees/managers'),
+                    api.get('/employees/teamleads')
+                ]);
+                setManagersList(mgrRes.data);
+                setTeamLeadsList(tlRes.data);
+            } catch (err) {
+                console.error('Failed to load lists');
+            }
+        };
+        fetchLists();
+    }, []);
 
     const handleAddProfile = async (e) => {
         e.preventDefault();
@@ -82,26 +102,89 @@ const AddEmployee = () => {
                     <div className="form-grid mt-15 mb-30" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                         <div className="form-group"><label className="input-label">Job Title</label><input className="custom-input" placeholder="e.g. Data Entry Operator" value={user.jobTitle} onChange={e => setUser({ ...user, jobTitle: e.target.value })} /></div>
                         <div className="form-group"><label className="input-label">Department / Business Unit</label><input className="custom-input" placeholder="e.g. Data Operations" value={user.department} onChange={e => setUser({ ...user, department: e.target.value })} /></div>
-                        <div className="form-group"><label className="input-label">Work Location</label><select className="swal2-select custom-input" value={user.workLocation} onChange={e => setUser({ ...user, workLocation: e.target.value })}><option value="WFO">WFO (Work From Office)</option><option value="WFH">WFH (Work From Home)</option><option value="HYBRID">Hybrid</option></select></div>
-                        <div className="form-group"><label className="input-label">Employment Type</label><select className="swal2-select custom-input" value={user.employmentType} onChange={e => setUser({ ...user, employmentType: e.target.value })}><option value="Full-time">Full-time</option><option value="Internship">Internship</option><option value="Part-time">Part-time</option><option value="Contract">Contract</option></select></div>
+                        <div className="form-group"><label className="input-label">Work Location</label><select className="custom-input" value={user.workLocation} onChange={e => setUser({ ...user, workLocation: e.target.value })}><option value="WFO">WFO (Work From Office)</option><option value="WFH">WFH (Work From Home)</option><option value="HYBRID">Hybrid</option></select></div>
+                        <div className="form-group"><label className="input-label">Employment Type</label><select className="custom-input" value={user.employmentType} onChange={e => setUser({ ...user, employmentType: e.target.value })}><option value="Full-time">Full-time</option><option value="Internship">Internship</option><option value="Part-time">Part-time</option><option value="Contract">Contract</option></select></div>
                     </div>
 
                     <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted" /> System Configuration</h3>
                     <div className="form-grid mt-15 mb-30" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                         <div className="form-group">
                             <label className="input-label">System Role *</label>
-                            <select className="swal2-select custom-input" value={user.role} onChange={e => setUser({ ...user, role: e.target.value })}>
+                            <select className="custom-input" value={user.role} onChange={e => setUser({ ...user, role: e.target.value })}>
                                 <option value="EMPLOYEE">Employee</option>
+                                <option value="TEAM LEAD">Team Lead</option>
                                 <option value="MANAGER">Manager</option>
-                                <option value="ACCOUNTS">Accounts</option>
                                 <option value="HR">HR</option>
+                                <option value="ACCOUNTS">Accounts</option>
                                 <option value="ADMIN">Admin</option>
                             </select>
                         </div>
-                        <div className="form-group"><label className="input-label">Shift Timing *</label><select className="swal2-select custom-input" value={user.shiftType} onChange={e => setUser({ ...user, shiftType: e.target.value })}><option value="DAY">Day Shift</option><option value="NIGHT">Night Shift</option></select></div>
-                        <div className="form-group"><label className="input-label">Account Status *</label><select className="swal2-select custom-input" value={user.status} onChange={e => setUser({ ...user, status: e.target.value })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
-                        <div className="form-group"><label className="input-label">Reporting Manager Name</label><input className="custom-input" placeholder="Manager's Full Name" value={user.reportingManagerName} onChange={e => setUser({ ...user, reportingManagerName: e.target.value })} /></div>
-                        <div className="form-group"><label className="input-label">Reporting Manager Email</label><input type="email" className="custom-input" placeholder="manager@gts.ai" value={user.reportingManagerEmail} onChange={e => setUser({ ...user, reportingManagerEmail: e.target.value })} /></div>
+                        <div className="form-group"><label className="input-label">Shift Timing *</label><select className="custom-input" value={user.shiftType} onChange={e => setUser({ ...user, shiftType: e.target.value })}><option value="DAY">Day Shift</option><option value="NIGHT">Night Shift</option></select></div>
+                        <div className="form-group"><label className="input-label">Account Status *</label><select className="custom-input" value={user.status} onChange={e => setUser({ ...user, status: e.target.value })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
+                        <div className="form-group">
+                            <label className="input-label">Reporting Managers</label>
+                            <Select
+                                isMulti
+                                options={managersList.map(mgr => ({ value: mgr.email, label: `${mgr.name} (${mgr.role})`, name: mgr.name }))}
+                                className="basic-multi-select"
+                                classNamePrefix="select"
+                                placeholder="Search and select managers..."
+                                value={(user.reportingManagerEmail || []).map((email, idx) => {
+                                    const found = managersList.find(m => m.email === email);
+                                    if (found) return { value: found.email, label: `${found.name} (${found.role})`, name: found.name };
+                                    return { value: email, label: user.reportingManagerName?.[idx] || email, name: user.reportingManagerName?.[idx] || '' };
+                                })}
+                                onChange={(selectedOptions) => {
+                                    setUser({
+                                        ...user,
+                                        reportingManagerEmail: selectedOptions ? selectedOptions.map(opt => opt.value) : [],
+                                        reportingManagerName: selectedOptions ? selectedOptions.map(opt => opt.name) : []
+                                    });
+                                }}
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        minHeight: '45px',
+                                        borderRadius: '8px',
+                                        borderColor: '#e2e8f0',
+                                        boxShadow: 'none',
+                                        '&:hover': { borderColor: '#cbd5e1' }
+                                    })
+                                }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="input-label">Team Leads</label>
+                            <Select
+                                isMulti
+                                options={teamLeadsList.map(tl => ({ value: tl.email, label: `${tl.name} (${tl.role})`, name: tl.name }))}
+                                className="basic-multi-select"
+                                classNamePrefix="select"
+                                placeholder="Search and select team leads..."
+                                value={(user.teamLeadsEmail || []).map((email, idx) => {
+                                    const found = teamLeadsList.find(t => t.email === email);
+                                    if (found) return { value: found.email, label: `${found.name} (${found.role})`, name: found.name };
+                                    return { value: email, label: user.teamLeadsName?.[idx] || email, name: user.teamLeadsName?.[idx] || '' };
+                                })}
+                                onChange={(selectedOptions) => {
+                                    setUser({
+                                        ...user,
+                                        teamLeadsEmail: selectedOptions ? selectedOptions.map(opt => opt.value) : [],
+                                        teamLeadsName: selectedOptions ? selectedOptions.map(opt => opt.name) : []
+                                    });
+                                }}
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        minHeight: '45px',
+                                        borderRadius: '8px',
+                                        borderColor: '#e2e8f0',
+                                        boxShadow: 'none',
+                                        '&:hover': { borderColor: '#cbd5e1' }
+                                    })
+                                }}
+                            />
+                        </div>
                         <div className="form-group checkbox-container" style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center' }}><label className="checkbox-label" style={{ fontWeight: '600', color: '#0f172a', margin: 0 }}><input type="checkbox" className="custom-checkbox" checked={user.isPurchaser} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} />Grant Purchaser Access</label></div>
                     </div>
 

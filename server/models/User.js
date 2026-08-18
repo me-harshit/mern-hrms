@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true },
     workEmail: { type: String, default: "", lowercase: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ['EMPLOYEE', 'ADMIN', 'HR', 'MANAGER', 'ACCOUNTS'], default: 'EMPLOYEE' },
+    role: { type: String, enum: ['EMPLOYEE', 'ADMIN', 'HR', 'MANAGER', 'TEAM LEAD', 'ACCOUNTS'], default: 'EMPLOYEE' },
 
     // --- JOB / ORG ---
     jobTitle: { type: String, default: "" },
@@ -34,9 +34,11 @@ const userSchema = new mongoose.Schema({
     emergencyContactName: { type: String, default: "" },
     emergencyContactRelation: { type: String, default: "" },
 
-    // --- REPORTING MANAGER ---
-    reportingManagerName: { type: String, default: "" },
-    reportingManagerEmail: { type: String, default: "" },
+    // --- REPORTING MANAGER & TEAM LEAD ---
+    reportingManagerName: { type: [String], default: [] },
+    reportingManagerEmail: { type: [String], default: [] },
+    teamLeadsName: { type: [String], default: [] },
+    teamLeadsEmail: { type: [String], default: [] },
 
     // --- HR & LEAVE SETTINGS ---
     salary: { type: Number, default: 0 }, 

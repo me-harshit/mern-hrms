@@ -197,9 +197,12 @@ router.get('/absent', auth, async (req, res) => {
         // 👇 FIXED: Includes HR/Managers/Accounts, excludes Admin
         let userQuery = { role: { $ne: 'ADMIN' }, status: 'ACTIVE' };
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            userQuery.reportingManagerEmail = manager.email.toLowerCase();
+            userQuery.$or = [
+                { reportingManagerEmail: manager.email.toLowerCase() },
+                { teamLeadsEmail: manager.email.toLowerCase() }
+            ];
         }
 
         const employees = await User.find(userQuery).select('_id');
@@ -250,9 +253,12 @@ router.get('/absent-report', auth, async (req, res) => {
             userQuery.shiftType = 'NIGHT';
         }
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            userQuery.reportingManagerEmail = manager.email.toLowerCase();
+            userQuery.$or = [
+                { reportingManagerEmail: manager.email.toLowerCase() },
+                { teamLeadsEmail: manager.email.toLowerCase() }
+            ];
         }
 
         if (req.query.search) {
@@ -397,9 +403,14 @@ router.get('/all-logs', auth, async (req, res) => {
             { status: { $nin: ['Absent', 'Pending'] } }
         ];
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const teamIds = await User.find({
+                $or: [
+                    { reportingManagerEmail: manager.email.toLowerCase() },
+                    { teamLeadsEmail: manager.email.toLowerCase() }
+                ]
+            }).distinct('_id');
             andConditions.push({ userId: { $in: teamIds } });
         }
 
@@ -489,9 +500,14 @@ router.get('/raw-logs', auth, async (req, res) => {
 
         let andConditions = [];
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const teamIds = await User.find({
+                $or: [
+                    { reportingManagerEmail: manager.email.toLowerCase() },
+                    { teamLeadsEmail: manager.email.toLowerCase() }
+                ]
+            }).distinct('_id');
             andConditions.push({ userId: { $in: teamIds } });
         }
 
@@ -555,11 +571,11 @@ router.get('/user-raw-logs/:userId', auth, async (req, res) => {
         if (!shiftDate) return res.status(400).json({ message: 'shiftDate is required' });
 
         // Managers can only view punches for members of their own team
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const target = await User.findById(req.params.userId).select('reportingManagerEmail');
-            if (!target || target.reportingManagerEmail !== manager.email.toLowerCase()) {
-                return res.status(403).json({ message: 'Access Denied' });
+            const target = await User.findById(req.params.userId).select('reportingManagerEmail teamLeadsEmail');
+            if (!target || (!target.reportingManagerEmail.includes(manager.email.toLowerCase()) && !target.teamLeadsEmail.includes(manager.email.toLowerCase()))) {
+                return res.status(403).json({ message: 'Access Denied: Not your reportee' });
             }
         }
 
@@ -614,9 +630,14 @@ router.get('/export', auth, async (req, res) => {
         let query = {};
         let andConditions = [{ status: { $nin: ['Absent', 'Pending'] } }];
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const teamIds = await User.find({
+                $or: [
+                    { reportingManagerEmail: manager.email.toLowerCase() },
+                    { teamLeadsEmail: manager.email.toLowerCase() }
+                ]
+            }).distinct('_id');
             andConditions.push({ userId: { $in: teamIds } });
         }
 
@@ -819,9 +840,13 @@ router.put('/update/:id', auth, async (req, res) => {
         const currentRecord = await Attendance.findById(req.params.id).populate('userId');
         if (!currentRecord) return res.status(404).json({ message: 'Log not found' });
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            if (currentRecord.userId.reportingManagerEmail?.toLowerCase() !== manager.email.toLowerCase()) {
+            const rme = currentRecord.userId.reportingManagerEmail || [];
+            const tle = currentRecord.userId.teamLeadsEmail || [];
+            const rmeLower = rme.map(e => e.toLowerCase());
+            const tleLower = tle.map(e => e.toLowerCase());
+            if (!rmeLower.includes(manager.email.toLowerCase()) && !tleLower.includes(manager.email.toLowerCase())) {
                 return res.status(403).json({ message: 'Unauthorized: Not your team member' });
             }
         }
@@ -1151,9 +1176,14 @@ router.get('/short-leaves/all-requests', auth, async (req, res) => {
             andConditions.push({ shortLeaveStatus: req.query.status });
         }
 
-        if (req.user.role === 'MANAGER') {
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
-            const teamIds = await User.find({ reportingManagerEmail: manager.email.toLowerCase() }).distinct('_id');
+            const teamIds = await User.find({
+                $or: [
+                    { reportingManagerEmail: manager.email.toLowerCase() },
+                    { teamLeadsEmail: manager.email.toLowerCase() }
+                ]
+            }).distinct('_id');
             andConditions.push({ userId: { $in: teamIds } });
         }
 

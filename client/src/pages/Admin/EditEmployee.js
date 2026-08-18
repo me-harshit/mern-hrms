@@ -7,6 +7,7 @@ import {
     faUser, faSave, faArrowLeft, faClock, faPlaneDeparture,
     faEdit, faWallet, faHistory, faTimes, faUserEdit, faCog, faMoneyBillWave, faKey, faBriefcase
 } from '@fortawesome/free-solid-svg-icons';
+import Select from 'react-select';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 import '../../styles/expenses.css';
@@ -36,6 +37,9 @@ const EditEmployee = () => {
     const [attTotalRecords, setAttTotalRecords] = useState(0);
     const [attLimit, setAttLimit] = useState(10);
 
+    const [managersList, setManagersList] = useState([]);
+    const [teamLeadsList, setTeamLeadsList] = useState([]);
+
     useEffect(() => {
         fetchEmployeeData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,15 +52,19 @@ const EditEmployee = () => {
 
     const fetchEmployeeData = async () => {
         try {
-            const [userRes, leaveRes, walletRes] = await Promise.all([
+            const [userRes, leaveRes, walletRes, managersRes, teamLeadsRes] = await Promise.all([
                 api.get(`/employees/${id}`),
                 api.get(`/leaves/admin/user-leaves/${id}`),
-                api.get(`/wallets/user/${id}`).catch(() => ({ data: { balance: 0 } }))
+                api.get(`/wallets/user/${id}`).catch(() => ({ data: { balance: 0 } })),
+                api.get('/employees/managers').catch(() => ({ data: [] })),
+                api.get('/employees/teamleads').catch(() => ({ data: [] }))
             ]);
 
             setUser(userRes.data);
             setLeaveStats(leaveRes.data);
             setWalletBalance(walletRes.data.balance);
+            setManagersList(managersRes.data);
+            setTeamLeadsList(teamLeadsRes.data);
             setLoading(false);
         } catch (err) {
             console.error(err);
@@ -285,7 +293,7 @@ const EditEmployee = () => {
     if (loading) return <div className="main-content">Loading...</div>;
 
     return (
-        <div className="settings-container fade-in">
+        <div className="settings-container fade-in" style={{ padding: '30px', margin: '-20px', minHeight: 'calc(100vh - 60px)' }}>
             {/* HEADER */}
             <div className="page-header-row mb-20" style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '15px' }}>
                 <button className="gts-btn warning btn-small m-0" onClick={() => navigate(`/employee/${id}`)}>
@@ -314,11 +322,15 @@ const EditEmployee = () => {
 
             {/* --- TAB CONTENT: DETAILS --- */}
             {activeTab === 'details' && (
-                <div className="control-card p-30 fade-in d-block">
+                <div className="fade-in d-block">
                     <form onSubmit={handleUpdateProfile}>
-                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faUser} className="mr-5 text-muted" /> Personal Details</h3>
-                        {/* 👇 UPDATED: using the new CSS Grid class */}
-                        <div className="form-grid-2-col mt-15 mb-30">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
+                            {/* Personal Details Card */}
+                            <div className="control-card p-25" style={{ borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)', border: '1px solid #e2e8f0' }}>
+                                <h3 className="section-title border-bottom pb-15 mb-20" style={{ fontSize: '1.1rem', color: '#1e293b' }}>
+                                    <FontAwesomeIcon icon={faUser} className="mr-10 text-primary" /> Personal Details
+                                </h3>
+                                <div className="form-grid-2-col">
                             <div className="form-group"><label className="input-label">Full Name</label><input className="custom-input" value={user.name || ''} onChange={e => setUser({ ...user, name: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Login Email</label><input className="custom-input" value={user.email || ''} onChange={e => setUser({ ...user, email: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Work Email</label><input className="custom-input" placeholder="name@gts.ai" value={user.workEmail || ''} onChange={e => setUser({ ...user, workEmail: e.target.value })} /></div>
@@ -333,18 +345,28 @@ const EditEmployee = () => {
                             <div className="form-group"><label className="input-label">Emergency Contact Relationship</label><input className="custom-input" placeholder="e.g. Parent" value={user.emergencyContactRelation || ''} onChange={e => setUser({ ...user, emergencyContactRelation: e.target.value })} /></div>
                             <div className="form-group col-span-full"><label className="input-label">Current Address</label><input className="custom-input" value={user.currentAddress || ''} onChange={e => setUser({ ...user, currentAddress: e.target.value })} /></div>
                             <div className="form-group col-span-full"><label className="input-label">Permanent Address</label><input className="custom-input" value={user.permanentAddress || ''} onChange={e => setUser({ ...user, permanentAddress: e.target.value })} /></div>
-                        </div>
+                                </div>
+                            </div>
 
-                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faBriefcase} className="mr-5 text-muted" /> Job & Organization</h3>
-                        <div className="form-grid-2-col mt-15 mb-30">
+                            {/* Job & Organization Card */}
+                            <div className="control-card p-25" style={{ borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)', border: '1px solid #e2e8f0' }}>
+                                <h3 className="section-title border-bottom pb-15 mb-20" style={{ fontSize: '1.1rem', color: '#1e293b' }}>
+                                    <FontAwesomeIcon icon={faBriefcase} className="mr-10 text-primary" /> Job & Organization
+                                </h3>
+                                <div className="form-grid-2-col">
                             <div className="form-group"><label className="input-label">Job Title</label><input className="custom-input" placeholder="e.g. Data Entry Operator" value={user.jobTitle || ''} onChange={e => setUser({ ...user, jobTitle: e.target.value })} /></div>
                             <div className="form-group"><label className="input-label">Department / Business Unit</label><input className="custom-input" placeholder="e.g. Data Operations" value={user.department || ''} onChange={e => setUser({ ...user, department: e.target.value })} /></div>
-                            <div className="form-group"><label className="input-label">Work Location</label><select className="swal2-select custom-input" value={user.workLocation || ''} onChange={e => setUser({ ...user, workLocation: e.target.value })}><option value="">— Not set —</option><option value="WFO">WFO (Work From Office)</option><option value="WFH">WFH (Work From Home)</option><option value="HYBRID">Hybrid</option></select></div>
-                            <div className="form-group"><label className="input-label">Employment Type</label><select className="swal2-select custom-input" value={user.employmentType || ''} onChange={e => setUser({ ...user, employmentType: e.target.value })}><option value="">— Not set —</option><option value="Full-time">Full-time</option><option value="Internship">Internship</option><option value="Part-time">Part-time</option><option value="Contract">Contract</option></select></div>
-                        </div>
+                            <div className="form-group"><label className="input-label">Work Location</label><select className="custom-input" value={user.workLocation || ''} onChange={e => setUser({ ...user, workLocation: e.target.value })}><option value="">— Not set —</option><option value="WFO">WFO (Work From Office)</option><option value="WFH">WFH (Work From Home)</option><option value="HYBRID">Hybrid</option></select></div>
+                            <div className="form-group"><label className="input-label">Employment Type</label><select className="custom-input" value={user.employmentType || ''} onChange={e => setUser({ ...user, employmentType: e.target.value })}><option value="">— Not set —</option><option value="Full-time">Full-time</option><option value="Internship">Internship</option><option value="Part-time">Part-time</option><option value="Contract">Contract</option></select></div>
+                                </div>
+                            </div>
 
-                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faCog} className="mr-5 text-muted" /> System Configuration</h3>
-                        <div className="form-grid-2-col mt-15 mb-30">
+                            {/* System Configuration Card */}
+                            <div className="control-card p-25" style={{ borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)', border: '1px solid #e2e8f0' }}>
+                                <h3 className="section-title border-bottom pb-15 mb-20" style={{ fontSize: '1.1rem', color: '#1e293b' }}>
+                                    <FontAwesomeIcon icon={faCog} className="mr-10 text-primary" /> System Configuration
+                                </h3>
+                                <div className="form-grid-2-col">
 
                             {/* Password Reset Field */}
                             <div className="form-group">
@@ -354,18 +376,82 @@ const EditEmployee = () => {
 
                             <div className="form-group">
                                 <label className="input-label">System Role</label>
-                                <select className="swal2-select custom-input" value={user.role || 'EMPLOYEE'} onChange={e => setUser({ ...user, role: e.target.value })} disabled={currentUser?.role !== 'ADMIN'} style={{ opacity: currentUser?.role !== 'ADMIN' ? 0.6 : 1 }}>
+                                <select className="custom-input" value={user.role || 'EMPLOYEE'} onChange={e => setUser({ ...user, role: e.target.value })} disabled={currentUser?.role !== 'ADMIN'} style={{ opacity: currentUser?.role !== 'ADMIN' ? 0.6 : 1 }}>
                                     <option value="EMPLOYEE">Employee</option>
+                                    <option value="TEAM LEAD">Team Lead</option>
                                     <option value="MANAGER">Manager</option>
-                                    <option value="ACCOUNTS">Accounts</option>
                                     <option value="HR">HR</option>
+                                    <option value="ACCOUNTS">Accounts</option>
                                     <option value="ADMIN">Admin</option>
                                 </select>
                             </div>
-                            <div className="form-group"><label className="input-label">Shift Timing</label><select className="swal2-select custom-input" value={user.shiftType || 'DAY'} onChange={e => setUser({ ...user, shiftType: e.target.value })}><option value="DAY">Day Shift</option><option value="NIGHT">Night Shift</option></select></div>
-                            <div className="form-group"><label className="input-label">Account Status</label><select className="swal2-select custom-input" value={user.status || 'ACTIVE'} onChange={e => setUser({ ...user, status: e.target.value })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
-                            <div className="form-group"><label className="input-label">Reporting Manager Name</label><input className="custom-input" placeholder="Manager's Full Name" value={user.reportingManagerName || ''} onChange={e => setUser({ ...user, reportingManagerName: e.target.value })} /></div>
-                            <div className="form-group"><label className="input-label">Reporting Manager Email</label><input type="email" className="custom-input" placeholder="manager@gts.ai" value={user.reportingManagerEmail || ''} onChange={e => setUser({ ...user, reportingManagerEmail: e.target.value })} /></div>
+                            <div className="form-group"><label className="input-label">Shift Timing</label><select className="custom-input" value={user.shiftType || 'DAY'} onChange={e => setUser({ ...user, shiftType: e.target.value })}><option value="DAY">Day Shift</option><option value="NIGHT">Night Shift</option></select></div>
+                            <div className="form-group"><label className="input-label">Account Status</label><select className="custom-input" value={user.status || 'ACTIVE'} onChange={e => setUser({ ...user, status: e.target.value })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
+                            <div className="form-group">
+                                <label className="input-label">Reporting Managers</label>
+                                <Select
+                                    isMulti
+                                    options={managersList.map(mgr => ({ value: mgr.email, label: `${mgr.name} (${mgr.role})`, name: mgr.name }))}
+                                    className="basic-multi-select"
+                                    classNamePrefix="select"
+                                    placeholder="Search and select managers..."
+                                    value={(user.reportingManagerEmail || []).map((email, idx) => {
+                                        const found = managersList.find(m => m.email === email);
+                                        if (found) return { value: found.email, label: `${found.name} (${found.role})`, name: found.name };
+                                        return { value: email, label: user.reportingManagerName?.[idx] || email, name: user.reportingManagerName?.[idx] || '' };
+                                    })}
+                                    onChange={(selectedOptions) => {
+                                        setUser({
+                                            ...user,
+                                            reportingManagerEmail: selectedOptions ? selectedOptions.map(opt => opt.value) : [],
+                                            reportingManagerName: selectedOptions ? selectedOptions.map(opt => opt.name) : []
+                                        });
+                                    }}
+                                    styles={{
+                                        control: (base) => ({
+                                            ...base,
+                                            minHeight: '45px',
+                                            borderRadius: '8px',
+                                            borderColor: '#e2e8f0',
+                                            boxShadow: 'none',
+                                            '&:hover': { borderColor: '#cbd5e1' }
+                                        })
+                                    }}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label className="input-label">Team Leads</label>
+                                <Select
+                                    isMulti
+                                    options={teamLeadsList.map(tl => ({ value: tl.email, label: `${tl.name} (${tl.role})`, name: tl.name }))}
+                                    className="basic-multi-select"
+                                    classNamePrefix="select"
+                                    placeholder="Search and select team leads..."
+                                    value={(user.teamLeadsEmail || []).map((email, idx) => {
+                                        const found = teamLeadsList.find(t => t.email === email);
+                                        if (found) return { value: found.email, label: `${found.name} (${found.role})`, name: found.name };
+                                        return { value: email, label: user.teamLeadsName?.[idx] || email, name: user.teamLeadsName?.[idx] || '' };
+                                    })}
+                                    onChange={(selectedOptions) => {
+                                        setUser({
+                                            ...user,
+                                            teamLeadsEmail: selectedOptions.map(opt => opt.value),
+                                            teamLeadsName: selectedOptions.map(opt => opt.name)
+                                        });
+                                    }}
+                                    styles={{
+                                        control: (base) => ({
+                                            ...base,
+                                            minHeight: '45px',
+                                            borderRadius: '8px',
+                                            borderColor: '#e2e8f0',
+                                            boxShadow: 'none',
+                                            '&:hover': { borderColor: '#cbd5e1' }
+                                        })
+                                    }}
+                                />
+                            </div>
 
                             {/* Clean Checkbox Card */}
                             <div className="form-group checkbox-card">
@@ -373,12 +459,17 @@ const EditEmployee = () => {
                                     <input type="checkbox" className="custom-checkbox mr-5" checked={user.isPurchaser || false} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} />
                                     Grant Purchaser Access
                                 </label>
+                                                      </div>
                             </div>
-                        </div>
+                            </div>
 
-                        <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faMoneyBillWave} className="mr-5 text-muted" /> Payroll & Wallet</h3>
-                        <div className="form-grid-2-col mt-15">
-                            <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} /></div>
+                            {/* Payroll & Wallet Card */}
+                            <div className="control-card p-25" style={{ borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)', border: '1px solid #e2e8f0' }}>
+                                <h3 className="section-title border-bottom pb-15 mb-20" style={{ fontSize: '1.1rem', color: '#1e293b' }}>
+                                    <FontAwesomeIcon icon={faMoneyBillWave} className="mr-10 text-primary" /> Payroll & Wallet
+                                </h3>
+                                <div className="form-grid-2-col">
+                                    <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} /></div>
                             <div className="form-group">
                                 <label className="input-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span><FontAwesomeIcon icon={faWallet} style={{ color: 'var(--primary, #215D7B)', marginRight: '6px' }} /> Employee Wallet</span>
@@ -394,9 +485,14 @@ const EditEmployee = () => {
                                 )}
                             </div>
                         </div>
+                        </div>
 
-                        <div className="border-top pt-20 mt-30 form-footer-right">
-                            <button type="submit" className="gts-btn primary btn-large"><FontAwesomeIcon icon={faSave} className="btn-icon" /> Save Profile Changes</button>
+                        {/* Sticky Footer */}
+                        <div className="control-card p-20 mt-25" style={{ display: 'flex', justifyContent: 'flex-end', background: '#f8fafc', border: '1px solid #cbd5e1', position: 'sticky', bottom: '20px', zIndex: 10, borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' }}>
+                            <button type="submit" className="gts-btn primary btn-large" style={{ padding: '12px 30px', fontSize: '15px' }}>
+                                <FontAwesomeIcon icon={faSave} className="btn-icon" /> Save Profile Changes
+                            </button>
+                        </div>
                         </div>
                     </form>
                 </div>
