@@ -9,6 +9,7 @@ import {
 import api from '../utils/api';
 import TaskDiscussion from '../components/TaskDiscussion';
 import TaskMediaGrid from '../components/TaskMediaGrid';
+import ScreenRecorder from '../components/ScreenRecorder';
 import { STATUS_OPTIONS, slug, initials, dueLabel, taskContextLabel } from '../utils/taskHelpers';
 import '../styles/App.css';
 import '../styles/tasks.css';
@@ -62,6 +63,10 @@ const TaskDetail = () => {
         e.target.value = '';
     };
 
+    const handleProofRecordingAttach = (file) => {
+        setProofFiles(prev => [...prev, file]);
+    };
+
     // Reference media can be topped up from here rather than only on the
     // edit page — the brief often grows after the task is handed over.
     const addReferenceMedia = async (e) => {
@@ -78,6 +83,30 @@ const TaskDetail = () => {
         try {
             const data = new FormData();
             files.forEach(f => data.append('attachments', f));
+            const res = await api.post(`/tasks/${id}/media`, data, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setTask(res.data);
+            Swal.fire({
+                icon: 'success', title: 'Media added', toast: true,
+                position: 'top-end', timer: 1600, showConfirmButton: false
+            });
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not add media.', 'error');
+        } finally {
+            setAddingMedia(false);
+        }
+    };
+
+    const addReferenceScreenRecording = async (file) => {
+        if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+            return Swal.fire('Too Large', `"${file.name}" is over ${MAX_VIDEO_MB}MB.`, 'warning');
+        }
+
+        setAddingMedia(true);
+        try {
+            const data = new FormData();
+            data.append('attachments', file);
             const res = await api.post(`/tasks/${id}/media`, data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
@@ -241,9 +270,11 @@ const TaskDetail = () => {
                                 />
 
                                 <label className="td-label">Attach completion proof</label>
+                                <ScreenRecorder onAttach={handleProofRecordingAttach} />
                                 <input
                                     className="custom-file-input" type="file" multiple
                                     accept="image/*,video/*" onChange={handleProofChange} disabled={saving}
+                                    style={{ marginTop: '10px' }}
                                 />
                                 <p className="td-field-hint">
                                     Evidence the work is done. To add briefing material, use Reference media below.
@@ -366,14 +397,17 @@ const TaskDetail = () => {
                                 )}
 
                                 {canEdit && (
-                                    <label className={`td-add-media ${addingMedia ? 'busy' : ''}`}>
-                                        <FontAwesomeIcon icon={addingMedia ? faSpinner : faPlus} spin={addingMedia} />
-                                        {addingMedia ? 'Uploading...' : 'Add reference media'}
-                                        <input
-                                            type="file" multiple accept="image/*,video/*" hidden
-                                            onChange={addReferenceMedia} disabled={addingMedia}
-                                        />
-                                    </label>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        <ScreenRecorder onAttach={addReferenceScreenRecording} />
+                                        <label className={`td-add-media ${addingMedia ? 'busy' : ''}`}>
+                                            <FontAwesomeIcon icon={addingMedia ? faSpinner : faPlus} spin={addingMedia} />
+                                            {addingMedia ? 'Uploading...' : 'Add reference media'}
+                                            <input
+                                                type="file" multiple accept="image/*,video/*" hidden
+                                                onChange={addReferenceMedia} disabled={addingMedia}
+                                            />
+                                        </label>
+                                    </div>
                                 )}
                             </div>
                         </section>

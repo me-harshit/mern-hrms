@@ -8,6 +8,7 @@ import {
     faClipboardList, faFilm, faSearch, faFolderOpen, faBuilding
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
+import ScreenRecorder from '../../components/ScreenRecorder';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
 
@@ -99,6 +100,10 @@ const AddTask = () => {
         setFiles(prev => [...prev, ...processed]);
         setIsCompressing(false);
         e.target.value = ''; // let the same file be picked again after removal
+    };
+
+    const handleScreenRecordingAttach = (file) => {
+        setFiles(prev => [...prev, file]);
     };
 
     const removeFile = (index) => setFiles(prev => prev.filter((_, i) => i !== index));
@@ -312,6 +317,8 @@ const AddTask = () => {
                     </div>
 
                     <div className="form-group expense-file-area">
+                        <ScreenRecorder onAttach={handleScreenRecordingAttach} />
+                        <br />
                         <input
                             className="custom-file-input" type="file" multiple
                             accept="image/*,video/*" onChange={handleFileChange}

@@ -9,6 +9,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import { resolveMediaUrl } from '../../utils/taskHelpers';
+import ScreenRecorder from '../../components/ScreenRecorder';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
 
@@ -115,6 +116,10 @@ const EditTask = () => {
         setNewFiles(prev => [...prev, ...processed]);
         setIsCompressing(false);
         e.target.value = '';
+    };
+
+    const handleScreenRecordingAttach = (file) => {
+        setNewFiles(prev => [...prev, file]);
     };
 
     const handleSubmit = async (e) => {
@@ -342,6 +347,8 @@ const EditTask = () => {
 
                     <div className="form-group expense-file-area">
                         <label className="input-label">Add more</label>
+                        <ScreenRecorder onAttach={handleScreenRecordingAttach} />
+                        <br />
                         <input className="custom-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
 
                         <div className="task-upload-note">

@@ -86,7 +86,7 @@ const MyTasks = () => {
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
     const currentUserId = currentUser?.id || currentUser?._id;
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -128,13 +128,10 @@ const MyTasks = () => {
     useEffect(() => {
         const taskId = searchParams.get('task');
         if (!taskId) return;
-        api.get(`/tasks/${taskId}`)
-            .then(res => setSelectedTask(res.data))
-            .catch(() => Swal.fire('Not Found', 'That task is no longer available.', 'info'))
-            .finally(() => {
-                searchParams.delete('task');
-                setSearchParams(searchParams, { replace: true });
-            });
+        
+        searchParams.delete('task');
+        setSearchParams(searchParams, { replace: true });
+        navigate(`/task/${taskId}`);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
