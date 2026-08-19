@@ -7,7 +7,8 @@ import {
     faUser, faArrowLeft, faClock, faPlaneDeparture, faEdit, faEnvelope, faPhone,
     faWallet, faHistory, faUserSecret, faBoxOpen, faFileInvoice, faImage,
     faCheckCircle, faTimesCircle, faUndo, faEye, faTimes, faBuilding, faCut,
-    faFingerprint, faSignInAlt, faSignOutAlt, faClipboardList, faExclamationTriangle
+    faFingerprint, faSignInAlt, faSignOutAlt, faClipboardList, faExclamationTriangle,
+    faFolderOpen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
@@ -836,7 +837,7 @@ const EmployeeProfile = () => {
                                 <thead>
                                     <tr>
                                         <th>Task</th>
-                                        <th>Project</th>
+                                        <th>Type / Project</th>
                                         <th>{taskScope === 'assigned' ? 'Assigned by' : 'Assignees'}</th>
                                         <th>Priority</th>
                                         <th>Due</th>
@@ -860,7 +861,12 @@ const EmployeeProfile = () => {
                                                         </div>
                                                     )}
                                                 </td>
-                                                <td data-label="Project">{taskContextLabel(t)}</td>
+                                                <td data-label="Type / Project">
+                                                    <span className={`task-context ${t.taskType === 'Regular Office Task' ? 'is-office' : ''}`}>
+                                                        <FontAwesomeIcon icon={t.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
+                                                        <span className="task-context-label">{taskContextLabel(t)}</span>
+                                                    </span>
+                                                </td>
                                                 <td data-label={taskScope === 'assigned' ? 'Assigned by' : 'Assignees'}>
                                                     {taskScope === 'assigned'
                                                         ? (t.assignedBy?.name || '—')

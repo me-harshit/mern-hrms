@@ -5,7 +5,7 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faClipboardList, faPlus, faSearch, faEdit, faTrash,
-    faPaperclip, faClipboardCheck, faTimes
+    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import { slug, initials, taskContextLabel } from '../../utils/taskHelpers';
@@ -231,7 +231,7 @@ const Tasks = () => {
                         <thead>
                             <tr>
                                 <th className="col-task">Task</th>
-                                <th className="col-project">Project</th>
+                                <th className="col-project">Type / Project</th>
                                 <th className="col-assignees">Assignees</th>
                                 <th className="col-priority">Priority</th>
                                 <th className="col-due">Due Date</th>
@@ -259,9 +259,12 @@ const Tasks = () => {
                                             </span>
                                         </td>
 
-                                        <td data-label="Project" className="col-project">
-                                            <span className={`task-project-cell ${task.taskType === 'Regular Office Task' ? 'is-office' : ''}`}>
-                                                {taskContextLabel(task)}
+                                        {/* Holds either a project name or "Regular Office",
+                                            so the icon carries the distinction. */}
+                                        <td data-label="Type / Project" className="col-project">
+                                            <span className={`task-context ${task.taskType === 'Regular Office Task' ? 'is-office' : ''}`}>
+                                                <FontAwesomeIcon icon={task.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
+                                                <span className="task-context-label">{taskContextLabel(task)}</span>
                                             </span>
                                         </td>
 

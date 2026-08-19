@@ -59,10 +59,37 @@
     font-size: 0.8rem;
 }
 
-/* Office work reads differently from a project name in list views. */
-.task-project-cell.is-office {
+/* One column holds either a project name or "Regular Office", so the icon and
+   colour carry the distinction rather than the header. */
+.task-context {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.85rem;
+    color: #475569;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.task-context svg {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+
+.task-context-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-context.is-office {
     color: #7c3aed;
     font-weight: 600;
+}
+
+.task-context.is-office svg {
+    color: #a78bfa;
 }
 
 .task-type-badge {
@@ -436,13 +463,6 @@
     flex-wrap: wrap;
 }
 
-.task-project-cell {
-    font-size: 0.85rem;
-    color: #475569;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
 /* --- Actions column: fixed width, right-aligned, never shifts --- */
 .task-table th.col-actions {
@@ -536,7 +556,7 @@
         margin-top: 8px;
     }
 
-    .task-project-cell {
+    .task-context-label {
         white-space: normal;
     }
 
