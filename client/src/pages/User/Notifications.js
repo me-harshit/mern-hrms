@@ -53,13 +53,15 @@ const Notifications = () => {
                 ));
             }
 
-            // Determine route based on type
+            // Determine route — an explicit link always wins, since it can
+            // point at a specific record rather than just the section.
             let route = '/dashboard';
-            if (notif.type === 'SALARY') route = '/payroll';
+            if (notif.link) route = notif.link;
+            else if (notif.type === 'SALARY') route = '/payroll';
             else if (notif.type === 'WFH') route = '/wfh';
             else if (notif.type === 'LEAVE') route = '/leaves';
             else if (notif.type === 'SHORT_LEAVE') route = '/attendance';
-            else if (notif.link) route = notif.link;
+            else if (notif.type === 'TASK') route = '/my-tasks';
 
             // Navigate
             navigate(route);

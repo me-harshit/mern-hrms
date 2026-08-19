@@ -36,6 +36,11 @@ import EditInventory from './pages/Admin/EditInventory';
 import Reimbursements from './pages/Admin/Reimbursements';
 import Payroll from './pages/Admin/Payroll';
 import Notifications from './pages/User/Notifications';
+import Tasks from './pages/Admin/Tasks';
+import AddTask from './pages/Admin/AddTask';
+import EditTask from './pages/Admin/EditTask';
+import MyTasks from './pages/User/MyTasks';
+import TaskDetail from './pages/TaskDetail';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -173,6 +178,8 @@ function App() {
             <Route path="/edit-expense/:id" element={<EditExpense />} />
             <Route path="/reimbursements" element={<Reimbursements />} />
             <Route path="/notifications" element={<Notifications />} />
+            <Route path="/my-tasks" element={<MyTasks />} />
+            <Route path="/task/:id" element={<TaskDetail />} />
 
             {/* 👇 Management Routes (Admin, HR, Manager, Accounts) */}
             <Route path="/employees" element={isManagement ? <Employees /> : <Navigate to="/dashboard" />} />
@@ -184,6 +191,9 @@ function App() {
             <Route path="/absent-employees" element={isManagement ? <AbsentEmployees /> : <Navigate to="/dashboard" />} />
             <Route path="/Employee-requests" element={isManagement ? <EmployeeRequests /> : <Navigate to="/dashboard" />} />
             <Route path="/projects" element={isManagement ? <Projects /> : <Navigate to="/dashboard" />} />
+            <Route path="/tasks" element={isManagement ? <Tasks /> : <Navigate to="/dashboard" />} />
+            <Route path="/add-task" element={isManagement ? <AddTask /> : <Navigate to="/dashboard" />} />
+            <Route path="/edit-task/:id" element={isManagement ? <EditTask /> : <Navigate to="/dashboard" />} />
             
             {/* Expense & Inventory Management */}
             <Route path="/admin-expenses" element={isManagement ? <AdminExpenses /> : <Navigate to="/dashboard" />} />

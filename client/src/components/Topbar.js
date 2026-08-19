@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserCircle, faSignOutAlt, faBars, faBell, faCheckDouble, faEnvelopeOpenText } from '@fortawesome/free-solid-svg-icons';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
+import { onSocket, disconnectSocket } from '../utils/socket';
 
 const Topbar = ({ onToggleSidebar }) => {
     const navigate = useNavigate();
@@ -33,6 +34,19 @@ const Topbar = ({ onToggleSidebar }) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    // Live push — the bell used to only update on a page refresh.
+    useEffect(() => {
+        const off = onSocket('notification:new', (notif) => {
+            setNotifications(prev => {
+                // A reconnect can replay an event we already hold.
+                if (prev.some(n => n._id === notif._id)) return prev;
+                return [notif, ...prev];
+            });
+            setUnreadCount(prev => prev + 1);
+        });
+        return off;
+    }, []);
+
     const fetchNotifications = async () => {
         try {
             const res = await api.get('/notifications');
@@ -60,12 +74,14 @@ const Topbar = ({ onToggleSidebar }) => {
             setShowNotifications(false); // Close dropdown
             
             // Determine route based on type
+            // An explicit link always wins — it can point at a specific record.
             let route = '/dashboard';
-            if (notif.type === 'SALARY') route = '/payroll';
+            if (notif.link) route = notif.link;
+            else if (notif.type === 'SALARY') route = '/payroll';
             else if (notif.type === 'WFH') route = '/wfh';
             else if (notif.type === 'LEAVE') route = '/leaves';
             else if (notif.type === 'SHORT_LEAVE') route = '/attendance';
-            else if (notif.link) route = notif.link;
+            else if (notif.type === 'TASK') route = '/my-tasks';
 
             navigate(route);
         } catch (error) {
@@ -85,10 +101,12 @@ const Topbar = ({ onToggleSidebar }) => {
             cancelButtonText: 'Stay logged in'
         }).then((result) => {
             if (result.isConfirmed) {
+                // Drop the socket too, so the next user doesn't inherit this session.
+                disconnectSocket();
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 navigate('/login');
-                window.location.reload(); 
+                window.location.reload();
             }
         });
     };

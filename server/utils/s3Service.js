@@ -2,7 +2,8 @@ const {
     S3Client,
     PutObjectCommand,
     ListObjectsV2Command,
-    GetObjectCommand
+    GetObjectCommand,
+    DeleteObjectCommand
 } = require('@aws-sdk/client-s3');
 
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -10,13 +11,26 @@ const sharp = require('sharp');
 const crypto = require('crypto');
 const path = require('path');
 
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION,
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+// Built on first use rather than at require() time. Reading process.env when
+// the module loads silently captures undefined credentials if anything requires
+// this file before dotenv.config() has run — which fails much later, at upload
+// time, with an unhelpful "Resolved credential object is not valid".
+let _s3Client = null;
+const getS3Client = () => {
+    if (!_s3Client) {
+        if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+            throw new Error('AWS credentials are not configured — check that .env is loaded before uploading.');
+        }
+        _s3Client = new S3Client({
+            region: process.env.AWS_REGION,
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            }
+        });
     }
-});
+    return _s3Client;
+};
 
 const uploadToS3 = async (file, subFolder = 'Default') => {
     const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(4).toString('hex');
@@ -43,7 +57,7 @@ const uploadToS3 = async (file, subFolder = 'Default') => {
         ContentType: mimeType,
     });
 
-    await s3Client.send(command);
+    await getS3Client().send(command);
     return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
 };
 
@@ -51,7 +65,7 @@ const listForeverBeginsFiles = async () => {
 
     const PREFIX = "tempzips/";
 
-    const response = await s3Client.send(
+    const response = await getS3Client().send(
         new ListObjectsV2Command({
             Bucket: process.env.AWS_S3_BUCKET_NAME,
             Prefix: PREFIX
@@ -67,7 +81,7 @@ const listForeverBeginsFiles = async () => {
         }
 
         const signedUrl = await getSignedUrl(
-            s3Client,
+            getS3Client(),
             new GetObjectCommand({
                 Bucket: process.env.AWS_S3_BUCKET_NAME,
                 Key: file.Key
@@ -90,7 +104,28 @@ const listForeverBeginsFiles = async () => {
     return files;
 };
 
+/**
+ * Removes an object given its public url. Best-effort: a failure here should
+ * never block the database change that prompted it, or a user would be stuck
+ * unable to delete a record because of a storage hiccup.
+ */
+const deleteFromS3 = async (url) => {
+    if (!url || !url.startsWith('http')) return false;
+    try {
+        const Key = decodeURIComponent(new URL(url).pathname.replace(/^\//, ''));
+        await getS3Client().send(new DeleteObjectCommand({
+            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Key
+        }));
+        return true;
+    } catch (err) {
+        console.error('[S3] Could not delete object for', url, '-', err.message);
+        return false;
+    }
+};
+
 module.exports = {
     uploadToS3,
-    listForeverBeginsFiles
+    listForeverBeginsFiles,
+    deleteFromS3
 };

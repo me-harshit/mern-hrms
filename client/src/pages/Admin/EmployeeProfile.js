@@ -7,10 +7,12 @@ import {
     faUser, faArrowLeft, faClock, faPlaneDeparture, faEdit, faEnvelope, faPhone,
     faWallet, faHistory, faUserSecret, faBoxOpen, faFileInvoice, faImage,
     faCheckCircle, faTimesCircle, faUndo, faEye, faTimes, faBuilding, faCut,
-    faFingerprint, faSignInAlt, faSignOutAlt
+    faFingerprint, faSignInAlt, faSignOutAlt, faClipboardList, faExclamationTriangle
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
+import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
+import '../../styles/tasks.css';
 import '../../styles/expenses.css';
 
 const EmployeeProfile = () => {
@@ -23,6 +25,17 @@ const EmployeeProfile = () => {
     const [user, setUser] = useState({});
     const [usersList, setUsersList] = useState([]);
     const [leaveStats, setLeaveStats] = useState({ history: [] });
+
+    // --- TASK STATES ---
+    const [tasks, setTasks] = useState([]);
+    const [taskStats, setTaskStats] = useState({ pending: 0, inProgress: 0, onHold: 0, completed: 0, overdue: 0, total: 0 });
+    const [taskScope, setTaskScope] = useState('assigned');
+    const [taskStatusFilter, setTaskStatusFilter] = useState('All');
+    const [taskPage, setTaskPage] = useState(1);
+    const [taskLimit, setTaskLimit] = useState(10);
+    const [taskTotalPages, setTaskTotalPages] = useState(1);
+    const [taskTotalRecords, setTaskTotalRecords] = useState(0);
+    const [tasksLoading, setTasksLoading] = useState(false);
 
     // --- WALLET & LEDGER STATES ---
     const [walletBalance, setWalletBalance] = useState(0);
@@ -84,6 +97,34 @@ const EmployeeProfile = () => {
         if (activeTab === 'expenses') fetchEmployeeExpenses(expPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, expPage, expLimit, activeTab, expStatusFilter]); // Added expStatusFilter
+
+    // Reset to page 1 whenever the view changes under us.
+    useEffect(() => {
+        setTaskPage(1);
+    }, [taskScope, taskStatusFilter]);
+
+    useEffect(() => {
+        if (activeTab === 'tasks') fetchEmployeeTasks(taskPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, taskPage, taskLimit, activeTab, taskScope, taskStatusFilter]);
+
+    const fetchEmployeeTasks = async (pageToFetch) => {
+        setTasksLoading(true);
+        try {
+            const res = await api.get(`/tasks/user/${id}`, {
+                params: { page: pageToFetch, limit: taskLimit, scope: taskScope, status: taskStatusFilter }
+            });
+            setTasks(res.data.data);
+            setTaskStats(res.data.stats);
+            setTaskTotalPages(res.data.pagination.totalPages);
+            setTaskTotalRecords(res.data.pagination.totalRecords);
+        } catch (err) {
+            console.error('Could not load tasks for this employee', err);
+            setTasks([]);
+        } finally {
+            setTasksLoading(false);
+        }
+    };
 
     const fetchEmployeeData = async () => {
         try {
@@ -486,6 +527,9 @@ const EmployeeProfile = () => {
                     <button className={`gts-btn tab-btn ${activeTab === 'expenses' ? 'primary' : 'warning inactive'}`} onClick={() => setActiveTab('expenses')}>
                         <FontAwesomeIcon icon={faBoxOpen} className="btn-icon" /> Expenses
                     </button>
+                    <button className={`gts-btn tab-btn ${activeTab === 'tasks' ? 'primary' : 'warning inactive'}`} onClick={() => setActiveTab('tasks')}>
+                        <FontAwesomeIcon icon={faClipboardList} className="btn-icon" /> Tasks
+                    </button>
                 </div>
             </div>
 
@@ -712,6 +756,146 @@ const EmployeeProfile = () => {
             )}
 
             {/* --- TAB CONTENT: EXPENSES --- */}
+            {/* --- TAB CONTENT: TASKS --- */}
+            {activeTab === 'tasks' && (
+                <div className="fade-in">
+                    {/* Summary tiles double as status filters. */}
+                    <div className="tk-stats" style={{ marginBottom: '16px' }}>
+                        {[
+                            { key: 'All', label: 'Total', value: taskStats.total, cls: '' },
+                            { key: 'Pending', label: 'Pending', value: taskStats.pending, cls: '' },
+                            { key: 'In Progress', label: 'In Progress', value: taskStats.inProgress, cls: 'accent' },
+                            { key: 'On Hold', label: 'On Hold', value: taskStats.onHold, cls: '' },
+                            { key: 'Completed', label: 'Completed', value: taskStats.completed, cls: 'success' }
+                        ].map(tile => (
+                            <div
+                                key={tile.key}
+                                className="tk-stat"
+                                onClick={() => setTaskStatusFilter(tile.key)}
+                                style={{
+                                    cursor: 'pointer',
+                                    borderColor: taskStatusFilter === tile.key ? '#215D7B' : undefined,
+                                    background: taskStatusFilter === tile.key ? '#f0f7fb' : undefined
+                                }}
+                            >
+                                <span className="tk-stat-label">{tile.label}</span>
+                                <span className={`tk-stat-value ${tile.cls}`}>{tile.value}</span>
+                            </div>
+                        ))}
+                        {taskStats.overdue > 0 && (
+                            <div className="tk-stat">
+                                <span className="tk-stat-label">
+                                    <FontAwesomeIcon icon={faExclamationTriangle} /> Overdue
+                                </span>
+                                <span className="tk-stat-value danger">{taskStats.overdue}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Work given to them vs work they handed out. */}
+                    <div className="task-tabs" style={{ marginBottom: '16px' }}>
+                        <button
+                            className={`task-tab ${taskScope === 'assigned' ? 'active' : ''}`}
+                            onClick={() => setTaskScope('assigned')}
+                        >
+                            Assigned to {user.name?.split(' ')[0] || 'them'}
+                        </button>
+                        <button
+                            className={`task-tab ${taskScope === 'created' ? 'active' : ''}`}
+                            onClick={() => setTaskScope('created')}
+                        >
+                            Assigned by {user.name?.split(' ')[0] || 'them'}
+                        </button>
+                        {taskStatusFilter !== 'All' && (
+                            <button className="task-tab" onClick={() => setTaskStatusFilter('All')}>
+                                <FontAwesomeIcon icon={faTimes} /> Clear "{taskStatusFilter}"
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="employee-table-container fade-in">
+                        <h3 className="table-header-title" style={{ padding: '20px 20px 0' }}>
+                            {taskScope === 'assigned' ? `Tasks assigned to ${user.name}` : `Tasks ${user.name} assigned to others`}
+                        </h3>
+
+                        {tasksLoading ? (
+                            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading tasks...</div>
+                        ) : tasks.length === 0 ? (
+                            <div style={{ padding: '50px 20px', textAlign: 'center' }}>
+                                <FontAwesomeIcon icon={faClipboardList} style={{ fontSize: '2.6rem', color: '#cbd5e1', marginBottom: '12px' }} />
+                                <p style={{ color: '#64748b', margin: 0 }}>
+                                    {taskStatusFilter !== 'All'
+                                        ? `No "${taskStatusFilter}" tasks in this view.`
+                                        : taskScope === 'assigned'
+                                            ? 'No tasks assigned to this employee.'
+                                            : 'This employee has not assigned any tasks.'}
+                                </p>
+                            </div>
+                        ) : (
+                            <table className="employee-table task-table mt-15">
+                                <thead>
+                                    <tr>
+                                        <th>Task</th>
+                                        <th>Project</th>
+                                        <th>{taskScope === 'assigned' ? 'Assigned by' : 'Assignees'}</th>
+                                        <th>Priority</th>
+                                        <th>Due</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {tasks.map(t => {
+                                        const due = dueLabel(t.dueDate, t.status === 'Completed');
+                                        return (
+                                            <tr
+                                                key={t._id}
+                                                style={{ cursor: 'pointer' }}
+                                                onClick={() => navigate(`/task/${t._id}`)}
+                                            >
+                                                <td data-label="Task">
+                                                    <strong style={{ color: '#1e293b' }}>{t.title}</strong>
+                                                    {t.description && (
+                                                        <div className="text-small text-muted" style={{ marginTop: '3px' }}>
+                                                            {t.description.length > 70 ? t.description.slice(0, 70) + '...' : t.description}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td data-label="Project">{taskContextLabel(t)}</td>
+                                                <td data-label={taskScope === 'assigned' ? 'Assigned by' : 'Assignees'}>
+                                                    {taskScope === 'assigned'
+                                                        ? (t.assignedBy?.name || '—')
+                                                        : (t.assignees.map(a => a.name).join(', ') || '—')}
+                                                </td>
+                                                <td data-label="Priority">
+                                                    <span className={`priority-badge ${slug(t.priority)}`}>{t.priority}</span>
+                                                </td>
+                                                <td data-label="Due">
+                                                    <span className={`tk-due ${due.tone}`}>{due.text}</span>
+                                                </td>
+                                                <td data-label="Status">
+                                                    <span className={`task-status-badge ${slug(t.status)}`}>{t.status}</span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+
+                    {!tasksLoading && taskTotalRecords > 0 && (
+                        <Pagination
+                            currentPage={taskPage}
+                            totalPages={taskTotalPages}
+                            totalRecords={taskTotalRecords}
+                            limit={taskLimit}
+                            onPageChange={setTaskPage}
+                            onLimitChange={(val) => { setTaskLimit(val); setTaskPage(1); }}
+                        />
+                    )}
+                </div>
+            )}
+
             {activeTab === 'expenses' && (
                 <div className="fade-in">
 

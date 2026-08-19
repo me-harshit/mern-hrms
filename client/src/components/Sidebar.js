@@ -19,7 +19,8 @@ import {
     faLaptopHouse,
     faWallet,
     faFileContract,
-    faFileInvoiceDollar
+    faFileInvoiceDollar,
+    faClipboardList
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -31,6 +32,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     const [hasInventory, setHasInventory] = useState(false);
     // Count of GTS Documents this user still needs to acknowledge
     const [pendingDocs, setPendingDocs] = useState(0);
+    // Count of tasks assigned to this user that aren't finished yet
+    const [openTasks, setOpenTasks] = useState(0);
 
     useEffect(() => {
         if (userRole === 'EMPLOYEE' || userRole === 'MANAGER') {
@@ -48,6 +51,12 @@ const Sidebar = ({ isOpen, onClose }) => {
         api.get('/documents/pending-count')
             .then(res => setPendingDocs(res.data.pending || 0))
             .catch(() => setPendingDocs(0));
+    }, []);
+
+    useEffect(() => {
+        api.get('/tasks/my/open-count')
+            .then(res => setOpenTasks(res.data.count || 0))
+            .catch(() => setOpenTasks(0));
     }, []);
 
     // Auto-close sidebar on mobile after clicking a link
@@ -84,6 +93,16 @@ const Sidebar = ({ isOpen, onClose }) => {
                     {pendingDocs > 0 && (
                         <span style={{ marginLeft: 'auto', background: '#dc2626', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 700 }}>
                             {pendingDocs}
+                        </span>
+                    )}
+                </Link>
+
+                {/* Visible to EVERY role — anyone can be assigned a task */}
+                <Link to="/my-tasks" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/my-tasks' ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faClipboardList} className="nav-icon" /> <span>My Tasks</span>
+                    {openTasks > 0 && (
+                        <span style={{ marginLeft: 'auto', background: '#215D7B', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 700 }}>
+                            {openTasks}
                         </span>
                     )}
                 </Link>
@@ -164,6 +183,11 @@ const Sidebar = ({ isOpen, onClose }) => {
                                 <FontAwesomeIcon icon={faFolderOpen} className="nav-icon" /> <span>Projects</span>
                             </Link>
                         )}
+
+                        <Link to="/tasks" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/tasks' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faClipboardList} className="nav-icon" />
+                            <span>{['MANAGER', 'TEAM LEAD'].includes(userRole) ? 'Assign Tasks' : 'All Tasks'}</span>
+                        </Link>
 
                         <Link to="/admin-expenses" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-expenses' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" />

@@ -5,9 +5,13 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 
-require('./cron/attendanceCron')
-
+// Must come first: several modules below read process.env at load time
+// (s3Service builds its S3 client from AWS_* the moment it is required), so
+// anything required before this would capture undefined credentials.
 dotenv.config();
+
+require('./cron/attendanceCron')
+require('./cron/videoCompressionCron')
 
 // --- 1. IMPORT ROUTES ---
 const authRoutes = require('./routes/auth');
@@ -28,6 +32,7 @@ const wfh = require('./routes/wfh');
 const documentRoutes = require('./routes/documents');
 const payrollRoutes = require('./routes/payroll');
 const notificationRoutes = require('./routes/notifications');
+const taskRoutes = require('./routes/tasks');
 
 const foreverBeginsRoutes = require('./routes/foreverBegins');
 
@@ -59,6 +64,7 @@ app.use('/api/wfh', wfh);
 app.use('/api/documents', documentRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/tasks', taskRoutes);
 
 app.use('/api/forever-begins', foreverBeginsRoutes);
 
@@ -66,9 +72,17 @@ app.get('/', (req, res) => res.send("GTS HRMS API is running..."));
 
 // --- 4. DATABASE & SERVER START ---
 const PORT = process.env.PORT || 5000;
+
+// socket.io needs the underlying HTTP server, so create it explicitly rather
+// than letting app.listen() make one internally.
+const http = require('http');
+const { initRealtime } = require('./utils/realtime');
+const httpServer = http.createServer(app);
+initRealtime(httpServer);
+
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         console.log("✅ MongoDB Connected");
-        app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
+        httpServer.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
     })
     .catch(err => console.log(err));
