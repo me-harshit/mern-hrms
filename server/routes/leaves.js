@@ -136,8 +136,11 @@ router.post('/apply', auth, async (req, res) => {
                 fromDate,
                 toDate,
                 days: l.days,
-                startHalf,
-                endHalf,
+                // Schema fields are startDayType/endDayType — passing
+                // startHalf/endHalf meant Mongoose silently dropped them and
+                // the half-day type was lost the moment the leave was saved.
+                startDayType: startHalf,
+                endDayType: endHalf,
                 reason: l.reason,
                 status: 'Pending'
             });
@@ -347,15 +350,39 @@ router.put('/action/:id', auth, async (req, res) => {
             // Update Attendance Records directly
             const from = new Date(leave.fromDate);
             const to = new Date(leave.toDate);
+            const isSingleDay = from.toDateString() === to.toDateString();
+
             for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
                 const dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+
+                // Only the first and last day of a range can be a half day.
+                // Older leaves predate startDayType being saved, so fall back to
+                // `days` for the single-day case.
+                let isHalfDay = false;
+                if (isSingleDay) {
+                    isHalfDay = leave.startDayType !== 'FULL' && leave.startDayType !== undefined
+                        ? true
+                        : leave.days === 0.5;
+                } else if (d.toDateString() === from.toDateString()) {
+                    isHalfDay = leave.startDayType && leave.startDayType !== 'FULL';
+                } else if (d.toDateString() === to.toDateString()) {
+                    isHalfDay = leave.endDayType && leave.endDayType !== 'FULL';
+                }
+
+                // A half day off means they work the other half, so the day is
+                // 'Half Day' — not a full 'On Leave'. Payroll then charges 0.5
+                // for unpaid (UL) and nothing for paid CL/EL, instead of
+                // deducting a whole day for a half day away.
+                const status = (isHalfDay && leave.leaveType === 'UL') ? 'Half Day' : 'On Leave';
+                const half = isHalfDay ? ' - Half Day' : '';
+
                 await Attendance.updateOne(
                     { userId: user._id, date: dateStr },
-                    { 
-                        $set: { 
-                            status: 'On Leave', 
-                            note: `Approved Leave (${leave.leaveType})` 
-                        } 
+                    {
+                        $set: {
+                            status,
+                            note: `Approved Leave (${leave.leaveType})${half}`
+                        }
                     }
                 );
             }

@@ -16,12 +16,19 @@ router.get('/admin-stats', auth, async (req, res) => {
 
         let targetUserIds = [];
 
-        // 🚀 MANAGER LOGIC: Fetch only their direct reports
-        if (req.user.role === 'MANAGER') {
-            const manager = await User.findById(req.user.id);
-            targetUserIds = await User.find({ 
-                status: 'ACTIVE', 
-                reportingManagerEmail: manager.email.toLowerCase() 
+        // 🚀 MANAGER / TEAM LEAD LOGIC: only their own people.
+        // Managers own direct reports; Team Leads own whoever lists them as
+        // team lead — same scoping the employee directory and tasks use.
+        if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
+            const me = await User.findById(req.user.id);
+            const emailKey = me.email.toLowerCase();
+            const teamFilter = req.user.role === 'TEAM LEAD'
+                ? { teamLeadsEmail: emailKey }
+                : { reportingManagerEmail: emailKey };
+
+            targetUserIds = await User.find({
+                status: 'ACTIVE',
+                ...teamFilter
             }).distinct('_id');
         } else {
             // HR and ADMIN: Fetch all active, non-admin employees
@@ -31,9 +38,19 @@ router.get('/admin-stats', auth, async (req, res) => {
             }).distinct('_id');
         }
 
+        // "Present" means they actually turned up. The Attendance model treats
+        // Absent / On Leave / Pending as the states with no check-in, and
+        // 'Pending' is just the skeleton row the morning cron creates before
+        // anyone punches in — counting those made everyone look present.
+        const PRESENT_STATUSES = ['Present', 'Half Day', 'Late', 'WFH'];
+
         // 2. Count metrics strictly for the targeted IDs (Company-wide or Team-wide)
         const [presentToday, pendingLeaves, onLeaveToday] = await Promise.all([
-            Attendance.countDocuments({ date: todayStr, userId: { $in: targetUserIds } }),
+            Attendance.countDocuments({
+                date: todayStr,
+                userId: { $in: targetUserIds },
+                status: { $in: PRESENT_STATUSES }
+            }),
             Leave.countDocuments({ status: 'Pending', userId: { $in: targetUserIds } }),
             Leave.countDocuments({ status: 'Approved', fromDate: { $lte: now }, toDate: { $gte: now }, userId: { $in: targetUserIds } })
         ]);

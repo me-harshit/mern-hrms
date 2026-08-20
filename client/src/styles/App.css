@@ -1808,3 +1808,166 @@ html {
 .p-30 { padding: 30px !important; }
 .mt-25 { margin-top: 25px !important; }
 .mb-25 { margin-bottom: 25px !important; }
+
+/* ==========================================
+   ATTENDANCE LOGS TABLE
+   Status column shows state only; every action lives in the Action
+   column, so a row with a pending short leave no longer sprawls.
+   ========================================== */
+
+/* These two variants were referenced in markup but never defined, so
+   'On Leave' badges and the approve button rendered unstyled. */
+.status-badge.primary {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.gts-btn.success {
+  background: #16a34a;
+  color: #fff;
+}
+
+.gts-btn.success:hover {
+  background: #15803d;
+}
+
+/* Fixed widths stop rows shifting as content varies. */
+.att-col-emp { width: 20%; min-width: 170px; }
+.att-col-date { width: 100px; white-space: nowrap; }
+.att-col-time { width: 90px; white-space: nowrap; }
+.att-col-hours { width: 110px; white-space: nowrap; }
+.att-col-status { width: 150px; }
+.att-col-note { width: auto; }
+.att-col-action { width: 118px; }
+
+.employee-table th.att-col-action {
+  text-align: right;
+}
+
+/* --- Status cell --- */
+.att-status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.att-subpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.att-subpill svg { font-size: 0.62rem; }
+
+.att-subpill.pending { background: #fef3c7; color: #b45309; }
+.att-subpill.approved { background: #dcfce7; color: #15803d; }
+.att-subpill.rejected { background: #fee2e2; color: #b91c1c; }
+
+/* --- Note cell --- */
+.att-note-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.att-note-text {
+  font-size: 0.82rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+/* Long reasons get truncated rather than pushing the row open;
+   the full text is on the title attribute. */
+.att-reason {
+  font-size: 0.75rem;
+  color: #854d0e;
+  background: #fef3c7;
+  padding: 3px 8px;
+  border-radius: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* --- Action cell --- */
+.att-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.att-icon-btn {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.att-icon-btn:hover {
+  background: #f1f5f9;
+  color: #215D7B;
+  border-color: #cbd5e1;
+}
+
+.att-icon-btn.approve {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.att-icon-btn.approve:hover {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.att-icon-btn.reject {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.att-icon-btn.reject:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  /* App.css turns the table into stacked cards below this width, so the
+     fixed widths and right-alignment have to stand down. */
+  .employee-table td[class^="att-col-"],
+  .employee-table td[class*=" att-col-"] {
+    width: 100%;
+  }
+
+  .att-status-cell,
+  .att-note-cell {
+    align-items: flex-end;
+  }
+
+  .att-reason {
+    white-space: normal;
+  }
+}

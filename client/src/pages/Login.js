@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ForgotPassword from '../components/ForgotPassword';
 import api from '../utils/api'; 
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -11,6 +12,7 @@ const Login = () => {
     const [password, setPassword] = useState('');
     
     const [showPassword, setShowPassword] = useState(false);
+    const [showForgot, setShowForgot] = useState(false);
     
     const navigate = useNavigate();
 
@@ -55,6 +57,15 @@ const Login = () => {
                 <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                     <img src="/GTS.png" alt="GTS Logo" style={{ height: '50px' }} />
                 </div>
+
+                {showForgot ? (
+                    <ForgotPassword
+                        initialEmail={email}
+                        onBack={() => setShowForgot(false)}
+                        onDone={(resetEmail) => { setEmail(resetEmail); setPassword(''); setShowForgot(false); }}
+                    />
+                ) : (
+                <>
                 <h2>Portal Login</h2>
                 <p className="auth-subtitle">Welcome back! Please enter your details.</p>
                 
@@ -102,7 +113,17 @@ const Login = () => {
                     </div>
 
                     <button type="submit" className="auth-btn">Sign In</button>
+
+                    <button
+                        type="button"
+                        className="forgot-link"
+                        onClick={() => setShowForgot(true)}
+                    >
+                        Forgot password?
+                    </button>
                 </form>
+                </>
+                )}
             </div>
         </div>
     );
