@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faEdit, faUserTimes, faFilter, faFingerprint, faFileExcel, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faEdit, faUserTimes, faFilter, faFingerprint, faFileExcel, faSpinner, faCheck, faXmark, faHourglassHalf } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 
@@ -276,14 +276,14 @@ const AttendanceLogs = () => {
                 <table className="employee-table">
                     <thead>
                         <tr>
-                            <th>Employee</th>
-                            <th>Date</th>
-                            <th>In Time</th>
-                            <th>Out Time</th>
-                            <th>Working Hours</th>
-                            <th>Status</th>
-                            <th>Note</th>
-                            <th>Action</th>
+                            <th className="att-col-emp">Employee</th>
+                            <th className="att-col-date">Date</th>
+                            <th className="att-col-time">In Time</th>
+                            <th className="att-col-time">Out Time</th>
+                            <th className="att-col-hours">Working Hours</th>
+                            <th className="att-col-status">Status</th>
+                            <th className="att-col-note">Note</th>
+                            <th className="att-col-action">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -322,48 +322,81 @@ const AttendanceLogs = () => {
                                             : calculateDuration(log.checkIn, log.checkOut)}
                                     </td>
 
-                                    <td data-label="Status">
-                                        <span className={`status-badge ${(log.status === 'Present' || log.status === 'WFH') ? 'success' :
-                                            log.status === 'On Leave' ? 'primary' :
-                                                (log.status === 'Half Day' || log.status === 'Late') ? 'warning' : 'danger'
-                                            }`}>
-                                            {log.status}
-                                        </span>
-                                        {log.shortLeaveStatus === 'Pending' && (
-                                            <div style={{marginTop: '5px'}}>
-                                                <span className="text-small text-warning fw-bold">Short Leave Pending</span><br/>
-                                                <button className="gts-btn success btn-small" style={{fontSize: '0.7rem', padding: '2px 5px', marginRight: '5px', marginTop: '3px'}} onClick={() => handleEdit(log)}>Review & Approve</button>
-                                                <button className="gts-btn danger btn-small" style={{fontSize: '0.7rem', padding: '2px 5px'}} onClick={async () => {
-                                                    try {
-                                                        await api.put(`/attendance/update/${log._id}`, { status: log.status, note: log.note, shortLeaveStatus: 'Rejected' });
-                                                        fetchLogs(currentPage);
-                                                    } catch(e) { Swal.fire('Error', 'Failed to reject', 'error'); }
-                                                }}>Reject</button>
-                                            </div>
-                                        )}
-                                        {log.shortLeaveStatus === 'Approved' && (
-                                            <div style={{marginTop: '5px'}}>
-                                                <span className="text-small text-success fw-bold">Short Leave Approved</span>
-                                            </div>
-                                        )}
-                                        {log.shortLeaveStatus === 'Rejected' && (
-                                            <div style={{marginTop: '5px'}}>
-                                                <span className="text-small text-danger fw-bold">Short Leave Rejected</span>
-                                            </div>
-                                        )}
+                                    {/* Status stays a status — the short-leave decision
+                                        buttons live in Actions with everything else. */}
+                                    <td data-label="Status" className="att-col-status">
+                                        <div className="att-status-cell">
+                                            <span className={`status-badge ${(log.status === 'Present' || log.status === 'WFH') ? 'success' :
+                                                log.status === 'On Leave' ? 'primary' :
+                                                    (log.status === 'Half Day' || log.status === 'Late') ? 'warning' : 'danger'
+                                                }`}>
+                                                {log.status}
+                                            </span>
+
+                                            {log.shortLeaveStatus && log.shortLeaveStatus !== 'None' && (
+                                                <span className={`att-subpill ${log.shortLeaveStatus.toLowerCase()}`}>
+                                                    <FontAwesomeIcon icon={
+                                                        log.shortLeaveStatus === 'Approved' ? faCheck
+                                                            : log.shortLeaveStatus === 'Rejected' ? faXmark
+                                                                : faHourglassHalf
+                                                    } />
+                                                    Short leave {log.shortLeaveStatus.toLowerCase()}
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
-                                    <td data-label="Note" className="text-small text-muted note-cell">
-                                        {log.note || '-'}
-                                        {log.shortLeaveReason && (
-                                            <div style={{marginTop: '5px', color: '#854d0e', backgroundColor: '#fef3c7', padding: '2px 5px', borderRadius: '4px'}}>
-                                                <strong>Reason:</strong> {log.shortLeaveReason}
-                                            </div>
-                                        )}
+
+                                    <td data-label="Note" className="att-col-note">
+                                        <div className="att-note-cell">
+                                            <span className="att-note-text">{log.note || '—'}</span>
+                                            {log.shortLeaveReason && (
+                                                <span className="att-reason" title={log.shortLeaveReason}>
+                                                    <strong>Reason:</strong> {log.shortLeaveReason}
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
-                                    <td data-label="Action">
-                                        <button className="gts-btn primary btn-small" onClick={() => handleEdit(log)}>
-                                            <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
-                                        </button>
+
+                                    <td data-label="Action" className="att-col-action">
+                                        <div className="att-actions">
+                                            {log.shortLeaveStatus === 'Pending' && (
+                                                <>
+                                                    <button
+                                                        className="att-icon-btn approve"
+                                                        title="Review & approve short leave"
+                                                        onClick={() => handleEdit(log)}
+                                                    >
+                                                        <FontAwesomeIcon icon={faCheck} />
+                                                    </button>
+                                                    <button
+                                                        className="att-icon-btn reject"
+                                                        title="Reject short leave"
+                                                        onClick={async () => {
+                                                            // This used to fire instantly — one stray click
+                                                            // rejected someone's request with no undo.
+                                                            const ok = await Swal.fire({
+                                                                title: 'Reject short leave?',
+                                                                text: `${log.userId?.name || 'This employee'} — ${log.date}`,
+                                                                icon: 'warning',
+                                                                showCancelButton: true,
+                                                                confirmButtonColor: '#dc2626',
+                                                                confirmButtonText: 'Reject'
+                                                            });
+                                                            if (!ok.isConfirmed) return;
+                                                            try {
+                                                                await api.put(`/attendance/update/${log._id}`, { status: log.status, note: log.note, shortLeaveStatus: 'Rejected' });
+                                                                fetchLogs(currentPage);
+                                                            } catch (e) { Swal.fire('Error', 'Failed to reject', 'error'); }
+                                                        }}
+                                                    >
+                                                        <FontAwesomeIcon icon={faXmark} />
+                                                    </button>
+                                                </>
+                                            )}
+                                            <button className="att-icon-btn" title="Edit log" onClick={() => handleEdit(log)}>
+                                                <FontAwesomeIcon icon={faEdit} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))

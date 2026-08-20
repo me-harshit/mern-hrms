@@ -185,4 +185,207 @@ router.post('/impersonate/:id', auth, async (req, res) => {
     }
 });
 
+// ==========================================
+// PASSWORD MANAGEMENT
+// ==========================================
+
+const crypto = require('crypto');
+const sendEmail = require('../utils/sendEmail');
+
+const MIN_PASSWORD_LENGTH = 8;
+const RESET_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_RESET_ATTEMPTS = 5;
+
+// The code is only ever stored hashed, so a database leak doesn't hand over
+// working reset codes. SHA-256 is fine here — unlike a password, a 6-digit code
+// lives for ten minutes and is rate limited.
+const hashCode = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
+
+// crypto.randomInt is uniform; Math.random is not, and is predictable.
+const generateCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+
+// Login accepts either address, so the reset flow has to match on both.
+const findByAnyEmail = (email, withResetFields = false) => {
+    const sanitized = String(email || '').trim().toLowerCase();
+    if (!sanitized) return null;
+    const query = User.findOne({ $or: [{ email: sanitized }, { workEmail: sanitized }] });
+    if (withResetFields) {
+        query.select('+resetPasswordCodeHash +resetPasswordExpires +resetPasswordAttempts');
+    }
+    return query;
+};
+
+const validatePassword = (password) => {
+    if (!password || password.length < MIN_PASSWORD_LENGTH) {
+        return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+    }
+    return null;
+};
+
+// @route   PUT /api/auth/change-password
+// @desc    Change your own password (must know the current one)
+router.put('/change-password', auth, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: 'Current and new password are both required' });
+        }
+
+        const invalid = validatePassword(newPassword);
+        if (invalid) return res.status(400).json({ message: invalid });
+
+        if (currentPassword === newPassword) {
+            return res.status(400).json({ message: 'New password must be different from the current one' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect' });
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        // Any pending reset code is void once the password changes deliberately.
+        user.resetPasswordCodeHash = undefined;
+        user.resetPasswordExpires = undefined;
+        user.resetPasswordAttempts = 0;
+
+        await user.save();
+        res.json({ message: 'Password changed successfully' });
+    } catch (err) {
+        console.error('Change Password Error:', err.message);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+// @route   POST /api/auth/forgot-password
+// @desc    Email a 6-digit reset code
+router.post('/forgot-password', async (req, res) => {
+    // Always the same reply, whether or not the account exists — otherwise this
+    // endpoint becomes a way to discover which emails are registered.
+    const genericReply = { message: 'If that email is registered, a 6-digit code is on its way.' };
+
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ message: 'Email is required' });
+
+        const user = await findByAnyEmail(email);
+        if (!user) return res.json(genericReply);
+
+        const code = generateCode();
+        user.resetPasswordCodeHash = hashCode(code);
+        user.resetPasswordExpires = new Date(Date.now() + RESET_CODE_TTL_MS);
+        user.resetPasswordAttempts = 0;
+        await user.save();
+
+        // Send to the address they actually typed, since it belongs to this account.
+        const target = String(email).trim().toLowerCase();
+
+        const message = `
+            <div style="font-family: 'Segoe UI', sans-serif; max-width: 520px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <h2 style="color: #215D7B; margin-top: 0;">Password Reset Code</h2>
+                <p style="color: #334155; font-size: 15px;">Hi ${user.name},</p>
+                <p style="color: #334155; font-size: 15px;">Use this code to reset your GTS HRMS password:</p>
+                <div style="font-size: 34px; font-weight: 700; letter-spacing: 10px; color: #0f172a; background: #f1f5f9; padding: 18px; text-align: center; border-radius: 10px; margin: 22px 0;">
+                    ${code}
+                </div>
+                <p style="color: #64748b; font-size: 14px;">This code expires in <strong>10 minutes</strong> and can only be used once.</p>
+                <p style="color: #64748b; font-size: 14px;">If you didn't request this, you can ignore this email — your password will not change.</p>
+            </div>
+        `;
+
+        try {
+            await sendEmail({ email: target, subject: 'Your GTS HRMS password reset code', message });
+        } catch (mailErr) {
+            // Don't strand the user with a stored code they never received.
+            console.error('Reset email failed:', mailErr.message);
+            user.resetPasswordCodeHash = undefined;
+            user.resetPasswordExpires = undefined;
+            await user.save();
+            return res.status(500).json({ message: 'Could not send the reset email. Please try again later.' });
+        }
+
+        res.json(genericReply);
+    } catch (err) {
+        console.error('Forgot Password Error:', err.message);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+/** Shared check for both the verify step and the final reset. */
+const checkResetCode = async (email, code) => {
+    const user = await findByAnyEmail(email, true);
+    if (!user || !user.resetPasswordCodeHash || !user.resetPasswordExpires) {
+        return { error: 'Invalid or expired code' };
+    }
+
+    if (user.resetPasswordExpires.getTime() < Date.now()) {
+        return { error: 'That code has expired. Request a new one.' };
+    }
+
+    if ((user.resetPasswordAttempts || 0) >= MAX_RESET_ATTEMPTS) {
+        return { error: 'Too many incorrect attempts. Request a new code.' };
+    }
+
+    if (user.resetPasswordCodeHash !== hashCode(String(code).trim())) {
+        user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+        await user.save();
+        const left = MAX_RESET_ATTEMPTS - user.resetPasswordAttempts;
+        return { error: left > 0 ? `Incorrect code. ${left} attempt(s) remaining.` : 'Too many incorrect attempts. Request a new code.' };
+    }
+
+    return { user };
+};
+
+// @route   POST /api/auth/verify-reset-code
+// @desc    Check a code before asking for the new password
+router.post('/verify-reset-code', async (req, res) => {
+    try {
+        const { email, code } = req.body;
+        if (!email || !code) return res.status(400).json({ message: 'Email and code are required' });
+
+        const { error } = await checkResetCode(email, code);
+        if (error) return res.status(400).json({ message: error });
+
+        res.json({ message: 'Code verified' });
+    } catch (err) {
+        console.error('Verify Reset Code Error:', err.message);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+// @route   POST /api/auth/reset-password
+// @desc    Set a new password using the emailed code
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { email, code, newPassword } = req.body;
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({ message: 'Email, code and new password are required' });
+        }
+
+        const invalid = validatePassword(newPassword);
+        if (invalid) return res.status(400).json({ message: invalid });
+
+        const { user, error } = await checkResetCode(email, code);
+        if (error) return res.status(400).json({ message: error });
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        // One code, one use.
+        user.resetPasswordCodeHash = undefined;
+        user.resetPasswordExpires = undefined;
+        user.resetPasswordAttempts = 0;
+        await user.save();
+
+        res.json({ message: 'Password reset successfully. You can sign in now.' });
+    } catch (err) {
+        console.error('Reset Password Error:', err.message);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
 module.exports = router;

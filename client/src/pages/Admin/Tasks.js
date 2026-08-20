@@ -5,9 +5,10 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faClipboardList, faPlus, faSearch, faEdit, faTrash,
-    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding
+    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faUsers
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
+import EmployeeTaskBoard from '../../components/EmployeeTaskBoard';
 import { slug, initials, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
@@ -28,6 +29,10 @@ const Tasks = () => {
     const currentUserId = currentUser?.id || currentUser?._id;
     const isPrivileged = ['ADMIN', 'HR'].includes(currentUser?.role);
     const [searchParams] = useSearchParams();
+
+    // 'tasks' lists work with its people attached; 'employees' flips it so the
+    // people without work are visible too.
+    const [view, setView] = useState('tasks');
 
     const [tasks, setTasks] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
@@ -78,7 +83,10 @@ const Tasks = () => {
         }
     }, [currentPage, itemsPerPage, debouncedSearch, filters]);
 
-    useEffect(() => { fetchTasks(); }, [fetchTasks]);
+    // The employee view loads its own data, so don't pay for this one while it's up.
+    useEffect(() => {
+        if (view === 'tasks') fetchTasks();
+    }, [fetchTasks, view]);
 
     // Older notifications link here as /tasks?task=<id>; send them to the page.
     useEffect(() => {
@@ -132,10 +140,32 @@ const Tasks = () => {
                     <FontAwesomeIcon icon={faClipboardList} style={{ marginRight: '10px', color: '#215D7B' }} />
                     {isPrivileged ? 'All Tasks' : 'Assigned Tasks'}
                 </h1>
+                {/* Same data, two questions: "what work is out there" vs
+                    "who is carrying it — and who isn't". */}
+                <div className="type-toggle view-toggle">
+                    <button
+                        type="button"
+                        className={`type-toggle-btn ${view === 'tasks' ? 'active' : ''}`}
+                        onClick={() => setView('tasks')}
+                    >
+                        <FontAwesomeIcon icon={faClipboardList} /> By Task
+                    </button>
+                    <button
+                        type="button"
+                        className={`type-toggle-btn ${view === 'employees' ? 'active' : ''}`}
+                        onClick={() => setView('employees')}
+                    >
+                        <FontAwesomeIcon icon={faUsers} /> By Employee
+                    </button>
+                </div>
+
                 <button className="gts-btn primary" style={{ marginLeft: 'auto' }} onClick={() => navigate('/add-task')}>
                     <FontAwesomeIcon icon={faPlus} /> Assign Task
                 </button>
             </div>
+
+            {view === 'employees' ? <EmployeeTaskBoard /> : (
+            <>
 
             {/* --- Search + filters in a single bar --- */}
             <div className="task-toolbar">
@@ -338,6 +368,9 @@ const Tasks = () => {
                     onPageChange={setCurrentPage}
                     onLimitChange={(val) => { setItemsPerPage(val); setCurrentPage(1); }}
                 />
+            )}
+
+            </>
             )}
 
         </div>

@@ -26,20 +26,26 @@ const CAN_ASSIGN_ANYONE = ['ADMIN', 'HR', 'MANAGER'];
 // SCOPING HELPERS
 // ==========================================
 
-// Who this user is allowed to hand work to. Managers run work across the whole
-// company, so they get everyone; a Team Lead only gets the people who list them
-// as their team lead.
-const getScopedEmployees = async (reqUser) => {
+// Which employees this user is allowed to see/assign. Managers run work across
+// the whole company, so they get everyone; a Team Lead only gets the people who
+// list them as their team lead. Returns null when the user record is gone.
+const getScopedEmployeeFilter = async (reqUser) => {
     if (CAN_ASSIGN_ANYONE.includes(reqUser.role)) {
-        return User.find({ status: 'ACTIVE' }).select('name email role employeeId').sort({ name: 1 });
+        return { status: 'ACTIVE' };
     }
 
-    const me = await User.findById(reqUser.id);
-    if (!me) return [];
+    const me = await User.findById(reqUser.id).select('email');
+    if (!me) return null;
 
-    return User.find({ status: 'ACTIVE', teamLeadsEmail: me.email.toLowerCase() })
-        .select('name email role employeeId')
-        .sort({ name: 1 });
+    return { status: 'ACTIVE', teamLeadsEmail: me.email.toLowerCase() };
+};
+
+// Who this user is allowed to hand work to.
+const getScopedEmployees = async (reqUser) => {
+    const filter = await getScopedEmployeeFilter(reqUser);
+    if (!filter) return [];
+
+    return User.find(filter).select('name email role employeeId').sort({ name: 1 });
 };
 
 // Which projects this user may file tasks against. Any Active project is fair
@@ -415,6 +421,177 @@ router.get('/user/:userId', auth, async (req, res) => {
     } catch (err) {
         console.error('User Tasks Error:', err);
         if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Employee not found' });
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 4c. EMPLOYEE VIEW — who is carrying work and who is free
+//
+// Flips the management list on its head: instead of tasks with assignees
+// hanging off them, it lists people with their workload hanging off them, so an
+// idle team member is as visible as a busy one. Scope follows the same rule as
+// assignment — Admin/HR/Manager see everyone, a Team Lead sees only their team.
+// Within that scope the counts cover *all* of an employee's live tasks, not
+// just the ones the viewer handed out, otherwise "who is free" would be wrong
+// the moment somebody else assigned them something.
+// ==========================================
+router.get('/by-employee', auth, async (req, res) => {
+    try {
+        if (!CAN_ASSIGN.includes(req.user.role)) return res.status(403).json({ message: 'Access Denied' });
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const emptyResult = {
+            data: [],
+            pagination: { totalRecords: 0, totalPages: 1, currentPage: page, limit },
+            summary: { totalEmployees: 0, withTasks: 0, withoutTasks: 0, idle: 0, overloaded: 0 }
+        };
+
+        const scopeFilter = await getScopedEmployeeFilter(req.user);
+        if (!scopeFilter) return res.json(emptyResult);
+
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            scopeFilter.$or = [
+                { name: searchRegex },
+                { employeeId: searchRegex },
+                { jobTitle: searchRegex },
+                { department: searchRegex }
+            ];
+        }
+
+        const employees = await User.find(scopeFilter)
+            .select('name email role employeeId jobTitle department profilePic')
+            .sort({ name: 1 })
+            .lean();
+
+        if (employees.length === 0) return res.json(emptyResult);
+
+        const empIds = employees.map(e => e._id);
+        const now = new Date();
+
+        // One pass over the team's live tasks. A task shared by three people
+        // counts once against each of them — that is the workload they feel.
+        const counts = await Task.aggregate([
+            { $match: { isArchived: false, assignees: { $in: empIds } } },
+            { $unwind: '$assignees' },
+            { $match: { assignees: { $in: empIds } } },
+            {
+                $group: {
+                    _id: '$assignees',
+                    total: { $sum: 1 },
+                    pending: { $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] } },
+                    inProgress: { $sum: { $cond: [{ $eq: ['$status', 'In Progress'] }, 1, 0] } },
+                    onHold: { $sum: { $cond: [{ $eq: ['$status', 'On Hold'] }, 1, 0] } },
+                    completed: { $sum: { $cond: [{ $eq: ['$status', 'Completed'] }, 1, 0] } },
+                    overdue: {
+                        $sum: {
+                            $cond: [
+                                { $and: [{ $ne: ['$status', 'Completed'] }, { $lt: ['$dueDate', now] }] },
+                                1, 0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        const countsById = new Map(counts.map(c => [c._id.toString(), c]));
+        const NO_TASKS = { total: 0, pending: 0, inProgress: 0, onHold: 0, completed: 0, overdue: 0 };
+
+        let rows = employees.map(emp => {
+            const c = countsById.get(emp._id.toString());
+            const counts = c ? {
+                total: c.total, pending: c.pending, inProgress: c.inProgress,
+                onHold: c.onHold, completed: c.completed, overdue: c.overdue
+            } : { ...NO_TASKS };
+
+            return { ...emp, counts, openCount: counts.total - counts.completed };
+        });
+
+        // Tiles describe the whole (searched) scope, so they don't shift as the
+        // workload filter narrows the list below them.
+        const summary = {
+            totalEmployees: rows.length,
+            withTasks: rows.filter(r => r.counts.total > 0).length,
+            withoutTasks: rows.filter(r => r.counts.total === 0).length,
+            idle: rows.filter(r => r.openCount === 0).length,
+            overloaded: rows.filter(r => r.counts.overdue > 0).length
+        };
+
+        switch (req.query.workload) {
+            case 'with': rows = rows.filter(r => r.counts.total > 0); break;
+            case 'without': rows = rows.filter(r => r.counts.total === 0); break;
+            case 'idle': rows = rows.filter(r => r.openCount === 0); break;
+            case 'overdue': rows = rows.filter(r => r.counts.overdue > 0); break;
+            default: break;
+        }
+
+        if (req.query.sort === 'busiest') rows.sort((a, b) => b.openCount - a.openCount);
+        else if (req.query.sort === 'freest') rows.sort((a, b) => a.openCount - b.openCount);
+
+        const totalRecords = rows.length;
+        const pageRows = rows.slice(skip, skip + limit);
+        const pageIds = pageRows.map(r => r._id);
+
+        // Only the visible page's tasks get loaded, so the payload stays flat
+        // however big the company gets.
+        const tasks = pageIds.length === 0 ? [] : await Task.find({
+            isArchived: false,
+            assignees: { $in: pageIds }
+        })
+            .select('title status priority startDate dueDate createdAt taskType projectId assignedBy assignees attachments')
+            .populate('projectId', 'name')
+            .populate('assignedBy', 'name')
+            .lean();
+
+        const tasksByEmp = new Map(pageIds.map(id => [id.toString(), []]));
+        tasks.forEach(task => {
+            const trimmed = {
+                _id: task._id,
+                title: task.title,
+                status: task.status,
+                priority: task.priority,
+                // createdAt is the moment it was handed over; startDate is when
+                // the work is meant to begin. The board shows both.
+                assignedAt: task.createdAt,
+                startDate: task.startDate,
+                dueDate: task.dueDate,
+                taskType: task.taskType,
+                projectId: task.projectId,
+                assignedBy: task.assignedBy,
+                shareCount: (task.assignees || []).length,
+                attachmentCount: (task.attachments || []).length
+            };
+            (task.assignees || []).forEach(a => {
+                const bucket = tasksByEmp.get(a.toString());
+                if (bucket) bucket.push(trimmed);
+            });
+        });
+
+        // Live work first, soonest due at the top — the order you triage in.
+        const byUrgency = (a, b) => {
+            const aDone = a.status === 'Completed' ? 1 : 0;
+            const bDone = b.status === 'Completed' ? 1 : 0;
+            if (aDone !== bDone) return aDone - bDone;
+            return new Date(a.dueDate) - new Date(b.dueDate);
+        };
+
+        const data = pageRows.map(row => ({
+            ...row,
+            tasks: (tasksByEmp.get(row._id.toString()) || []).sort(byUrgency)
+        }));
+
+        res.json({
+            data,
+            pagination: { totalRecords, totalPages: Math.ceil(totalRecords / limit) || 1, currentPage: page, limit },
+            summary
+        });
+    } catch (err) {
+        console.error('Tasks By Employee Error:', err);
         res.status(500).send('Server Error');
     }
 });

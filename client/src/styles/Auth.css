@@ -100,3 +100,153 @@
 .auth-link:hover {
   text-decoration: underline;
 }
+/* ==========================================
+   PASSWORD RESET + CHANGE PASSWORD
+   ========================================== */
+
+.forgot-panel h2 {
+    margin-bottom: 6px;
+}
+
+.forgot-back,
+.forgot-link {
+    background: none;
+    border: none;
+    color: #215D7B;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.forgot-back:hover:not(:disabled),
+.forgot-link:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.forgot-back:disabled,
+.forgot-link:disabled {
+    color: #94a3b8;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+.forgot-link {
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-top: 14px;
+}
+
+/* --- Step indicator --- */
+.forgot-steps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 18px 0;
+}
+
+.forgot-step {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1;
+    min-width: 0;
+}
+
+.forgot-step-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.forgot-step-label {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.forgot-step.active .forgot-step-dot {
+    background: #215D7B;
+    color: #fff;
+}
+
+.forgot-step.active .forgot-step-label {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.forgot-step.done .forgot-step-dot {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.forgot-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.83rem;
+    margin-bottom: 14px;
+    line-height: 1.45;
+}
+
+/* The 6-digit code deserves to be readable at a glance. */
+.code-input {
+    text-align: center;
+    letter-spacing: 12px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding-left: 12px;
+}
+
+/* --- Change password card (profile) --- */
+.pw-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.pw-input-wrap {
+    position: relative;
+}
+
+.pw-input-wrap .custom-input {
+    padding-right: 40px;
+    width: 100%;
+}
+
+.pw-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.85rem;
+}
+
+.pw-toggle:hover {
+    color: #475569;
+}

@@ -5,10 +5,11 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faSave, faPaperclip, faInfoCircle, faUsers, faSpinner,
-    faClipboardList, faFilm, faSearch, faFolderOpen, faBuilding
+    faClipboardList, faFilm, faFolderOpen, faBuilding, faCalendarDay
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
+import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
 
@@ -23,7 +24,6 @@ const AddTask = () => {
 
     const [projectsList, setProjectsList] = useState([]);
     const [employeesList, setEmployeesList] = useState([]);
-    const [employeeSearch, setEmployeeSearch] = useState('');
 
     const [formData, setFormData] = useState({
         title: '',
@@ -56,12 +56,6 @@ const AddTask = () => {
     }, []);
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-
-    const toggleAssignee = (id) => {
-        setSelectedAssignees(prev =>
-            prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-        );
-    };
 
     const handleFileChange = async (e) => {
         const selectedFiles = Array.from(e.target.files);
@@ -160,11 +154,6 @@ const AddTask = () => {
         }
     };
 
-    const filteredEmployees = employeesList.filter(emp =>
-        emp.name.toLowerCase().includes(employeeSearch.toLowerCase()) ||
-        (emp.employeeId || '').toLowerCase().includes(employeeSearch.toLowerCase())
-    );
-
     return (
         <div className="attendance-container fade-in">
             <div className="task-page-header">
@@ -178,32 +167,16 @@ const AddTask = () => {
             </div>
 
             <form onSubmit={handleSubmit}>
-                <div className="control-card">
-                    <div className="expense-section-title">
-                        <FontAwesomeIcon icon={faInfoCircle} /> Task Details
-                    </div>
+                <div className="task-form-grid">
 
-                    <div className="expense-grid">
-                        <div className="form-group grid-span-2">
-                            <label className="input-label">Task Title *</label>
-                            <input
-                                type="text" name="title" className="custom-input"
-                                value={formData.title} onChange={handleChange}
-                                placeholder="e.g. Shoot 20 product clips for the Spectra launch"
-                                required
-                            />
+                    {/* ---------- LEFT: what the task is ---------- */}
+                    <section className="task-form-card">
+                        <div className="expense-section-title">
+                            <FontAwesomeIcon icon={faInfoCircle} /> Task Details
                         </div>
 
-                        <div className="form-group grid-span-2">
-                            <label className="input-label">Description</label>
-                            <textarea
-                                name="description" className="custom-input" rows="4"
-                                value={formData.description} onChange={handleChange}
-                                placeholder="What exactly needs to be done? Include any references or acceptance criteria."
-                            />
-                        </div>
-
-                        <div className="form-group grid-span-2">
+                        {/* Type comes first — it decides whether a project is even asked for. */}
+                        <div className="form-group task-field">
                             <label className="input-label">Task Type</label>
                             <div className="type-toggle">
                                 <button
@@ -228,8 +201,28 @@ const AddTask = () => {
                             </small>
                         </div>
 
+                        <div className="form-group task-field">
+                            <label className="input-label">Task Title *</label>
+                            <input
+                                type="text" name="title" className="custom-input"
+                                value={formData.title} onChange={handleChange}
+                                placeholder="e.g. Shoot 20 product clips for the Spectra launch"
+                                required
+                            />
+                        </div>
+
+                        <div className="form-group task-field field-grow">
+                            <label className="input-label">Description</label>
+                            <textarea
+                                name="description" className="custom-input" rows="8"
+                                value={formData.description} onChange={handleChange}
+                                placeholder="What exactly needs to be done? Include any references or acceptance criteria."
+                            />
+                        </div>
+
+                        {/* Project stays next to the toggle that decides whether it's asked for. */}
                         {formData.taskType === 'Project Task' && (
-                            <div className="form-group">
+                            <div className="form-group task-field">
                                 <label className="input-label">Project *</label>
                                 <select name="projectId" className="swal2-select custom-select" value={formData.projectId} onChange={handleChange} required>
                                     <option value="">Select a project</option>
@@ -240,120 +233,106 @@ const AddTask = () => {
                                 )}
                             </div>
                         )}
+                    </section>
 
-                        <div className="form-group">
-                            <label className="input-label">Priority</label>
-                            <select name="priority" className="swal2-select custom-select" value={formData.priority} onChange={handleChange}>
-                                <option value="Low">Low</option>
-                                <option value="Medium">Medium</option>
-                                <option value="High">High</option>
-                                <option value="Urgent">Urgent</option>
-                            </select>
-                        </div>
+                    {/* ---------- RIGHT: when it's due, who it goes to, what comes with it ---------- */}
+                    <div className="task-form-col">
+                        <section className="task-form-card">
+                            <div className="expense-section-title">
+                                <FontAwesomeIcon icon={faCalendarDay} /> Priority &amp; Schedule
+                            </div>
 
-                        <div className="form-group">
-                            <label className="input-label">Start Date</label>
-                            <input type="date" name="startDate" className="custom-input" value={formData.startDate} onChange={handleChange} />
-                        </div>
+                            <div className="task-field-row cols-3">
+                                <div className="form-group task-field">
+                                    <label className="input-label">Priority</label>
+                                    <select name="priority" className="swal2-select custom-select" value={formData.priority} onChange={handleChange}>
+                                        <option value="Low">Low</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="High">High</option>
+                                        <option value="Urgent">Urgent</option>
+                                    </select>
+                                </div>
 
-                        <div className="form-group">
-                            <label className="input-label">Due Date *</label>
-                            <input type="date" name="dueDate" className="custom-input" value={formData.dueDate} onChange={handleChange} required />
-                        </div>
-                    </div>
-                </div>
+                                <div className="form-group task-field">
+                                    <label className="input-label">Start Date</label>
+                                    <input type="date" name="startDate" className="custom-input" value={formData.startDate} onChange={handleChange} />
+                                </div>
 
-                <div className="control-card">
-                    <div className="expense-section-title">
-                        <FontAwesomeIcon icon={faUsers} /> Assign To
-                        {selectedAssignees.length > 0 && (
-                            <span className="task-count-pill">{selectedAssignees.length} selected</span>
-                        )}
-                    </div>
+                                <div className="form-group task-field">
+                                    <label className="input-label">Due Date *</label>
+                                    <input type="date" name="dueDate" className="custom-input" value={formData.dueDate} onChange={handleChange} required />
+                                </div>
+                            </div>
+                        </section>
 
-                    {employeesList.length === 0 ? (
-                        <p className="text-muted">No employees are mapped to you as their Team Lead yet — ask HR to set that up.</p>
-                    ) : (
-                        <>
-                            <div className="task-search-wrap">
-                                <FontAwesomeIcon icon={faSearch} className="task-search-icon" />
+                        <section className="task-form-card">
+                            <div className="expense-section-title">
+                                <FontAwesomeIcon icon={faUsers} /> Assign To
+                                {selectedAssignees.length > 0 && (
+                                    <span className="task-count-pill">{selectedAssignees.length} selected</span>
+                                )}
+                            </div>
+
+                            <EmployeeMultiSelect
+                                employees={employeesList}
+                                selected={selectedAssignees}
+                                onChange={setSelectedAssignees}
+                                emptyText="No employees are mapped to you as their Team Lead yet — ask HR to set that up."
+                            />
+
+                            {employeesList.length > 0 && (
+                                <small className="task-hint">
+                                    Search by name or employee ID, then tick everyone who should own this task.
+                                </small>
+                            )}
+                        </section>
+
+                        <section className="task-form-card">
+                            <div className="expense-section-title">
+                                <FontAwesomeIcon icon={faPaperclip} /> Reference Images &amp; Videos
+                            </div>
+
+                            <ScreenRecorder onAttach={handleScreenRecordingAttach} />
+
+                            <div className="task-file-drop">
                                 <input
-                                    type="text" className="custom-input" placeholder="Search your team..."
-                                    value={employeeSearch} onChange={(e) => setEmployeeSearch(e.target.value)}
+                                    className="custom-file-input" type="file" multiple
+                                    accept="image/*,video/*" onChange={handleFileChange}
                                 />
                             </div>
 
-                            <div className="assignee-picker">
-                                {filteredEmployees.map(emp => (
-                                    <label
-                                        key={emp._id}
-                                        className={`assignee-option ${selectedAssignees.includes(emp._id) ? 'selected' : ''}`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedAssignees.includes(emp._id)}
-                                            onChange={() => toggleAssignee(emp._id)}
-                                        />
-                                        <div className="assignee-avatar">
-                                            {emp.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                                        </div>
-                                        <div className="assignee-meta">
-                                            <span className="assignee-name">{emp.name}</span>
-                                            <span className="assignee-role">{emp.employeeId || emp.role}</span>
-                                        </div>
-                                    </label>
-                                ))}
-                                {filteredEmployees.length === 0 && (
-                                    <p className="text-muted" style={{ padding: '10px' }}>No one matches "{employeeSearch}".</p>
-                                )}
+                            <div className="task-upload-note">
+                                <FontAwesomeIcon icon={faFilm} />
+                                <span>
+                                    Videos up to {MAX_VIDEO_MB}MB upload as-is and are watchable immediately.
+                                    They&apos;re compressed and moved to permanent storage automatically at midnight.
+                                </span>
                             </div>
-                        </>
-                    )}
-                </div>
 
-                <div className="control-card">
-                    <div className="expense-section-title">
-                        <FontAwesomeIcon icon={faPaperclip} /> Reference Images & Videos
-                    </div>
+                            {isCompressing && (
+                                <p className="file-success-text" style={{ color: '#d97706', marginTop: '8px', fontWeight: '600' }}>
+                                    <FontAwesomeIcon icon={faSpinner} spin /> Preparing files...
+                                </p>
+                            )}
 
-                    <div className="form-group expense-file-area">
-                        <ScreenRecorder onAttach={handleScreenRecordingAttach} />
-                        <br />
-                        <input
-                            className="custom-file-input" type="file" multiple
-                            accept="image/*,video/*" onChange={handleFileChange}
-                        />
-
-                        <div className="task-upload-note">
-                            <FontAwesomeIcon icon={faFilm} />
-                            <span>
-                                Videos up to {MAX_VIDEO_MB}MB upload as-is and are watchable immediately.
-                                They're compressed and moved to permanent storage automatically at midnight.
-                            </span>
-                        </div>
-
-                        {isCompressing && (
-                            <p className="file-success-text" style={{ color: '#d97706', marginTop: '5px', fontWeight: '600' }}>
-                                <FontAwesomeIcon icon={faSpinner} spin /> Preparing files...
-                            </p>
-                        )}
-
-                        {files.length > 0 && (
-                            <div className="file-chips-list">
-                                {files.map((f, i) => (
-                                    <div key={i} className="file-chip">
-                                        <span className="file-chip-name">
-                                            {f.name} <em>({(f.size / 1048576).toFixed(1)}MB)</em>
-                                        </span>
-                                        <button type="button" className="file-chip-remove" onClick={() => removeFile(i)}>✕</button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                            {files.length > 0 && (
+                                <div className="file-chips-list task-file-chips">
+                                    {files.map((f, i) => (
+                                        <div key={i} className="file-chip">
+                                            <span className="file-chip-name">
+                                                {f.name} <em>({(f.size / 1048576).toFixed(1)}MB)</em>
+                                            </span>
+                                            <button type="button" className="file-chip-remove" onClick={() => removeFile(i)}>✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
                     </div>
                 </div>
 
-                <div className="profile-actions mt-30" style={{ flexDirection: 'column', gap: '15px' }}>
+                {/* Sticky so the form never has to be scrolled back to reach Submit. */}
+                <div className="task-form-footer">
                     {loading && uploadProgress > 0 && (
                         <div className="upload-progress-container">
                             <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}>
@@ -361,11 +340,19 @@ const AddTask = () => {
                             </div>
                         </div>
                     )}
-                    <button type="submit" className="gts-btn primary" disabled={loading || isCompressing}>
-                        {loading
-                            ? <><FontAwesomeIcon icon={faSpinner} spin /> Assigning...</>
-                            : <><FontAwesomeIcon icon={faSave} /> Assign Task</>}
-                    </button>
+                    <div className="task-form-footer-actions">
+                        <span className="task-form-summary">
+                            {selectedAssignees.length > 0
+                                ? `${selectedAssignees.length} assignee${selectedAssignees.length > 1 ? 's' : ''}`
+                                : 'No assignees yet'}
+                            {files.length > 0 && ` · ${files.length} attachment${files.length > 1 ? 's' : ''}`}
+                        </span>
+                        <button type="submit" className="gts-btn primary" disabled={loading || isCompressing}>
+                            {loading
+                                ? <><FontAwesomeIcon icon={faSpinner} spin /> Assigning...</>
+                                : <><FontAwesomeIcon icon={faSave} /> Assign Task</>}
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>

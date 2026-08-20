@@ -30,6 +30,15 @@ export const timeAgo = (date) => {
     return new Date(date).toLocaleDateString();
 };
 
+// "12 Aug 2026" — unambiguous at a glance, unlike 08/12/2026, which reads as a
+// different day depending on who is looking at it.
+export const shortDate = (date) => {
+    if (!date) return '—';
+    const d = new Date(date);
+    if (isNaN(d)) return '—';
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
 // "3 days left" reads better than a bare date when triaging your own work.
 export const dueLabel = (dueDate, isDone) => {
     const due = new Date(dueDate);

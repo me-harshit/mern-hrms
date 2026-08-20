@@ -8,6 +8,7 @@ import {
     faIdCard, faFirstAid, faUserTie,
     faBriefcase, faBuilding, faLaptopHouse, faTint, faHome, faClock
 } from '@fortawesome/free-solid-svg-icons';
+import ChangePassword from '../../components/ChangePassword';
 
 const Profile = () => {
     const [user, setUser] = useState(null);
@@ -328,6 +329,8 @@ const Profile = () => {
                     </div>
                 )}
             </div>
+
+            <ChangePassword />
         </div>
     );
 };

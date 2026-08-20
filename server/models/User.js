@@ -40,6 +40,13 @@ const userSchema = new mongoose.Schema({
     teamLeadsName: { type: [String], default: [] },
     teamLeadsEmail: { type: [String], default: [] },
 
+    // --- PASSWORD RESET ---
+    // select:false so these never ride along on /auth/me, the employee
+    // directory, or any other query that forgets to exclude them.
+    resetPasswordCodeHash: { type: String, select: false },
+    resetPasswordExpires: { type: Date, select: false },
+    resetPasswordAttempts: { type: Number, default: 0, select: false },
+
     // --- HR & LEAVE SETTINGS ---
     salary: { type: Number, default: 0 }, 
     casualLeaveBalance: { type: Number, default: 1 }, 
