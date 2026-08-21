@@ -8,7 +8,16 @@ const mongoose = require('mongoose');
  * task's nested media arrays.
  */
 const videoCompressionQueueSchema = new mongoose.Schema({
-    taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', required: true },
+    /**
+     * Which collection `taskId` points into. A recurring schedule carries its
+     * own brief media (TaskPlan.md §13.7), and those videos stage and compress
+     * exactly like a task's — but the cron has to look them up in the right
+     * place. Defaults to 'Task' so every row written before this existed keeps
+     * behaving identically.
+     */
+    ownerModel: { type: String, enum: ['Task', 'RecurringTask'], default: 'Task' },
+
+    taskId: { type: mongoose.Schema.Types.ObjectId, refPath: 'ownerModel', required: true },
 
     // _id of the media subdocument inside the task — stable even if the array
     // is reordered, unlike an index would be.

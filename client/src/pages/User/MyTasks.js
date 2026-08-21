@@ -6,11 +6,12 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faClipboardList, faSearch, faFolderOpen, faPaperclip,
     faCheckCircle, faExclamationTriangle, faTableColumns, faListUl,
-    faTimes, faComment, faSpinner, faInbox, faGripVertical, faBuilding
+    faTimes, faComment, faSpinner, faInbox, faGripVertical, faBuilding, faRepeat
 } from '@fortawesome/free-solid-svg-icons';
 import { slug, initials, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
+import '../../styles/recurring.css';
 
 const COLUMNS = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const VIEW_KEY = 'mytasks_view';
@@ -39,8 +40,12 @@ const TaskCard = ({
 
             <h4 className="tk-card-title">{task.title}</h4>
 
-            {!compact && task.description && (
-                <p className="tk-card-desc">{task.description}</p>
+            {/* Rendered even when empty: it is the flexible block that holds the
+                footer down, so omitting it would shorten the card. */}
+            {!compact && (
+                <p className={`tk-card-desc ${task.description ? '' : 'is-empty'}`}>
+                    {task.description || 'No description'}
+                </p>
             )}
 
             <div className="tk-card-tags">
@@ -48,6 +53,11 @@ const TaskCard = ({
                     <FontAwesomeIcon icon={task.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
                     {taskContextLabel(task)}
                 </span>
+                {task.recurringTaskId && (
+                    <span className="rt-day-badge" title="Part of a daily task - a fresh one arrives each morning">
+                        <FontAwesomeIcon icon={faRepeat} /> Daily
+                    </span>
+                )}
                 <span className={`tk-due ${due.tone}`}>{due.text}</span>
             </div>
 

@@ -383,3 +383,256 @@ Roughly 15 lines, but this is the part that goes wrong. Notes:
 - **Webcam bubble** (picture-in-picture of the presenter) — nice for briefs, meaningfully more work. Out of scope unless wanted.
 - **Countdown before recording starts** (3-2-1) so the first seconds aren't of the picker closing.
 - Should a recording **auto-attach on stop**, or always require the preview step? Recommend always previewing.
+
+---
+
+## 13. Recurring daily tasks — **built**
+
+Status: implemented end to end. Server verified by `node server/scripts/testRecurringTasks.js` (61 assertions). §13.12 records what changed during the build — read it before trusting 13.1–13.9.
+
+Let a manager assign the *same* task to an employee every day for a chosen stretch of days — "post on LinkedIn daily for the next 10 days". Each morning it lands as a **fresh, blank task**: its own status, its own completion proof, its own discussion thread. Yesterday's submission has no bearing on today's.
+
+Days that fall on a Sunday, a company holiday, or an approved full-day leave are **skipped**, and the schedule **rolls forward** so the agreed number of tasks still gets done.
+
+### 13.1 The core decision — template + generated instances
+
+A `RecurringTask` document is the **template**. It is never a task itself. A cron **materialises a real `Task`** from it each morning, linked back by `recurringTaskId` + `occurrenceDate`.
+
+Three alternatives were rejected:
+
+| Rejected | Why |
+|---|---|
+| Pre-create all N `Task` docs at save time | Leave and holidays would be evaluated against the state *today*, not the state on the day. Leave approved next week wouldn't be honoured. Also floods the employee's board with ten future cards. |
+| One `Task` holding N days internally | Breaks the board, the detail page, the discussion thread and completion proof — all of which assume one status and one proof set per document. |
+| An `isRecurring` flag on `Task` that resets itself nightly | Destroys history. "Did he post on the 27th?" becomes unanswerable, and the discussion thread accumulates across unrelated days. |
+
+The payoff for template-plus-instance is that **the entire existing employee-facing stack is reused untouched** — Trello board, `/task/:id`, socket discussion, completion proof, the video compression queue, notifications. A generated task is an ordinary `Task`. The only client change on the employee side is a small "Day 3 of 10" badge.
+
+### 13.2 New model — `server/models/RecurringTask.js`
+
+| Field | Type | Notes |
+|---|---|---|
+| `title`, `description`, `taskType`, `projectId`, `priority` | | Same shape and validation as `Task` |
+| `assignedBy` | ObjectId → `User` | |
+| `assignees` | `[ObjectId → User]` | See 13.3 — fanned out per person, not shared |
+| `attachments` | `[MediaSchema]` | The brief. **Referenced by generated tasks, never copied** — see 13.7 |
+| `plannedDates` | `[String]` | Normalised `YYYY-MM-DD`. The plan, which grows on roll-forward |
+| `targetCount` | Number | `plannedDates.length` at save time. The promise being kept |
+| `skipSundays` / `skipHolidays` / `skipOnLeave` | Boolean, default `true` | |
+| `status` | enum `Active / Paused / Completed / Cancelled` | |
+| `occurrences` | `[OccurrenceSchema]` | The audit log, below |
+
+`OccurrenceSchema`:
+```js
+{
+    date: String,            // YYYY-MM-DD
+    assignee: ObjectId,      // -> User
+    taskId: ObjectId,        // -> Task, null when skipped
+    result: 'generated' | 'skipped',
+    skipReason: String,      // 'Sunday' | 'Holiday: Diwali' | 'On leave' | 'Employee inactive'
+    outcome: 'pending' | 'completed' | 'missed'
+}
+```
+
+`occurrences[]` is deliberately **not** derivable by querying `Task`, because skipped days never produce a Task. It is the only place the full picture lives, and it is what drives the manager's compliance calendar (13.8). Denormalising `outcome` here also means that view is one document read rather than an N-day fan-out query.
+
+**Additive changes to `Task`** — nothing existing is modified:
+```js
+recurringTaskId: { type: ObjectId, ref: 'RecurringTask', default: null },
+occurrenceDate:  { type: String, default: null }    // YYYY-MM-DD
+```
+
+### 13.3 One task per assignee per day
+
+Per §11, a `Task` carries **one shared status** across all its assignees. That is right for collaborative work and wrong here: if three people are each told to post daily, one person marking it Completed must not clear it for the other two.
+
+So the daily generation **fans out per assignee** — three assignees on a 10-day schedule produce 30 `Task` documents over its life, one per person per day. The `RecurringTask` holds all three; `occurrences[]` carries `assignee` for exactly this reason.
+
+### 13.4 Skip rules, and the two kinds of "not today"
+
+This is the subtle part of the design and the easiest thing to get wrong.
+
+- A day the **manager deselected** in the calendar is simply *not in `plannedDates`*. It is not a skip, produces no `occurrences` row, and **must not extend the schedule**. Otherwise deselecting every Saturday would push the end date out indefinitely.
+- A day the **system skips** — Sunday, holiday, approved leave, deactivated employee — is a skip. It logs an `occurrences` row with a reason, and **appends the next eligible date** after the current last `plannedDates` entry, so `targetCount` is still met.
+
+Roll-forward is evaluated **per assignee**. If Rahul is on leave Wednesday but Priya is not, Rahul's schedule extends by a day and Priya's does not. `plannedDates` is therefore the shared baseline, and per-assignee extension is tracked through `occurrences[]`.
+
+Guard rail: cap roll-forward at `targetCount + 30` days. A long sick leave should stall and alert the assigner, not silently trail a task into next quarter.
+
+Two rules that are easy to get backwards:
+
+- **Half-day leave does not skip.** `Leave` carries `startHalf` / `endHalf`. Someone on a half day can still write a post. Skip only when the day is `FULL`.
+- **WFH never skips.** They are working.
+
+### 13.5 The generation cron — `server/cron/recurringTaskCron.js`
+
+Follows `attendanceCron.js` closely; its defensive `Leave` / `Wfh` / `Holiday` requires and its Sunday/holiday checks lift almost verbatim.
+
+Schedule: **06:00 every day**, including Sunday — the job decides for itself whether to skip, rather than encoding that in the cron expression where it can't log a reason.
+
+Each run, in order:
+
+1. **Sweep yesterday.** Every `occurrences` row with `outcome: 'pending'` whose Task is still `Pending` or `In Progress` flips to `outcome: 'missed'`, and the Task is archived (`isArchived: true`) so the board stays clean. Nothing is deleted — it stays openable from the schedule view.
+2. **Generate today.** For each `Active` schedule containing today in `plannedDates`, for each assignee: check Sunday → holiday → full-day approved leave → user still `ACTIVE`. Skip with a reason and roll forward, or create the `Task` and notify.
+3. **Close finished schedules.** Once generated + skipped-beyond-cap covers `targetCount`, set `status: 'Completed'`.
+
+Three things that must be built in from the start, not retrofitted:
+
+- **Startup catch-up sweep.** §11 records that `node-cron` silently does not fire when the process is down at the scheduled minute — this already bit the video compression job in production. On boot, run the same generation for today if it hasn't already happened.
+- **Idempotency.** Unique compound index on `{ recurringTaskId, occurrenceDate, assignee }`. Without it, the catch-up sweep plus a restart double-assigns the day. This is the single highest-risk bug in the feature.
+- **Timezone.** The classic off-by-one. `Attendance` already sidesteps this by storing its `date` as a string rather than a `Date`, and `occurrenceDate` follows that precedent with normalised `YYYY-MM-DD`. Pin the cron's notion of "today" to IST explicitly rather than trusting server local time — a UTC VPS rolls the date over at 05:30 IST, an hour before this job runs.
+
+### 13.6 The calendar
+
+No date library is installed (`react-select`, `recharts`, `sweetalert2`, and nothing else), and the codebase hand-rolls its UI — `Pagination.js`, the board, the lightbox. `<ScheduleCalendar />` is hand-rolled too, for a reason beyond consistency: the whole value here is **per-day annotation**, which a picker library fights rather than helps.
+
+Two months side by side, Airbnb-style drag to select a range, then click any day to toggle it individually — inside the range to drop it, outside to add a one-off.
+
+Each day cell renders its own state:
+
+| State | Appearance |
+|---|---|
+| Past | Disabled |
+| Sunday | Greyed |
+| Company holiday | Greyed, name on hover |
+| Selected assignee on approved full-day leave | Striped amber, "Rahul on leave" |
+| Selected | Filled |
+
+Live footer, updating as the selection changes:
+
+> **10 days selected → 8 tasks will be created, 2 skipped (Sun 24 Aug, Diwali) → schedule ends Thu 4 Sep**
+
+Quick-picks for the common phrasing: **next 5 / 7 / 14 working days**.
+
+### 13.7 Reference media must be referenced, not copied
+
+Copying the template's `attachments` into each generated `Task` looks obvious and is a trap. If the brief contains a video, it stages at `/uploads/tasks/…` and only becomes an S3 url after the midnight compression job — which then **deletes the local file**. Day 1's copy is left pointing at a path that no longer exists.
+
+Instead, populate `recurringTaskId` on the task detail page and render the template's attachments as the brief, alongside the task's own (empty) `attachments`. The compression job updates the template once, and every day — past and future — sees the corrected url. Editing the brief stays consistent across the whole schedule too.
+
+### 13.8 UI surface
+
+| Where | What |
+|---|---|
+| `AddTask` | A **"Repeat daily"** toggle. The date field is a button that opens the calendar popup in either mode; everything else on the form is unchanged |
+| `/tasks` → **Recurring** tab | Manager list of schedules — title, assignees, progress (`6 of 10`), status, Pause / End / Extend. A third view beside "By Task" and "By Employee", **not** a separate sidebar entry |
+| `/tasks/recurring/:id` (new) | The **compliance calendar**: done, missed, skipped (with reason), open. Per assignee. This is the view that answers "did he actually post for 10 days" |
+| Employee board | Unchanged, plus a small **"Day 3 of 10"** badge on generated cards |
+
+### 13.9 API
+
+| Route | Purpose |
+|---|---|
+| `POST /api/tasks/recurring/preview` | Assignees + date range → `[{date, willRun, reason}]`. Powers the calendar footer |
+| `POST /api/tasks/recurring` | Create the schedule. Same multipart shape and `CAN_ASSIGN` / scope checks as `POST /api/tasks` |
+| `GET /api/tasks/recurring` | List, scoped like `/managed` |
+| `GET /api/tasks/recurring/:id` | Detail + `occurrences[]` for the compliance view |
+| `PUT /api/tasks/recurring/:id` | Edit brief, pause, resume, end early, extend |
+
+The preview endpoint is **advisory only**. Leave approved *after* the schedule is created won't appear in it, and that is fine — the cron re-checks every morning and is the sole authority. Worth a line of copy on the form so nobody reads the preview as a guarantee.
+
+### 13.10 Build order
+
+1. ~~`RecurringTask` model + the two additive `Task` fields + the unique index~~ **done**
+2. ~~`POST /recurring/preview` + the skip-evaluation helper~~ **done** (`utils/recurringSchedule.js`)
+3. ~~`recurringTaskCron.js` — generation, sweep, roll-forward, startup catch-up~~ **done**
+4. ~~`<ScheduleCalendar />` standalone~~ **done**
+5. ~~Wire the "Repeat daily" toggle into `AddTask`~~ **done**
+6. ~~`/tasks/recurring` list + compliance detail page~~ **done**
+7. ~~"Day 3 of 10" badge; brief-from-template rendering on `/task/:id`~~ **done**
+
+Steps 1–3 also shipped the full route surface from 13.9 (create/list/detail/update) — a cron with no way to create a schedule cannot be tested.
+
+### 13.11 Open questions
+
+- **Should a missed day roll forward too?** Currently only *system* skips extend the schedule. If someone simply doesn't post, should they owe an extra day at the end? Leaning no — that's a management conversation, not an automation.
+- **Notify the assigner on a miss?** The `notify()` helper in `routes/tasks.js` makes it a two-line addition. Probably wanted, but it is a daily nag if a schedule goes stale.
+- **Time of day.** 06:00 assumes the day shift. Night-shift employees would get the task mid-shift. `attendanceCron` already splits DAY/NIGHT — this may need the same treatment.
+
+---
+
+## 13.12 What the backend build actually changed
+
+13.1–13.11 are the design as drawn. These are the deviations, and the two bugs the build turned up.
+
+### Files
+
+| File | |
+|---|---|
+| `server/utils/recurringSchedule.js` | **new** — date helpers, eligibility, roll-forward projection. The whole rules engine; no HTTP or cron in it |
+| `server/utils/taskScoping.js` | **new** — roles + team scoping, *extracted from* `routes/tasks.js` |
+| `server/models/RecurringTask.js` | **new** |
+| `server/routes/recurringTasks.js` | **new** — the five routes from 13.9 |
+| `server/cron/recurringTaskCron.js` | **new** |
+| `server/scripts/testRecurringTasks.js` | **new** — 61-assertion harness; refuses to run against anything but a local `*test*` database |
+| `server/models/Task.js` | `recurringTaskId`, `occurrenceDate`, the unique partial index, exports `mediaSchema` |
+| `server/models/VideoCompressionQueue.js` | `ownerModel` discriminator — see below |
+| `server/cron/videoCompressionCron.js` | resolves Task vs RecurringTask via `ownerModel` |
+| `server/routes/tasks.js` | uses `utils/taskScoping`; status route reports back to the occurrence log |
+| `server/index.js` | cron required; `/api/tasks/recurring` mounted **before** `/api/tasks` |
+| `client/src/utils/scheduleDates.js` | **new** — 'YYYY-MM-DD' helpers and the month-grid builder |
+| `client/src/components/ScheduleCalendar.js` | **new** — the two-month picker, `mode="multi"` (recurring) or `"range"` (one-off start..due) |
+| `client/src/components/DatePickerField.js` | **new** — the field plus its anchored calendar popover |
+| `client/src/components/ScheduleProjection.js` | **new** — the "8 will run, 2 skipped" footer |
+| `client/src/components/RecurringTaskList.js` | **new** — schedules list, embedded as a third view on the Tasks page |
+| `client/src/pages/Admin/RecurringTaskDetail.js` | **new** — compliance calendar |
+| `client/src/styles/recurring.css` | **new** |
+| `client/src/pages/Admin/AddTask.js` | "Repeat daily" toggle; posts to `/tasks/recurring` when on |
+| `client/src/pages/TaskDetail.js` | "Day N of M" badge; brief inherited from the schedule |
+| `client/src/pages/User/MyTasks.js` | "Daily" chip on generated cards |
+| `client/src/components/Sidebar.js`, `client/src/App.js` | nav link and the two routes |
+
+### Deviations from the design
+
+- **Scoping was extracted, not duplicated.** Both task routers now share `utils/taskScoping.js`. Two copies of "which employees may this Team Lead assign to" is exactly the thing that drifts into a permissions hole.
+- **`assigneeState[]` was added to the model.** 13.4 said per-assignee roll-forward would be tracked "through `occurrences[]`", which would mean recomputing each person's date set from the log on every run. An explicit `{ user, extraDates[], generatedCount, status }` is cheaper and directly renderable.
+- **A schedule starting today generates immediately** on create instead of waiting for 06:00 tomorrow. It calls the cron's own generator, so that path is identical to every other day, duplicate guard included.
+- **The sweep settles every past day, not just yesterday.** A weekend of downtime would otherwise leave a permanent hole in the log.
+- **The startup catch-up is gated on the hour** — only past 06:00 IST. A 02:00 restart must not hand people their task four hours early.
+- **`outcome: 'not-applicable'`** was added for skipped days. With only pending/completed/missed, a Sunday would have to be one of those, and none is true.
+- **The status route reports back**, so a completed task turns green on the compliance calendar immediately rather than at the next sweep.
+
+### Two bugs found during the build
+
+**1. The compression queue would have destroyed a brief's video.** A schedule carries its own reference media, so its videos stage on disk and queue like any other. But `VideoCompressionQueue.taskId` was `ref: 'Task'`, and the cron does `Task.findById(job.taskId)` — with a *schedule* id that returns null, and the null branch **deletes the raw file and marks the job done**. The only copy, gone at midnight. Fixed with an `ownerModel` discriminator (defaulting to `'Task'`, so every existing row behaves exactly as before) plus `refPath`.
+
+**2. `GET /recurring/:id` locked out the schedule's own creator.** The route populates `assignedBy` before the permission check, and `.toString()` on a populated Mongoose document returns an inspect string, not an id — so the comparison never matched and the manager got a 403 on their own schedule. `routes/tasks.js` has the same shape of check but runs it on an *unpopulated* document, which is why it never surfaced there. Now normalised through an `idOf()` helper that handles both.
+
+### Verified
+
+`node server/scripts/testRecurringTasks.js` — needs a local mongod, drops only its own database.
+
+The generation suite simulates Fri 21 → Sat 29 Aug 2026: a 5-day schedule with a Sunday deliberately selected, a holiday on the Monday, a full-day leave for one assignee and a half-day for the other.
+
+```
+Rahul                                Priya
+  08-21 RUN                            08-21 RUN
+  08-22 RUN                            08-22 RUN   <- half day, NOT skipped
+  08-23 skip: Sunday                   08-23 skip: Sunday
+  08-24 skip: Holiday                  08-24 skip: Holiday
+  08-25 skip: On approved leave        08-25 RUN
+  08-26 RUN                            08-26 RUN
+  08-27 RUN                            08-27 RUN
+  08-28 RUN
+  = 5 tasks, ends 28th                 = 5 tasks, ends 27th
+```
+
+Both get their 5 tasks; the runs end on different days because roll-forward is per person. Re-running all nine days creates nothing new.
+
+### Client notes
+
+- **The calendar keeps Sundays and holidays clickable.** They are greyed, not disabled. Selecting one is not a mistake: it counts toward the target, gets skipped on the day, and rolls the run forward — so the person still does the agreed number. The footer says so explicitly rather than the calendar silently refusing the click.
+- **The preview is one debounced call** carrying both jobs: annotations for the months on screen, and the projection for the days picked. It re-runs on every day clicked and every assignee added, and dragging a range fires a burst of those.
+- **`GET /tasks/:id` gained `recurringDayNumber`**, counted over that person's *generated* occurrences only — a skipped Sunday is not a day number, so "Day 3 of 10" stays honest.
+- **The calendar is an anchored popover, not inline and not a modal.** Inline, a two-month calendar is ~380px tall and shoved the rest of the form off screen. A centred modal fixed that but overcorrected — dimming the whole page to pick a date hides the form you are filling in. It now drops open directly under the date field like an ordinary date input, compact (~500px, 208px months), right-aligned so it grows leftward into the page rather than off the edge, closing on click-outside or Escape. The full skip breakdown stays in the form rather than the popover, which is what lets the popover stay small.
+- **The one-off task uses the same picker.** A task's start and due date *is* a contiguous range, so `mode="range"` gives one calendar for both kinds of task instead of two different date UIs on the same form. The native `<input type="date">` pair is gone from `AddTask`; the row is now a clean two-column `Priority | Dates` grid that looks identical whichever mode the switch is in. Note the button cannot carry `required`, so the due-date check moved into `handleSubmit`.
+- **"Normal Tasks" genuinely means one-off.** The tab passes `excludeRecurring=true` to `/tasks/managed`, so days generated by a schedule appear only under Recurring. Without that the two tabs would overlap and the split would be cosmetic. The flag is opt-in, so every other caller of `/managed` still sees everything.
+- **Recurring lives inside the Tasks page, not the sidebar.** It was briefly its own nav entry and its own route, which was wrong: a recurring task is still task assignment, so two menu items for one concept is a menu that has to be explained. It is now the third tab beside "By Task" and "By Employee" (`/tasks?view=recurring`), and the only recurring-specific route left is the compliance page at `/tasks/recurring/:id`. Creating one is a "Repeat daily" switch on the existing Assign Task form — there is no second form.
+- **Task cards are a uniform height**, board and list alike. Not by hard-coding one — title, description and the tag row are each pinned to an exact line count, so the total comes out identical and there is no dead padding. Three things had to be fixed to get there: a long title pushed the card taller (`min-height` → exact `height`), a flex-grown description leaked a third line under the `-webkit-line-clamp` ellipsis (the clamp draws the ellipsis but does not hide overflow once the box is taller than the clamp), and the `Daily` badge was 2px taller than the other chips, which alone put recurring cards out of line. The empty-description block is still rendered, as "No description", because omitting it would shorten the card.
+- **The board shows only a "Daily" chip**, not the day number. The precise position needs the schedule document, and fetching one per card to render a badge is not worth it; the detail page has the full count.
+
+### Still open
+
+- **`EditTask` still uses native date inputs.** Only `AddTask` was moved to the popup picker. Editing an existing task is a different enough context that this was left alone, but the two forms now look slightly different.
+- **Night shift.** 06:00 IST suits the day shift; a night-shift employee gets the task mid-shift. `attendanceCron` already splits DAY/NIGHT and this likely needs the same.
+- **Missed days do not roll forward.** Only system skips extend a schedule; someone simply not posting does not earn an extra day.
