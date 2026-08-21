@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faSave, faPaperclip, faInfoCircle, faUsers, faSpinner,
-    faClipboardList, faFilm, faFolderOpen, faBuilding, faCalendarDay
+    faClipboardList, faFilm, faFolderOpen, faBuilding, faCalendarDay, faRepeat
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
+import DatePickerField from '../../components/DatePickerField';
+import ScheduleProjection from '../../components/ScheduleProjection';
+import { datesBetween, prettyDate } from '../../utils/scheduleDates';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
+import '../../styles/recurring.css';
 
 const MAX_VIDEO_MB = 300;
 
@@ -38,6 +42,16 @@ const AddTask = () => {
     const [selectedAssignees, setSelectedAssignees] = useState([]);
     const [files, setFiles] = useState([]);
 
+    // --- recurring schedule (TaskPlan.md §13) ---
+    // Off by default: a one-off task is still the common case, and the whole
+    // form below stays exactly as it was until this is switched on.
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [plannedDates, setPlannedDates] = useState([]);
+    const [visibleRange, setVisibleRange] = useState(null);
+    const [annotations, setAnnotations] = useState({});
+    const [projection, setProjection] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+
     useEffect(() => {
         const fetchDropdowns = async () => {
             try {
@@ -54,6 +68,84 @@ const AddTask = () => {
         };
         fetchDropdowns();
     }, []);
+
+    /**
+     * Ask the server what this selection would actually do.
+     *
+     * One call covers both jobs: annotations for the months on screen (holidays
+     * and per-person leave, so the calendar can grey and stripe them) and, once
+     * days are picked, the projection that drives the footer.
+     *
+     * Debounced because it re-runs on every day clicked and every assignee
+     * added, and dragging a range fires a burst of those.
+     */
+    useEffect(() => {
+        if (!isRecurring || !visibleRange) return;
+
+        const timer = setTimeout(async () => {
+            setPreviewLoading(plannedDates.length > 0 && selectedAssignees.length > 0);
+            try {
+                const res = await api.post('/tasks/recurring/preview', {
+                    from: visibleRange.from,
+                    to: visibleRange.to,
+                    assigneeIds: selectedAssignees,
+                    // Omitted entirely until both are present — the endpoint
+                    // rejects a projection with no one to project for.
+                    ...(plannedDates.length && selectedAssignees.length ? { dates: plannedDates } : {})
+                });
+                setAnnotations(res.data.annotations || {});
+                setProjection(res.data.projection || null);
+            } catch (err) {
+                console.error('Could not preview the schedule', err);
+                setProjection(null);
+            } finally {
+                setPreviewLoading(false);
+            }
+        }, 350);
+
+        return () => clearTimeout(timer);
+    }, [isRecurring, visibleRange, plannedDates, selectedAssignees]);
+
+    // Stable identity so the calendar's effect doesn't refire every render.
+    const handleVisibleRange = useCallback((from, to) => {
+        setVisibleRange(prev => (prev?.from === from && prev?.to === to ? prev : { from, to }));
+    }, []);
+
+    // A one-off task's start..due is just a contiguous range, so it drives the
+    // same picker the recurring day set uses — one calendar, two modes.
+    const oneOffDates = formData.dueDate
+        ? datesBetween(formData.startDate || formData.dueDate, formData.dueDate)
+        : (formData.startDate ? [formData.startDate] : []);
+
+    const handleOneOffDates = (dates) => {
+        setFormData(prev => ({
+            ...prev,
+            startDate: dates[0] || '',
+            dueDate: dates.length ? dates[dates.length - 1] : ''
+        }));
+    };
+
+    const dateFieldLabel = () => {
+        if (isRecurring) {
+            if (plannedDates.length === 0) return 'Pick the days this runs on';
+            return `${prettyDate(plannedDates[0])} → ${prettyDate(plannedDates[plannedDates.length - 1])}`;
+        }
+        if (!formData.dueDate) return 'Pick the start and due date';
+        if (formData.startDate === formData.dueDate) return prettyDate(formData.dueDate);
+        return `${prettyDate(formData.startDate)} → ${prettyDate(formData.dueDate)}`;
+    };
+
+    // One line under the field, so the skip detail is visible without
+    // reopening the popup. The full breakdown lives inside it.
+    const projectionHeadline = () => {
+        if (!isRecurring || !projection) return null;
+        const skipped = projection.perUser.reduce(
+            (max, u) => Math.max(max, u.timeline.filter(t => !t.willRun && t.date).length), 0);
+        const bits = [`${projection.targetCount} task${projection.targetCount === 1 ? '' : 's'} each`];
+        if (skipped > 0) bits.push(`${skipped} day${skipped === 1 ? '' : 's'} skipped, rolled forward`);
+        if (projection.summary?.endsOn) bits.push(`ends ${prettyDate(projection.summary.endsOn)}`);
+        return bits.join(' · ');
+    };
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -111,7 +203,14 @@ const AddTask = () => {
         if (selectedAssignees.length === 0) {
             return Swal.fire('No Assignees', 'Select at least one employee to assign this task to.', 'warning');
         }
-        if (formData.startDate && formData.dueDate && new Date(formData.dueDate) < new Date(formData.startDate)) {
+        if (isRecurring && plannedDates.length === 0) {
+            return Swal.fire('Pick Some Days', 'Choose at least one day on the calendar for this task to run.', 'warning');
+        }
+        // The date field is a button now, so the browser can't enforce this.
+        if (!isRecurring && !formData.dueDate) {
+            return Swal.fire('Pick a Due Date', 'Choose when this task is due.', 'warning');
+        }
+        if (!isRecurring && formData.startDate && formData.dueDate && new Date(formData.dueDate) < new Date(formData.startDate)) {
             return Swal.fire('Check Dates', 'The due date cannot be before the start date.', 'warning');
         }
 
@@ -120,11 +219,20 @@ const AddTask = () => {
 
         try {
             const data = new FormData();
-            Object.keys(formData).forEach(key => data.append(key, formData[key]));
-            data.append('assigneeIds', JSON.stringify(selectedAssignees));
             files.forEach(f => data.append('attachments', f));
+            data.append('assigneeIds', JSON.stringify(selectedAssignees));
 
-            await api.post('/tasks', data, {
+            if (isRecurring) {
+                // A schedule has no single due date — each generated task gets
+                // its own, on the day it lands.
+                ['title', 'description', 'taskType', 'projectId', 'priority']
+                    .forEach(key => data.append(key, formData[key]));
+                data.append('plannedDates', JSON.stringify(plannedDates));
+            } else {
+                Object.keys(formData).forEach(key => data.append(key, formData[key]));
+            }
+
+            const res = await api.post(isRecurring ? '/tasks/recurring' : '/tasks', data, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent) => {
                     const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -133,22 +241,41 @@ const AddTask = () => {
             });
 
             const hasVideo = files.some(f => f.type.startsWith('video/'));
-            await Swal.fire({
-                icon: 'success',
-                title: 'Task Assigned',
-                text: hasVideo
-                    ? 'Your team has been notified. Videos are viewable right away and will be optimised overnight.'
-                    : 'Your team has been notified.',
-                timer: hasVideo ? 3500 : 1800,
-                showConfirmButton: false
-            });
-            navigate('/tasks');
+            const videoNote = hasVideo
+                ? ' Videos are viewable right away and will be optimised overnight.'
+                : '';
+
+            if (isRecurring) {
+                const startedToday = res.data?.generatedToday > 0;
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Daily Task Scheduled',
+                    text: `${plannedDates.length} day${plannedDates.length === 1 ? '' : 's'} scheduled for `
+                        + `${selectedAssignees.length} ${selectedAssignees.length === 1 ? 'person' : 'people'}. `
+                        + (startedToday
+                            ? "Today's task has already gone out."
+                            : 'The first one goes out at 6am on the first scheduled day.')
+                        + videoNote,
+                    timer: hasVideo ? 4500 : 3200,
+                    showConfirmButton: false
+                });
+                navigate('/tasks?view=recurring');
+            } else {
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Task Assigned',
+                    text: 'Your team has been notified.' + videoNote,
+                    timer: hasVideo ? 3500 : 1800,
+                    showConfirmButton: false
+                });
+                navigate('/tasks');
+            }
         } catch (err) {
             console.error('Task creation error:', err);
             const message = err.response?.status === 413
                 ? `File too large. Videos must be under ${MAX_VIDEO_MB}MB.`
                 : err.response?.data?.message || 'Failed to create the task. Please try again.';
-            Swal.fire('Could Not Assign Task', message, 'error');
+            Swal.fire(isRecurring ? 'Could Not Schedule Task' : 'Could Not Assign Task', message, 'error');
         } finally {
             setLoading(false);
         }
@@ -162,7 +289,7 @@ const AddTask = () => {
                 </button>
                 <h1 className="page-title header-no-margin">
                     <FontAwesomeIcon icon={faClipboardList} style={{ marginRight: '10px', color: '#215D7B' }} />
-                    Assign New Task
+                    {isRecurring ? 'Schedule a Daily Task' : 'Assign New Task'}
                 </h1>
             </div>
 
@@ -242,7 +369,31 @@ const AddTask = () => {
                                 <FontAwesomeIcon icon={faCalendarDay} /> Priority &amp; Schedule
                             </div>
 
-                            <div className="task-field-row cols-3">
+                            {/* The switch that turns one task into a run of them. */}
+                            <div className={`rt-switch-row ${isRecurring ? 'is-on' : ''}`}>
+                                <button
+                                    type="button"
+                                    className={`rt-switch ${isRecurring ? 'is-on' : ''}`}
+                                    onClick={() => setIsRecurring(v => !v)}
+                                    aria-pressed={isRecurring}
+                                    aria-label="Repeat this task daily"
+                                />
+                                <div className="rt-switch-text">
+                                    <strong>
+                                        <FontAwesomeIcon icon={faRepeat} style={{ marginRight: '6px', color: '#215D7B' }} />
+                                        Repeat daily
+                                    </strong>
+                                    <small>
+                                        {isRecurring
+                                            ? 'A fresh copy goes out each morning. Sundays, holidays and approved leave are skipped, and the run rolls forward so the count still adds up.'
+                                            : 'Assign the same task every day for a stretch of days — a daily post, a daily report.'}
+                                    </small>
+                                </div>
+                            </div>
+
+                            {/* Two columns, identical in both modes, so nothing
+                                jumps around when the switch is flipped. */}
+                            <div className="task-field-row cols-2">
                                 <div className="form-group task-field">
                                     <label className="input-label">Priority</label>
                                     <select name="priority" className="swal2-select custom-select" value={formData.priority} onChange={handleChange}>
@@ -254,15 +405,36 @@ const AddTask = () => {
                                 </div>
 
                                 <div className="form-group task-field">
-                                    <label className="input-label">Start Date</label>
-                                    <input type="date" name="startDate" className="custom-input" value={formData.startDate} onChange={handleChange} />
-                                </div>
-
-                                <div className="form-group task-field">
-                                    <label className="input-label">Due Date *</label>
-                                    <input type="date" name="dueDate" className="custom-input" value={formData.dueDate} onChange={handleChange} required />
+                                    <label className="input-label">
+                                        {isRecurring ? 'Which days? *' : 'Start & due date *'}
+                                    </label>
+                                    <DatePickerField
+                                        displayValue={dateFieldLabel()}
+                                        isEmpty={isRecurring ? plannedDates.length === 0 : !formData.dueDate}
+                                        countBadge={isRecurring && plannedDates.length > 0
+                                            ? `${plannedDates.length} days` : null}
+                                        mode={isRecurring ? 'multi' : 'range'}
+                                        selected={isRecurring ? plannedDates : oneOffDates}
+                                        onChange={isRecurring ? setPlannedDates : handleOneOffDates}
+                                        annotations={isRecurring ? annotations : {}}
+                                        onVisibleRangeChange={isRecurring ? handleVisibleRange : undefined}
+                                    />
+                                    {isRecurring && projectionHeadline() && (
+                                        <small className="task-hint">{projectionHeadline()}</small>
+                                    )}
                                 </div>
                             </div>
+
+                            {/* The full skip breakdown sits in the form, not in the
+                                popover — it can run to several lines, and keeping it
+                                here is what lets the popover stay small. */}
+                            {isRecurring && plannedDates.length > 0 && (
+                                <ScheduleProjection
+                                    projection={projection}
+                                    loading={previewLoading}
+                                    selectedCount={plannedDates.length}
+                                />
+                            )}
                         </section>
 
                         <section className="task-form-card">
@@ -346,15 +518,20 @@ const AddTask = () => {
                                 ? `${selectedAssignees.length} assignee${selectedAssignees.length > 1 ? 's' : ''}`
                                 : 'No assignees yet'}
                             {files.length > 0 && ` · ${files.length} attachment${files.length > 1 ? 's' : ''}`}
+                            {isRecurring && plannedDates.length > 0 &&
+                                ` · ${plannedDates.length} day${plannedDates.length > 1 ? 's' : ''} scheduled`}
                         </span>
                         <button type="submit" className="gts-btn primary" disabled={loading || isCompressing}>
                             {loading
-                                ? <><FontAwesomeIcon icon={faSpinner} spin /> Assigning...</>
-                                : <><FontAwesomeIcon icon={faSave} /> Assign Task</>}
+                                ? <><FontAwesomeIcon icon={faSpinner} spin /> {isRecurring ? 'Scheduling...' : 'Assigning...'}</>
+                                : isRecurring
+                                    ? <><FontAwesomeIcon icon={faRepeat} /> Schedule Daily Task</>
+                                    : <><FontAwesomeIcon icon={faSave} /> Assign Task</>}
                         </button>
                     </div>
                 </div>
             </form>
+
         </div>
     );
 };

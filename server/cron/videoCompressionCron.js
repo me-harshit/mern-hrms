@@ -5,6 +5,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 
 const Task = require('../models/Task');
+const RecurringTask = require('../models/RecurringTask');
 const VideoCompressionQueue = require('../models/VideoCompressionQueue');
 const { uploadToS3 } = require('../utils/s3Service');
 const { s3Folder } = require('../utils/taskMedia');
@@ -39,13 +40,18 @@ const compressVideo = (inputPath, outputPath) => new Promise((resolve, reject) =
 });
 
 // ========================================================
-// POINT THE TASK AT THE NEW S3 URL
+// POINT THE OWNER AT THE NEW S3 URL
 // ========================================================
-// Both media arrays live at the top level of the task, so a positional match
-// on the media _id is all that's needed.
+// A queued video belongs either to a Task or to a RecurringTask's brief. Both
+// keep their media in a top-level `attachments` array of the same shape, so the
+// only difference is which collection to update.
+const ownerFor = (job) => (job.ownerModel === 'RecurringTask' ? RecurringTask : Task);
+
+// Both media arrays live at the top level, so a positional match on the media
+// _id is all that's needed.
 const attachCompressedUrl = async (job, url) => {
     const field = job.field === 'completionProof' ? 'completionProof' : 'attachments';
-    return Task.updateOne(
+    return ownerFor(job).updateOne(
         { _id: job.taskId, [`${field}._id`]: job.mediaId },
         { $set: { [`${field}.$.url`]: url, [`${field}.$.status`]: 'ready' } }
     );
@@ -53,7 +59,7 @@ const attachCompressedUrl = async (job, url) => {
 
 const markMediaFailed = async (job) => {
     const field = job.field === 'completionProof' ? 'completionProof' : 'attachments';
-    return Task.updateOne(
+    return ownerFor(job).updateOne(
         { _id: job.taskId, [`${field}._id`]: job.mediaId },
         { $set: { [`${field}.$.status`]: 'failed' } }
     );
@@ -79,13 +85,13 @@ const processJob = async (job) => {
         job.attempts += 1;
         await job.save();
 
-        // The task (or just this attachment) may have been removed since upload.
-        const task = await Task.findById(job.taskId).select('_id');
-        if (!task) {
-            console.log(`[VIDEO CRON] Task ${job.taskId} is gone — discarding raw file.`);
+        // The owner (or just this attachment) may have been removed since upload.
+        const owner = await ownerFor(job).findById(job.taskId).select('_id');
+        if (!owner) {
+            console.log(`[VIDEO CRON] ${job.ownerModel || 'Task'} ${job.taskId} is gone — discarding raw file.`);
             safeUnlink(job.localPath);
             job.status = 'done';
-            job.lastError = 'Parent task no longer exists';
+            job.lastError = 'Parent record no longer exists';
             job.processedAt = new Date();
             await job.save();
             return;
