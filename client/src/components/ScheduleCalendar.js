@@ -48,7 +48,10 @@ const ScheduleCalendar = ({
     mode = 'multi'
 }) => {
     const isRange = mode === 'range';
-    const start = parseYmd(minDate);
+    // Open on the first chosen day, else today — never on minDate. A picker with
+    // a far-back floor (notification history uses 2000-01-01) would otherwise
+    // open twenty-odd years in the past.
+    const start = parseYmd(selected[0] || (todayYmd() >= minDate ? todayYmd() : minDate));
     const [cursor, setCursor] = useState({ year: start.getFullYear(), month: start.getMonth() });
     const [anchor, setAnchor] = useState(null);
     const [hover, setHover] = useState(null);

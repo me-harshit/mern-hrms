@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faSearch, faTimes, faCheck, faBan, faInbox,
+    faSearch, faTimes, faCheck, faBan, faInbox, faTrash,
     faFolderOpen, faBuilding, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
@@ -96,6 +96,34 @@ const SelfAssignedList = () => {
             fetchTasks();
         } catch (err) {
             Swal.fire('Error', err.response?.data?.message || 'Could not record the decision.', 'error');
+        } finally {
+            setDeciding(null);
+        }
+    };
+
+    const remove = async (task) => {
+        const who = task.assignees[0]?.name || 'this employee';
+        const result = await Swal.fire({
+            title: 'Delete this task?',
+            html: `<p style="margin:0 0 4px">“${task.title}” will be removed from ${who}’s board.</p>`
+                + `<p style="margin:0;font-size:0.85rem;color:#64748b">Rejecting instead lets them fix it and resubmit — deleting does not.</p>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            confirmButtonText: 'Yes, delete it'
+        });
+        if (!result.isConfirmed) return;
+
+        setDeciding(task._id);
+        try {
+            await api.delete(`/tasks/${task._id}`);
+            Swal.fire({
+                icon: 'success', title: 'Task deleted',
+                toast: true, position: 'top-end', timer: 1800, showConfirmButton: false
+            });
+            fetchTasks();
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not delete the task.', 'error');
         } finally {
             setDeciding(null);
         }
@@ -240,12 +268,18 @@ const SelfAssignedList = () => {
                                                 )}
                                                 {task.approvalStatus !== 'Rejected' && (
                                                     <button
-                                                        className="icon-btn danger" title="Reject" aria-label="Reject"
+                                                        className="icon-btn" title="Reject (they can fix and resubmit)" aria-label="Reject"
                                                         disabled={busy} onClick={() => decide(task, 'Rejected')}
                                                     >
                                                         <FontAwesomeIcon icon={faBan} />
                                                     </button>
                                                 )}
+                                                <button
+                                                    className="icon-btn danger" title="Delete task" aria-label="Delete task"
+                                                    disabled={busy} onClick={() => remove(task)}
+                                                >
+                                                    <FontAwesomeIcon icon={faTrash} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>

@@ -1170,7 +1170,17 @@ router.delete('/:id', auth, async (req, res) => {
         if (!task) return res.status(404).json({ message: 'Task not found' });
 
         const isOwner = task.assignedBy.toString() === req.user.id;
-        if (!isOwner && !IS_PRIVILEGED.includes(req.user.role)) {
+        let allowed = isOwner || IS_PRIVILEGED.includes(req.user.role);
+
+        // On a self-assigned task `assignedBy` is whoever the employee *named*,
+        // which is not necessarily anyone with authority over it. Whoever can
+        // approve the request can also throw it away — otherwise a Team Lead can
+        // reject a request from their own team but not remove it.
+        if (!allowed && task.isSelfAssigned) {
+            allowed = await canApproveFor(task.assignees[0], req.user);
+        }
+
+        if (!allowed) {
             return res.status(403).json({ message: 'Only the assigner can remove this task' });
         }
 
