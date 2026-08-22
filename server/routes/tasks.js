@@ -24,7 +24,8 @@ const {
     getScopedEmployees,
     getScopedProjects,
     getApproversFor,
-    canApproveFor
+    canApproveFor,
+    getTaskVisibilityFilter
 } = require('../utils/taskScoping');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
@@ -529,6 +530,10 @@ router.get('/self-assigned', auth, async (req, res) => {
         if (req.query.employeeId && req.query.employeeId !== 'All') {
             andConditions.push({ assignees: req.query.employeeId });
         }
+        // The work status, as distinct from the approval status above.
+        if (req.query.status && req.query.status !== 'All' && TASK_STATUSES.includes(req.query.status)) {
+            andConditions.push({ status: req.query.status });
+        }
         if (req.query.search) {
             andConditions.push({ title: new RegExp(req.query.search, 'i') });
         }
@@ -575,8 +580,11 @@ router.get('/managed', auth, async (req, res) => {
         const andConditions = [{ isArchived: false }];
 
         // Admin/HR see everything; everyone else sees what they created.
-        if (!IS_PRIVILEGED.includes(req.user.role)) {
-            andConditions.push({ assignedBy: req.user.id });
+        // A Team Lead sees their own team's work whoever assigned it; a Manager
+        // sees what they handed out. Admin/HR see everything.
+        const visibility = await getTaskVisibilityFilter(req.user);
+        if (visibility) {
+            andConditions.push(visibility);
         } else if (req.query.assignedBy && req.query.assignedBy !== 'All') {
             andConditions.push({ assignedBy: req.query.assignedBy });
         }

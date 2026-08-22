@@ -895,7 +895,8 @@
 }
 
 .sa-table .col-priority {
-    width: 148px;
+    /* Two stacked badges: approval state and work state. */
+    width: 168px;
 }
 
 /* Nothing in either actions cell may wrap onto a second line. */

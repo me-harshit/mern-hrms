@@ -457,3 +457,12 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Approval state above work state, so the Status column answers both
+   "was this signed off" and "how far along is it". */
+.sa-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}

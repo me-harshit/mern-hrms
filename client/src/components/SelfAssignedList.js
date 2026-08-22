@@ -30,6 +30,9 @@ const SelfAssignedList = () => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [approvalStatus, setApprovalStatus] = useState('Pending');
+    // The work status (Pending / In Progress / On Hold / Completed), which is a
+    // different question from whether the request was approved.
+    const [workStatus, setWorkStatus] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [deciding, setDeciding] = useState(null);
@@ -44,13 +47,17 @@ const SelfAssignedList = () => {
         return () => clearTimeout(t);
     }, [searchTerm]);
 
-    useEffect(() => setCurrentPage(1), [debouncedSearch, approvalStatus]);
+    useEffect(() => setCurrentPage(1), [debouncedSearch, approvalStatus, workStatus]);
 
     const fetchTasks = useCallback(async () => {
         setLoading(true);
         try {
             const res = await api.get('/tasks/self-assigned', {
-                params: { page: currentPage, limit: itemsPerPage, search: debouncedSearch, approvalStatus }
+                params: {
+                    page: currentPage, limit: itemsPerPage,
+                    search: debouncedSearch, approvalStatus,
+                    ...(workStatus !== 'All' ? { status: workStatus } : {})
+                }
             });
             setTasks(res.data.data || []);
             setTotalPages(res.data.pagination.totalPages);
@@ -61,7 +68,7 @@ const SelfAssignedList = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, itemsPerPage, debouncedSearch, approvalStatus]);
+    }, [currentPage, itemsPerPage, debouncedSearch, approvalStatus, workStatus]);
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -142,7 +149,8 @@ const SelfAssignedList = () => {
         return `${shortDate(start)} → ${shortDate(due)}`;
     };
 
-    const activeFilterCount = (approvalStatus !== 'All' ? 1 : 0) + (searchTerm ? 1 : 0);
+    const activeFilterCount = (approvalStatus !== 'All' ? 1 : 0)
+        + (workStatus !== 'All' ? 1 : 0) + (searchTerm ? 1 : 0);
 
     return (
         <div className="fade-in">
@@ -169,10 +177,22 @@ const SelfAssignedList = () => {
                         <option value="All">All</option>
                     </select>
 
+                    <select
+                        className={`task-filter-select ${workStatus !== 'All' ? 'is-active' : ''}`}
+                        value={workStatus}
+                        onChange={(e) => setWorkStatus(e.target.value)}
+                    >
+                        <option value="All">Any work status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="On Hold">On Hold</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+
                     {activeFilterCount > 0 && (
                         <button
                             className="task-filter-clear"
-                            onClick={() => { setApprovalStatus('All'); setSearchTerm(''); }}
+                            onClick={() => { setApprovalStatus('All'); setWorkStatus('All'); setSearchTerm(''); }}
                         >
                             <FontAwesomeIcon icon={faTimes} /> Clear ({activeFilterCount})
                         </button>
@@ -255,9 +275,19 @@ const SelfAssignedList = () => {
                                         </td>
 
                                         <td data-label="Status" className="col-priority">
-                                            <span className={`ap-badge ${slug(task.approvalStatus)}`}>
-                                                {task.approvalStatus === 'Pending' ? 'Awaiting' : task.approvalStatus}
-                                            </span>
+                                            <div className="sa-status">
+                                                <span
+                                                    className={`ap-badge ${slug(task.approvalStatus)}`}
+                                                    title={task.approvedBy ? `Decided by ${task.approvedBy.name}` : 'Waiting on approval'}
+                                                >
+                                                    {task.approvalStatus === 'Pending' ? 'Awaiting' : task.approvalStatus}
+                                                </span>
+                                                {/* Approval and progress are different questions: a task can be
+                                                    approved and untouched, or half done and still unapproved. */}
+                                                <span className={`task-status-badge ${slug(task.status)}`} title="Work status">
+                                                    {task.status}
+                                                </span>
+                                            </div>
                                             {task.approvedBy && (
                                                 <div className="sa-employee-id" style={{ marginTop: '4px' }}>
                                                     by {task.approvedBy.name}

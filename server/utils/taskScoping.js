@@ -87,6 +87,42 @@ const canApproveFor = async (employeeId, reqUser) => {
     return approvers.some(a => a._id.toString() === reqUser.id);
 };
 
+/**
+ * What a user is allowed to *see* in the task lists.
+ *
+ * Distinct from getScopedEmployeeFilter, which answers "who may I assign to".
+ * A Team Lead is responsible for their team's work whoever handed it out, so
+ * they see anything assigned to one of their people — not merely what they
+ * created themselves, which used to hide a task a Manager gave to their own
+ * team member.
+ *
+ * Managers keep creator-based visibility deliberately: their assign scope is
+ * the whole company, so scoping their *view* the same way would show them every
+ * task in the business, which is not what this changes.
+ *
+ * @returns a Mongo filter fragment, or null for "no restriction".
+ */
+const getTaskVisibilityFilter = async (reqUser, { assigneeField = 'assignees' } = {}) => {
+    if (IS_PRIVILEGED.includes(reqUser.role)) return null;
+
+    if (reqUser.role === 'TEAM LEAD') {
+        const me = await User.findById(reqUser.id).select('email');
+        if (!me) return { assignedBy: reqUser.id };
+
+        const team = await User.find({ teamLeadsEmail: me.email.toLowerCase() }).select('_id');
+        return {
+            $or: [
+                { [assigneeField]: { $in: team.map(u => u._id) } },
+                // Work they handed out themselves stays visible even if that
+                // person has since moved off their team.
+                { assignedBy: reqUser.id }
+            ]
+        };
+    }
+
+    return { assignedBy: reqUser.id };
+};
+
 module.exports = {
     CAN_ASSIGN,
     IS_PRIVILEGED,
@@ -95,5 +131,6 @@ module.exports = {
     getScopedEmployees,
     getScopedProjects,
     getApproversFor,
-    canApproveFor
+    canApproveFor,
+    getTaskVisibilityFilter
 };

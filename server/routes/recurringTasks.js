@@ -14,7 +14,8 @@ const {
     CAN_ASSIGN,
     IS_PRIVILEGED,
     getScopedEmployees,
-    getScopedProjects
+    getScopedProjects,
+    getTaskVisibilityFilter
 } = require('../utils/taskScoping');
 
 const {
@@ -441,9 +442,11 @@ router.get('/', auth, async (req, res) => {
         // — the same trap that hid historical tasks from the admin list.
         const andConditions = [{ isArchived: { $ne: true } }];
 
-        // Admin/HR see everything; everyone else sees what they created.
-        if (!IS_PRIVILEGED.includes(req.user.role)) {
-            andConditions.push({ assignedBy: req.user.id });
+        // Same rule as the one-off task list: a Team Lead sees schedules running
+        // for their own team, whoever set them up.
+        const visibility = await getTaskVisibilityFilter(req.user);
+        if (visibility) {
+            andConditions.push(visibility);
         } else if (req.query.assignedBy && req.query.assignedBy !== 'All') {
             andConditions.push({ assignedBy: req.query.assignedBy });
         }
