@@ -253,7 +253,11 @@ const SelfAssignedList = () => {
                                         <td data-label="Task" className="col-task">
                                             <span className="task-title-cell" title={task.title}>{task.title}</span>
                                             <span className="sa-claimed">
-                                                <FontAwesomeIcon icon={faUserPen} />
+                                                <Avatar
+                                                    name={task.assignedBy?.name}
+                                                    profilePic={task.assignedBy?.profilePic}
+                                                    className="sa-inline-avatar"
+                                                />
                                                 asked by {task.assignedBy?.name || 'someone'}
                                             </span>
                                             {task.approvalStatus === 'Rejected' && task.approvalNote && (
@@ -289,7 +293,12 @@ const SelfAssignedList = () => {
                                                 </span>
                                             </div>
                                             {task.approvedBy && (
-                                                <div className="sa-employee-id" style={{ marginTop: '4px' }}>
+                                                <div className="sa-decider" title={`${task.approvalStatus} by ${task.approvedBy.name}`}>
+                                                    <Avatar
+                                                        name={task.approvedBy.name}
+                                                        profilePic={task.approvedBy.profilePic}
+                                                        className="sa-inline-avatar"
+                                                    />
                                                     by {task.approvedBy.name}
                                                 </div>
                                             )}

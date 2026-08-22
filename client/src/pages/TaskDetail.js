@@ -390,6 +390,64 @@ const TaskDetail = () => {
                         )}
                     </section>
 
+                    {/* Where this task came from. Self-assigned work has two people
+                        behind it — whoever the employee says asked for it, and
+                        whoever signed it off — and conflating them hides who is
+                        actually accountable. */}
+                    {task.isSelfAssigned && (
+                        <section className="td-panel">
+                            <header className="td-panel-head">
+                                <h2><FontAwesomeIcon icon={faUserPen} /> Self Assigned</h2>
+                            </header>
+                            <div className="td-panel-body">
+                                <ul className="sa-prov">
+                                    <li>
+                                        <Avatar
+                                            name={task.assignees[0]?.name}
+                                            profilePic={task.assignees[0]?.profilePic}
+                                            className="sa-prov-avatar"
+                                        />
+                                        <span className="sa-prov-name">{task.assignees[0]?.name || 'Unknown'}</span>
+                                        <span className="sa-prov-role">logged this</span>
+                                    </li>
+                                    <li>
+                                        <Avatar
+                                            name={task.assignedBy?.name}
+                                            profilePic={task.assignedBy?.profilePic}
+                                            className="sa-prov-avatar"
+                                        />
+                                        <span className="sa-prov-name">{task.assignedBy?.name || 'Unknown'}</span>
+                                        <span className="sa-prov-role">asked for it</span>
+                                    </li>
+                                    <li>
+                                        {task.approvedBy ? (
+                                            <>
+                                                <Avatar
+                                                    name={task.approvedBy.name}
+                                                    profilePic={task.approvedBy.profilePic}
+                                                    className="sa-prov-avatar"
+                                                />
+                                                <span className="sa-prov-name">{task.approvedBy.name}</span>
+                                                <span className={`sa-prov-role ${task.approvalStatus === 'Rejected' ? 'is-rejected' : 'is-approved'}`}>
+                                                    {task.approvalStatus === 'Rejected' ? 'rejected it' : 'approved it'}
+                                                    {task.approvedAt && ` · ${new Date(task.approvedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="sa-prov-avatar is-waiting">
+                                                    <FontAwesomeIcon icon={faHourglassHalf} />
+                                                </span>
+                                                <span className="sa-prov-name muted">Not yet decided</span>
+                                                <span className="sa-prov-role">awaiting approval</span>
+                                            </>
+                                        )}
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+                    )}
+
                     {/* Details */}
                     <section className="td-panel">
                         <header className="td-panel-head"><h2>Details</h2></header>

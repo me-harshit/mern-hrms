@@ -79,9 +79,20 @@ const getApproversFor = async (employeeId) => {
     }).select('_id name email role');
 };
 
-// Is this specific user allowed to decide on that employee's request?
+/**
+ * Is this specific user allowed to decide on that employee's request?
+ *
+ * Admin, HR and any Manager may sign off anyone's — a Manager's remit is the
+ * whole company, the same reason CAN_ASSIGN_ANYONE lets them hand work to
+ * anybody. A Team Lead is limited to their own team, which is what
+ * getApproversFor works out.
+ *
+ * The approval *request* still only notifies the employee's own chain plus
+ * Admin/HR, so this widens who may act without pinging every manager in the
+ * business about every request.
+ */
 const canApproveFor = async (employeeId, reqUser) => {
-    if (IS_PRIVILEGED.includes(reqUser.role)) return true;
+    if (CAN_ASSIGN_ANYONE.includes(reqUser.role)) return true;
 
     const approvers = await getApproversFor(employeeId);
     return approvers.some(a => a._id.toString() === reqUser.id);

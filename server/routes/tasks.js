@@ -10,6 +10,10 @@ const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 const VideoCompressionQueue = require('../models/VideoCompressionQueue');
 const TaskComment = require('../models/TaskComment');
+// Required for its side effect: this file populates recurringTaskId, and
+// Mongoose needs that schema registered. It only worked before because
+// index.js loads the recurring cron, which is a fragile thing to rely on.
+require('../models/RecurringTask');
 const { emitToTask } = require('../utils/realtime');
 const { deleteFromS3 } = require('../utils/s3Service');
 const fs = require('fs');
@@ -228,6 +232,7 @@ router.get('/my', auth, async (req, res) => {
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
             .populate('assignees', 'name email employeeId profilePic')
+            .populate('approvedBy', 'name profilePic')
             .sort({ dueDate: 1 })
             .skip(skip)
             .limit(limit);
@@ -636,6 +641,7 @@ router.get('/managed', auth, async (req, res) => {
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
             .populate('assignees', 'name email employeeId profilePic')
+            .populate('approvedBy', 'name profilePic')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -893,6 +899,8 @@ router.get('/:id', auth, async (req, res) => {
             .populate('assignees', 'name email employeeId profilePic')
             .populate('statusUpdatedBy', 'name profilePic')
             .populate('completionProof.uploadedBy', 'name profilePic')
+            // Who signed the request off, so the task page can say so plainly.
+            .populate('approvedBy', 'name profilePic')
             // A generated task carries no brief of its own — it points back at
             // the schedule's (TaskPlan.md 13.7). Null for ordinary tasks.
             .populate('recurringTaskId', 'title targetCount attachments occurrences');
