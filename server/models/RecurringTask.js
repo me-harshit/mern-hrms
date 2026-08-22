@@ -107,6 +107,11 @@ const recurringTaskSchema = new mongoose.Schema({
 
     status: { type: String, enum: SCHEDULE_STATUSES, default: 'Active' },
 
+    // Soft delete, exactly as Task.isArchived works: the schedule leaves the
+    // list but its occurrence log survives, so the generated tasks that point
+    // back at it keep their brief and their "Day 3 of 10".
+    isArchived: { type: Boolean, default: false },
+
     assigneeState: [assigneeStateSchema],
     occurrences: [occurrenceSchema]
 }, { timestamps: true });

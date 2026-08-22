@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faUserTie, faEdit, faCalendarAlt, faSearch, faSun, faMoon, faEye } from '@fortawesome/free-solid-svg-icons';
+import { faPlus, faEdit, faCalendarAlt, faSearch, faSun, faMoon, faEye } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination'; 
+import Avatar from '../../components/Avatar';
 import '../../styles/App.css';
 
 const Employees = () => {
@@ -120,9 +121,11 @@ const Employees = () => {
                                 <tr key={emp._id}>
                                     <td data-label="Employee">
                                         <div className="flex-row gap-10">
-                                            <div className="table-avatar">
-                                                <FontAwesomeIcon icon={faUserTie} />
-                                            </div>
+                                            <Avatar
+                                                name={emp.name}
+                                                profilePic={emp.profilePic}
+                                                className="table-avatar"
+                                            />
                                             <div>
                                                 <div 
                                                     className="fw-600 text-dark-blue" 

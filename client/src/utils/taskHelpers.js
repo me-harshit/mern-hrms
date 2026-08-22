@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { SERVER_URL } from './api';
 
 export const STATUS_OPTIONS = ['Pending', 'In Progress', 'On Hold', 'Completed'];
@@ -12,8 +13,7 @@ export const taskContextLabel = (task) =>
 // "In Progress" -> "inprogress", used for status/priority CSS modifiers.
 export const slug = (str) => (str || '').toLowerCase().replace(/[^a-z]/g, '');
 
-export const initials = (name) =>
-    (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
 
 // Videos live on the VPS until the nightly job moves them to S3, so their urls
 // are server-relative until then. S3 urls are absolute and pass straight through.
@@ -53,4 +53,32 @@ export const dueLabel = (dueDate, isDone) => {
     if (days === 1) return { text: 'Due tomorrow', tone: 'soon' };
     if (days <= 3) return { text: `${days}d left`, tone: 'soon' };
     return { text: due.toLocaleDateString(), tone: 'normal' };
+};
+
+/**
+ * Confirm deleting a schedule, letting the admin decide what happens to the
+ * days it already generated.
+ *
+ * Defaults to leaving them alone: those are real tasks people may have
+ * completed, with proof and a discussion thread attached. Clearing them is the
+ * deliberate choice, not the accident.
+ *
+ * @returns {null} if cancelled, otherwise { clearOpen: boolean }
+ */
+export const confirmDeleteSchedule = async (title) => {
+    const { isConfirmed, value } = await Swal.fire({
+        title: 'Delete this schedule?',
+        html: `<p style="margin:0 0 4px">“${title}” will stop generating tasks and leave the list.</p>`
+            + `<p style="margin:0;font-size:0.85rem;color:#64748b">Days it already created stay as they are unless you tick the box.</p>`,
+        icon: 'warning',
+        input: 'checkbox',
+        inputValue: 0,
+        inputPlaceholder: 'Also remove unfinished days from employees’ boards',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'Delete schedule'
+    });
+
+    if (!isConfirmed) return null;
+    return { clearOpen: Boolean(value) };
 };

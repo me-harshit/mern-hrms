@@ -3,7 +3,8 @@ import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFolderOpen, faPlus, faEdit, faSearch, faCalendarAlt, faUserTie } from '@fortawesome/free-solid-svg-icons';
-import Pagination from '../../components/Pagination'; // 👇 NEW: Modular Pagination
+import Pagination from '../../components/Pagination';
+import Avatar from '../../components/Avatar'; // 👇 NEW: Modular Pagination
 import '../../styles/App.css';
 
 const Projects = () => {
@@ -299,9 +300,22 @@ const Projects = () => {
                                     </td>
                                    
                                     <td data-label="Lead & Dates">
-                                        <div className="fw-600 text-dark-blue">
-                                            <FontAwesomeIcon icon={faUserTie} style={{ color: '#94a3b8', marginRight: '5px' }} />
-                                            {proj.projectLead?.name || 'Unassigned'}
+                                        <div className="proj-lead">
+                                            {proj.projectLead ? (
+                                                <>
+                                                    <Avatar
+                                                        name={proj.projectLead.name}
+                                                        profilePic={proj.projectLead.profilePic}
+                                                        className="proj-lead-avatar"
+                                                    />
+                                                    <span>{proj.projectLead.name}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FontAwesomeIcon icon={faUserTie} style={{ color: '#94a3b8' }} />
+                                                    <span className="text-muted">Unassigned</span>
+                                                </>
+                                            )}
                                         </div>
                                         <div className="text-small text-muted" style={{ marginTop: '4px' }}>
                                             <FontAwesomeIcon icon={faCalendarAlt} style={{ marginRight: '5px' }} />

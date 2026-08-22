@@ -11,6 +11,7 @@ import {
     faFolderOpen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
+import Avatar from '../../components/Avatar';
 import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
@@ -486,9 +487,11 @@ const EmployeeProfile = () => {
 
             {/* SUMMARY CARD */}
             <div className="control-card p-20 mb-20" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: '#f8fafc' }}>
-                <div style={{ width: '80px', height: '80px', background: '#215D7B', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' }}>
-                    {user.name?.charAt(0)}
-                </div>
+                <Avatar
+                    name={user.name}
+                    profilePic={user.profilePic}
+                    className="emp-summary-avatar"
+                />
                 <div style={{ flex: 1 }}>
                     <h2 style={{ margin: '0 0 5px 0', fontSize: '22px' }}>{user.name}</h2>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>

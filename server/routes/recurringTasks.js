@@ -303,14 +303,123 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
 
         const populated = await RecurringTask.findById(schedule._id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId');
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic');
 
         res.status(201).json({ schedule: populated, generatedToday });
     } catch (err) {
         discardStagedFiles(req.files);
         console.error('Recurring Task Creation Error:', err);
         res.status(500).json({ message: 'Server Error while creating the schedule' });
+    }
+});
+
+// ==========================================
+// 2b. CONVERT AN EXISTING TASK INTO A SCHEDULE
+// ==========================================
+/**
+ * "This one-off should actually repeat."
+ *
+ * Copies the task's brief, assignees and media onto a new schedule and archives
+ * the original, so the schedule takes over rather than sitting beside a
+ * duplicate of itself.
+ *
+ * The fiddly part is media: a video still waiting on the nightly compression has
+ * a VideoCompressionQueue row pointing at the *task*. Left alone, the job would
+ * write the S3 url back to the archived task and the schedule's copy would keep
+ * a staged path that gets deleted — the §13.7 trap, arriving by a different
+ * route. So the queue rows are re-pointed at the schedule as part of the move.
+ */
+router.post('/from-task/:taskId', auth, async (req, res) => {
+    try {
+        if (!CAN_ASSIGN.includes(req.user.role)) {
+            return res.status(403).json({ message: 'You are not allowed to assign tasks' });
+        }
+
+        const task = await Task.findById(req.params.taskId).populate('projectId', 'name');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        if (task.recurringTaskId) {
+            return res.status(400).json({ message: 'This task already belongs to a recurring schedule' });
+        }
+        if (task.isArchived) {
+            return res.status(400).json({ message: 'This task has been removed' });
+        }
+        if (task.isSelfAssigned && task.approvalStatus !== 'Approved') {
+            return res.status(400).json({ message: 'Approve this task before making it recurring' });
+        }
+
+        const canConvert = idOf(task.assignedBy) === req.user.id || IS_PRIVILEGED.includes(req.user.role);
+        if (!canConvert) {
+            return res.status(403).json({ message: 'Only the assigner can convert this task' });
+        }
+
+        const parsed = normaliseDates(req.body.plannedDates);
+        if (parsed.error) return res.status(400).json({ message: parsed.error });
+
+        const assigneeIds = task.assignees.map(a => a.toString());
+        if (assigneeIds.length === 0) {
+            return res.status(400).json({ message: 'This task has nobody assigned to it' });
+        }
+
+        const schedule = new RecurringTask({
+            title: task.title,
+            description: task.description,
+            taskType: task.taskType,
+            projectId: task.taskType === 'Regular Office Task' ? null : (task.projectId?._id || task.projectId),
+            priority: task.priority,
+            // Carried over by value; the queue rows below are what keep a
+            // still-compressing video pointing at the right document.
+            attachments: task.attachments,
+            assignedBy: task.assignedBy,
+            assignees: assigneeIds,
+            plannedDates: parsed.dates,
+            targetCount: parsed.dates.length,
+            skipSundays: req.body.skipSundays !== false,
+            skipHolidays: req.body.skipHolidays !== false,
+            skipOnLeave: req.body.skipOnLeave !== false,
+            assigneeState: assigneeIds.map(id => ({ user: id, extraDates: [], generatedCount: 0, status: 'Active' }))
+        });
+
+        await schedule.save();
+
+        await VideoCompressionQueue.updateMany(
+            { taskId: task._id, field: 'attachments', status: { $in: ['queued', 'failed'] } },
+            { $set: { ownerModel: 'RecurringTask', taskId: schedule._id } }
+        );
+
+        // The schedule replaces it, so the one-off comes off the boards.
+        task.isArchived = true;
+        await task.save();
+
+        const actor = await User.findById(req.user.id).select('name');
+        await Promise.all(assigneeIds.map(id => notify(
+            id,
+            'Task is now a daily task',
+            `${actor?.name || 'Your manager'} turned "${task.title}" into a daily task for ${parsed.dates.length} day(s).`,
+            `/my-tasks`
+        )));
+
+        let generatedToday = 0;
+        if (parsed.dates.includes(todayIST())) {
+            try {
+                const { generateForSchedule } = require('../cron/recurringTaskCron');
+                generatedToday = await generateForSchedule(schedule, todayIST());
+            } catch (err) {
+                console.error('[RECURRING] Immediate generation failed:', err.message);
+            }
+        }
+
+        const populated = await RecurringTask.findById(schedule._id)
+            .populate('projectId', 'name')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic');
+
+        res.status(201).json({ schedule: populated, generatedToday });
+    } catch (err) {
+        console.error('Convert To Recurring Error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Task not found' });
+        res.status(500).json({ message: 'Server Error while converting the task' });
     }
 });
 
@@ -325,7 +434,10 @@ router.get('/', auth, async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
 
-        const andConditions = [];
+        // $ne rather than `false`: schedules created before isArchived existed
+        // have no such field, and an equality match would hide every one of them
+        // — the same trap that hid historical tasks from the admin list.
+        const andConditions = [{ isArchived: { $ne: true } }];
 
         // Admin/HR see everything; everyone else sees what they created.
         if (!IS_PRIVILEGED.includes(req.user.role)) {
@@ -344,13 +456,13 @@ router.get('/', auth, async (req, res) => {
             andConditions.push({ title: new RegExp(req.query.search, 'i') });
         }
 
-        const query = andConditions.length ? { $and: andConditions } : {};
+        const query = { $and: andConditions };
 
         const totalRecords = await RecurringTask.countDocuments(query);
         const schedules = await RecurringTask.find(query)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
@@ -394,8 +506,8 @@ router.get('/:id', auth, async (req, res) => {
     try {
         const schedule = await RecurringTask.findById(req.params.id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
             .populate('occurrences.taskId', 'status title');
 
         if (!schedule) return res.status(404).json({ message: 'Schedule not found' });
@@ -488,13 +600,70 @@ router.put('/:id', auth, async (req, res) => {
 
         const populated = await RecurringTask.findById(schedule._id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId');
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic');
 
         res.json(populated);
     } catch (err) {
         console.error('Recurring Update Error:', err);
         res.status(500).json({ message: 'Server Error while updating the schedule' });
+    }
+});
+
+// ==========================================
+// 6. DELETE A SCHEDULE
+// ==========================================
+/**
+ * Soft delete, matching how `DELETE /api/tasks/:id` archives rather than
+ * destroys. The document stays so that tasks it already generated keep their
+ * brief and their day number — a hard delete would strip those from real work
+ * people have already done.
+ *
+ * `clearOpen=true` additionally takes unfinished days off employees' boards.
+ * Completed days are never touched: they are a record of work that happened.
+ */
+router.delete('/:id', auth, async (req, res) => {
+    try {
+        const schedule = await RecurringTask.findById(req.params.id);
+        if (!schedule) return res.status(404).json({ message: 'Schedule not found' });
+
+        const canDelete = idOf(schedule.assignedBy) === req.user.id ||
+            IS_PRIVILEGED.includes(req.user.role);
+        if (!canDelete) return res.status(403).json({ message: 'Access Denied' });
+
+        schedule.isArchived = true;
+        // Cancelled as well as archived: the cron looks for status 'Active', so
+        // this is what actually stops tomorrow morning's run.
+        if (!['Completed', 'Cancelled'].includes(schedule.status)) {
+            schedule.status = 'Cancelled';
+        }
+        await schedule.save();
+
+        let clearedTasks = 0;
+        if (req.query.clearOpen === 'true') {
+            const result = await Task.updateMany(
+                {
+                    recurringTaskId: schedule._id,
+                    status: { $ne: 'Completed' },
+                    isArchived: { $ne: true }
+                },
+                { $set: { isArchived: true } }
+            );
+            clearedTasks = result.modifiedCount || 0;
+
+            // Keep the compliance log honest — those days were not missed, they
+            // were withdrawn.
+            schedule.occurrences.forEach(o => {
+                if (o.outcome === 'pending') o.outcome = 'not-applicable';
+            });
+            await schedule.save();
+        }
+
+        res.json({ message: 'Schedule deleted', clearedTasks });
+    } catch (err) {
+        console.error('Recurring Delete Error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Schedule not found' });
+        res.status(500).json({ message: 'Server Error while deleting the schedule' });
     }
 });
 

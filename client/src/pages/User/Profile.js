@@ -3,38 +3,38 @@ import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faUser, faEnvelope, faPhone, faMapMarkerAlt,
-    faEdit, faSave, faTimes, faCamera,
-    faIdCard, faFirstAid, faUserTie,
-    faBriefcase, faBuilding, faLaptopHouse, faTint, faHome, faClock
+    faEdit, faSave, faTimes, faCamera, faSpinner,
+    faBriefcase, faAddressBook
 } from '@fortawesome/free-solid-svg-icons';
 import ChangePassword from '../../components/ChangePassword';
+import Avatar from '../../components/Avatar';
+import '../../styles/App.css';
+import '../../styles/profile.css';
 
+/**
+ * A single bordered card holding every part of the profile, hairline-separated
+ * into sections, with each section's action in a tinted footer bar.
+ *
+ * Security used to sit in its own card below the profile, which read as an
+ * unrelated feature bolted on; it is now the card's last section.
+ */
 const Profile = () => {
     const [user, setUser] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
 
-    // 👇 EXPANDED: Now holds all editable fields
     const [formData, setFormData] = useState({
         name: '', email: '', phoneNumber: '', currentAddress: '', permanentAddress: '',
         bloodGroup: '', aadhaar: '', emergencyContactName: '', emergencyContactRelation: '', emergencyContact: '',
         jobTitle: '', department: '', workLocation: '', shiftType: ''
     });
 
-    const SERVER_URL = process.env.NODE_ENV === 'production'
-        ? ''
-        : 'http://localhost:5000';
-
-    useEffect(() => {
-        fetchProfile();
-    }, []);
+    useEffect(() => { fetchProfile(); }, []);
 
     const fetchProfile = async () => {
         try {
             const res = await api.get('/auth/me');
             setUser(res.data);
-
-            // 👇 EXPANDED: Pre-fill all data for the edit form
             setFormData({
                 name: res.data.name || '',
                 email: res.data.email || '',
@@ -52,7 +52,7 @@ const Profile = () => {
                 shiftType: res.data.shiftType || ''
             });
         } catch (err) {
-            console.error("Error fetching profile", err);
+            console.error('Error fetching profile', err);
         }
     };
 
@@ -66,22 +66,16 @@ const Profile = () => {
             title: 'Uploading Profile Picture...',
             html: 'Please wait while we upload your image securely.',
             allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
+            didOpen: () => Swal.showLoading()
         });
 
         try {
             const res = await api.post('/auth/upload-avatar', uploadData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                },
+                headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                     const content = Swal.getHtmlContainer();
-                    if (content) {
-                        content.textContent = `Uploading: ${percentCompleted}%`;
-                    }
+                    if (content) content.textContent = `Uploading: ${percentCompleted}%`;
                 }
             });
 
@@ -99,6 +93,7 @@ const Profile = () => {
 
     const handleUpdate = async (e) => {
         e.preventDefault();
+        setSaving(true);
         try {
             const res = await api.put('/auth/update-profile', formData);
             setUser(res.data);
@@ -110,227 +105,212 @@ const Profile = () => {
             Swal.fire({ icon: 'success', title: 'Profile Updated', timer: 1500, showConfirmButton: false });
         } catch (err) {
             Swal.fire('Error', 'Could not update profile', 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
-    if (!user) return <div className="main-content">Loading profile...</div>;
+    if (!user) {
+        return (
+            <div className="main-content">
+                <div className="pf-page">
+                    <div className="pf-card">
+                        <div className="pf-hero" style={{ color: '#6b7280' }}>Loading profile...</div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
-    const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
+    // An unset field says so quietly rather than shouting "Not provided" in the
+    // same weight as real data.
+    const Field = ({ label, value, sub, span, mono }) => (
+        <div className={span ? 'pf-span-2' : undefined}>
+            <span className="pf-field-label">{label}</span>
+            <p className={`pf-field-value ${value ? '' : 'is-empty'} ${mono ? 'pf-mono' : ''}`}>
+                {value || '—'}
+                {value && sub && <span className="pf-field-sub">{sub}</span>}
+            </p>
+        </div>
+    );
+
+    const input = (label, key, placeholder, span) => (
+        <div className={`form-group ${span ? 'pf-span-2' : ''}`}>
+            <label className="input-label">{label}</label>
+            <input
+                className="custom-input"
+                type="text"
+                value={formData[key]}
+                onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
+                placeholder={placeholder}
+            />
+        </div>
+    );
+
+    const managers = user.reportingManagerName || [];
 
     return (
         <div className="profile-container fade-in">
-            <h1 className="page-title">My Profile</h1>
+            <div className="pf-page">
+                <h1 className="pf-page-title">My Profile</h1>
+                <p className="pf-page-sub">Your personal and employment details, and your sign-in password.</p>
 
-            <div className="profile-card">
-                <div className="profile-header">
-                    <div className="profile-avatar-container">
-                        {user.profilePic ? (
-                            <img
-                                src={user.profilePic?.startsWith('http') ? user.profilePic : `${SERVER_URL}${user.profilePic}`}
-                                alt="Profile"
-                                className="profile-img-large"
-                                onError={(e) => { e.target.onerror = null; e.target.src = '' }}
-                            />
-                        ) : (
-                            <div className="profile-avatar-large">{initials}</div>
+                <div className="pf-card">
+                    {/* ---------- hero ---------- */}
+                    <div className="pf-hero">
+                        <div className="pf-avatar-wrap">
+                            <Avatar name={user.name} profilePic={user.profilePic} className={user.profilePic ? "pf-avatar-img" : "pf-avatar"} />
+                            <label htmlFor="avatar-upload" className="pf-avatar-edit" title="Change photo">
+                                <FontAwesomeIcon icon={faCamera} />
+                                <input type="file" id="avatar-upload" hidden onChange={handleFileChange} accept="image/*" />
+                            </label>
+                        </div>
+
+                        <div className="pf-identity">
+                            <h2 className="pf-name">{user.name}</h2>
+                            <div className="pf-meta">
+                                <span className="pf-role">{user.role}</span>
+                                {user.jobTitle && <><span className="pf-dot" />{user.jobTitle}</>}
+                                <span className="pf-dot" />
+                                <span>{user.email}</span>
+                            </div>
+                        </div>
+
+                        {!isEditing && (
+                            <div className="pf-hero-actions">
+                                <button className="gts-btn secondary" onClick={() => setIsEditing(true)}>
+                                    <FontAwesomeIcon icon={faEdit} /> Edit profile
+                                </button>
+                            </div>
                         )}
-                        <label htmlFor="avatar-upload" className="avatar-edit-icon">
-                            <FontAwesomeIcon icon={faCamera} />
-                            <input
-                                type="file"
-                                id="avatar-upload"
-                                hidden
-                                onChange={handleFileChange}
-                                accept="image/*"
-                            />
-                        </label>
                     </div>
 
-                    <div className="profile-info-text">
-                        <h2>{user.name}</h2>
-                        <span className={`role-tag ${user.role.toLowerCase()}`}>{user.role}</span>
-                    </div>
+                    {isEditing ? (
+                        <form onSubmit={handleUpdate}>
+                            <div className="pf-section">
+                                <div className="pf-section-head">
+                                    <h2 className="pf-section-title"><FontAwesomeIcon icon={faBriefcase} /> Employment</h2>
+                                    <p className="pf-section-desc">Where you sit in the company and which shift you work.</p>
+                                </div>
+                                <div className="pf-form-grid">
+                                    {input('Job title', 'jobTitle', 'e.g. Software Engineer')}
+                                    {input('Department', 'department', 'e.g. Engineering')}
+                                    {input('Work location', 'workLocation', 'e.g. WFO')}
+                                    <div className="form-group">
+                                        <label className="input-label">Shift type</label>
+                                        <select
+                                            className="swal2-select custom-select"
+                                            value={formData.shiftType}
+                                            onChange={(e) => setFormData({ ...formData, shiftType: e.target.value })}
+                                        >
+                                            <option value="">Select shift</option>
+                                            <option value="DAY">Day shift</option>
+                                            <option value="NIGHT">Night shift</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
-                    {!isEditing && (
-                        <button className="edit-profile-btn" onClick={() => setIsEditing(true)}>
-                            <FontAwesomeIcon icon={faEdit} /> Edit Profile
-                        </button>
+                            <div className="pf-section">
+                                <div className="pf-section-head">
+                                    <h2 className="pf-section-title"><FontAwesomeIcon icon={faAddressBook} /> Personal</h2>
+                                    <p className="pf-section-desc">How the company reaches you, and who to call in an emergency.</p>
+                                </div>
+                                <div className="pf-form-grid">
+                                    <div className="form-group">
+                                        <label className="input-label">Full name *</label>
+                                        <input className="custom-input" type="text" required
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="input-label">Work email *</label>
+                                        <input className="custom-input" type="email" required
+                                            value={formData.email}
+                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+                                    </div>
+                                    {input('Phone number', 'phoneNumber', '+91 ...')}
+                                    {input('Blood group', 'bloodGroup', 'e.g. O+')}
+                                    {input('Government ID', 'aadhaar', 'XXXX-XXXX-XXXX')}
+                                    {input('Emergency contact name', 'emergencyContactName', 'Name of contact person')}
+                                    {input('Emergency relation', 'emergencyContactRelation', 'e.g. Spouse, Parent')}
+                                    {input('Emergency phone', 'emergencyContact', '+91 ...')}
+                                    {input('Current address', 'currentAddress', 'Current city, state', true)}
+                                    {input('Permanent address', 'permanentAddress', 'Permanent city, state', true)}
+                                </div>
+                            </div>
+
+                            <div className="pf-bar">
+                                <p className="pf-bar-note">Changes apply immediately across the portal.</p>
+                                <div className="pf-bar-actions">
+                                    <button type="button" className="gts-btn secondary" disabled={saving}
+                                        onClick={() => { setIsEditing(false); fetchProfile(); }}>
+                                        <FontAwesomeIcon icon={faTimes} /> Cancel
+                                    </button>
+                                    <button type="submit" className="gts-btn primary" disabled={saving}>
+                                        {saving
+                                            ? <><FontAwesomeIcon icon={faSpinner} spin /> Saving...</>
+                                            : <><FontAwesomeIcon icon={faSave} /> Save changes</>}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    ) : (
+                        <>
+                            <div className="pf-section">
+                                <div className="pf-section-head">
+                                    <h2 className="pf-section-title"><FontAwesomeIcon icon={faBriefcase} /> Employment</h2>
+                                </div>
+                                <div className="pf-grid">
+                                    <Field label="Job title" value={user.jobTitle} />
+                                    <Field label="Department" value={user.department} />
+                                    <Field
+                                        label="Work location"
+                                        value={user.workLocation}
+                                        sub={user.employmentType}
+                                    />
+                                    <Field label="Shift" value={user.shiftType === 'NIGHT' ? 'Night shift' : 'Day shift'} />
+                                    <Field
+                                        label="Reporting managers"
+                                        value={managers.length ? managers.join(', ') : ''}
+                                        sub={(user.reportingManagerEmail || []).join(', ')}
+                                    />
+                                    <Field
+                                        label="Member since"
+                                        value={new Date(user.createdAt).toLocaleDateString('en-GB', {
+                                            day: '2-digit', month: 'short', year: 'numeric'
+                                        })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pf-section">
+                                <div className="pf-section-head">
+                                    <h2 className="pf-section-title"><FontAwesomeIcon icon={faAddressBook} /> Personal</h2>
+                                </div>
+                                <div className="pf-grid">
+                                    <Field label="Email" value={user.email} sub={user.workEmail} />
+                                    <Field label="Phone" value={user.phoneNumber} />
+                                    <Field label="Blood group" value={user.bloodGroup} />
+                                    <Field label="Government ID" value={user.aadhaar} mono />
+                                    <Field
+                                        label="Emergency contact"
+                                        value={user.emergencyContactName
+                                            ? `${user.emergencyContactName}${user.emergencyContactRelation ? ` (${user.emergencyContactRelation})` : ''}`
+                                            : ''}
+                                        sub={user.emergencyContact}
+                                    />
+                                    <Field label="Current address" value={user.currentAddress || user.address} />
+                                    <Field label="Permanent address" value={user.permanentAddress} span />
+                                </div>
+                            </div>
+
+                            {/* Security is a section of this card, not a card of its own. */}
+                            <ChangePassword />
+                        </>
                     )}
                 </div>
-
-                <hr className="profile-divider" />
-
-                {isEditing ? (
-                    <form onSubmit={handleUpdate} className="profile-form fade-in">
-                        
-                        {/* --- EMPLOYMENT INFO SECTION --- */}
-                        <h3 style={{ color: '#215D7B', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '5px' }}>
-                            Employment Information
-                        </h3>
-                        <div className="form-grid" style={{ marginBottom: '30px' }}>
-                            <div className="form-group">
-                                <label className="input-label">Job Title</label>
-                                <input className="custom-input" type="text" value={formData.jobTitle} onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Department</label>
-                                <input className="custom-input" type="text" value={formData.department} onChange={(e) => setFormData({ ...formData, department: e.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Work Location</label>
-                                <input className="custom-input" type="text" value={formData.workLocation} onChange={(e) => setFormData({ ...formData, workLocation: e.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Shift Type</label>
-                                <select className="swal2-select custom-select" value={formData.shiftType} onChange={(e) => setFormData({ ...formData, shiftType: e.target.value })}>
-                                    <option value="">Select Shift</option>
-                                    <option value="DAY">Day Shift</option>
-                                    <option value="NIGHT">Night Shift</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* --- PERSONAL INFO SECTION --- */}
-                        <h3 style={{ color: '#215D7B', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '5px' }}>
-                            Personal Information
-                        </h3>
-                        <div className="form-grid">
-                            <div className="form-group">
-                                <label className="input-label">Full Name *</label>
-                                <input className="custom-input" type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Work Email *</label>
-                                <input className="custom-input" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Phone Number</label>
-                                <input className="custom-input" type="text" value={formData.phoneNumber} onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="+91 ..." />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Blood Group</label>
-                                <input className="custom-input" type="text" value={formData.bloodGroup} onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })} placeholder="e.g. O+" />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Government ID Number</label>
-                                <input className="custom-input" type="text" value={formData.aadhaar} onChange={(e) => setFormData({ ...formData, aadhaar: e.target.value })} placeholder="XXXX-XXXX-XXXX" />
-                            </div>
-                            <div className="form-group grid-span-2">
-                                <label className="input-label">Emergency Contact Name</label>
-                                <input className="custom-input" type="text" value={formData.emergencyContactName} onChange={(e) => setFormData({ ...formData, emergencyContactName: e.target.value })} placeholder="Name of contact person" />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Emergency Relation</label>
-                                <input className="custom-input" type="text" value={formData.emergencyContactRelation} onChange={(e) => setFormData({ ...formData, emergencyContactRelation: e.target.value })} placeholder="e.g. Spouse, Parent" />
-                            </div>
-                            <div className="form-group">
-                                <label className="input-label">Emergency Phone</label>
-                                <input className="custom-input" type="text" value={formData.emergencyContact} onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })} placeholder="+91 ..." />
-                            </div>
-                            <div className="form-group grid-span-2">
-                                <label className="input-label">Current Address</label>
-                                <input className="custom-input" type="text" value={formData.currentAddress} onChange={(e) => setFormData({ ...formData, currentAddress: e.target.value })} placeholder="Current city, state" />
-                            </div>
-                            <div className="form-group grid-span-2">
-                                <label className="input-label">Permanent Address</label>
-                                <input className="custom-input" type="text" value={formData.permanentAddress} onChange={(e) => setFormData({ ...formData, permanentAddress: e.target.value })} placeholder="Permanent city, state" />
-                            </div>
-                        </div>
-
-                        <div className="profile-actions" style={{ marginTop: '20px' }}>
-                            <button type="submit" className="save-btn"><FontAwesomeIcon icon={faSave} className="btn-icon" /> Save Changes</button>
-                            <button type="button" className="cancel-btn" onClick={() => setIsEditing(false)}><FontAwesomeIcon icon={faTimes} className="btn-icon" /> Cancel</button>
-                        </div>
-                    </form>
-                ) : (
-                    <div className="profile-details-grid fade-in">
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faBriefcase} className="detail-icon" />
-                            <div><label>Job Title</label><p>{user.jobTitle || 'Not provided'}</p></div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faBuilding} className="detail-icon" />
-                            <div><label>Department</label><p>{user.department || 'Not provided'}</p></div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faLaptopHouse} className="detail-icon" />
-                            <div><label>Work Location</label><p>{user.workLocation || 'Not set'}{user.employmentType ? ` · ${user.employmentType}` : ''}</p></div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faClock} className="detail-icon"/>
-                            <div>
-                                <label>Shift Type</label>
-                                <p className="fw-600 tracking-wide">
-                                    {user.shiftType === 'NIGHT' ? 'Night Shift' : 'Day Shift'}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faEnvelope} className="detail-icon" />
-                            <div><label>Email Address</label><p>{user.email}{user.workEmail ? <><br /><span className="text-small text-muted">{user.workEmail}</span></> : ''}</p></div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faPhone} className="detail-icon" />
-                            <div><label>Phone Number</label><p>{user.phoneNumber || 'Not provided'}</p></div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faTint} className="detail-icon" />
-                            <div><label>Blood Group</label><p>{user.bloodGroup || 'Not provided'}</p></div>
-                        </div>
-
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faIdCard} className="detail-icon" />
-                            <div>
-                                <label>Government ID</label>
-                                <p className="tracking-wide fw-600">
-                                    {user.aadhaar || 'Pending HR Update'}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faFirstAid} className="detail-icon" />
-                            <div>
-                                <label>Emergency Contact</label>
-                                <p className="tracking-wide fw-600">
-                                    {user.emergencyContactName ? `${user.emergencyContactName}${user.emergencyContactRelation ? ` (${user.emergencyContactRelation})` : ''}` : ''}
-                                    {user.emergencyContact ? <><br /><span className="text-small text-muted fw-normal">{user.emergencyContact}</span></> : (!user.emergencyContactName && 'Not provided')}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* --- REPORTING MANAGER FIELD (Still static as it references another user) --- */}
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faUserTie} className="detail-icon text-primary" />
-                            <div className="info-group">
-                                <label className="text-muted text-small d-block mb-5">Reporting Managers</label>
-                                {user.reportingManagerName && user.reportingManagerName.length > 0 ? (
-                                    <div className="fw-600">
-                                        {user.reportingManagerName.join(', ')} <br />
-                                        <span className="text-small text-muted fw-normal">{(user.reportingManagerEmail || []).join(', ')}</span>
-                                    </div>
-                                ) : (
-                                    <div className="fw-600 text-muted">Not Assigned</div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faMapMarkerAlt} className="detail-icon" />
-                            <div><label>Current Address</label><p>{user.currentAddress || user.address || 'Not provided'}</p></div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faHome} className="detail-icon" />
-                            <div><label>Permanent Address</label><p>{user.permanentAddress || 'Not provided'}</p></div>
-                        </div>
-                        <div className="detail-item">
-                            <FontAwesomeIcon icon={faUser} className="detail-icon" />
-                            <div><label>Member Since</label><p>{new Date(user.createdAt).toLocaleDateString('en-GB')}</p></div>
-                        </div>
-                    </div>
-                )}
             </div>
-
-            <ChangePassword />
         </div>
     );
 };

@@ -634,6 +634,8 @@ html {
   color: #334155;
 }
 
+/* Holds either the person's photo (an <img> from Avatar) or their initials,
+   so it needs object-fit for the former and legible type for the latter. */
 .table-avatar {
   width: 35px;
   height: 35px;
@@ -642,7 +644,11 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  object-fit: cover;
 }
 
 .role-tag {
@@ -700,119 +706,11 @@ html {
 }
 
 /* ==========================================================================
-   PROFILE PAGE STYLES
+   PROFILE PAGE
+   The profile page's own styles live in profile.css. What remains here is
+   only what other pages also use.
    ========================================================================== */
-.profile-card {
-  background: white;
-  border-radius: 16px;
-  padding: 30px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  max-width: 900px;
-}
 
-.profile-header {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  position: relative;
-}
-
-.profile-avatar-large {
-  width: 80px;
-  height: 80px;
-  background: var(--primary);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 700;
-}
-
-.profile-avatar-container {
-  position: relative;
-  width: 100px;
-  height: 100px;
-}
-
-.profile-img-large {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid #fff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.avatar-edit-icon {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  background: var(--primary);
-  color: white;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border: 2px solid white;
-  font-size: 14px;
-  transition: 0.3s;
-}
-
-.avatar-edit-icon:hover {
-  background: var(--secondary);
-  transform: scale(1.1);
-}
-
-.edit-profile-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  background: #f1f5f9;
-  color: var(--primary);
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.profile-details-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-  margin-top: 20px;
-}
-
-.detail-item {
-  display: flex;
-  gap: 15px;
-  align-items: flex-start;
-}
-
-.detail-icon {
-  margin-top: 5px;
-  color: #94a3b8;
-  font-size: 18px;
-}
-
-.detail-item label {
-  display: block;
-  font-size: 12px;
-  color: #7A7A7A;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.detail-item p {
-  margin: 5px 0 0 0;
-  font-weight: 500;
-  color: #1e293b;
-}
 
 .form-grid {
   display: grid;
@@ -1027,17 +925,6 @@ html {
   font-weight: normal;
 }
 
-.profile-divider {
-  border: none;
-  border-top: 1px solid #f1f5f9;
-  margin: 25px 0;
-}
-
-.profile-info-text h2 {
-  margin: 0 0 5px 0;
-  color: #1e293b;
-  font-size: 20px;
-}
 
 /* Layout Utilities */
 .leaves-stats-grid.two-cols {
@@ -1468,22 +1355,8 @@ html {
     display: none !important;
   }
 
-  /* =========================================
-     PROFILE PAGE OVERRIDES 
-     ========================================= */
-  .profile-details-grid,
   .form-grid {
     grid-template-columns: 1fr;
-  }
-
-  .profile-header {
-    flex-direction: column;
-    text-align: center;
-  }
-
-  .edit-profile-btn {
-    position: relative;
-    margin-top: 15px;
   }
 
   /* =========================================
@@ -1970,4 +1843,46 @@ html {
   .att-reason {
     white-space: normal;
   }
+}
+
+/* Admin.s view of an employee: the summary card avatar. A class rather than an
+   inline style so the same rules apply to the <img> Avatar renders when a
+   picture exists, not just to the initials <div>. */
+.emp-summary-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #215D7B;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 700;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+/* Project lead cell: a small avatar sitting inline with the name. */
+.proj-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.proj-lead-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #215D7B;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  object-fit: cover;
 }

@@ -5,14 +5,17 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faClipboardList, faPlus, faSearch, faEdit, faTrash,
-    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faUsers, faRepeat
+    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faUsers, faRepeat, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import EmployeeTaskBoard from '../../components/EmployeeTaskBoard';
 import RecurringTaskList from '../../components/RecurringTaskList';
-import { slug, initials, taskContextLabel } from '../../utils/taskHelpers';
+import SelfAssignedList from '../../components/SelfAssignedList';
+import { slug, taskContextLabel } from '../../utils/taskHelpers';
+import Avatar from '../../components/Avatar';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
+import '../../styles/selftask.css';
 
 const DEFAULT_FILTERS = { status: 'All', priority: 'All', projectId: 'All', taskType: 'All' };
 
@@ -27,15 +30,27 @@ const STATUS_PROGRESS = {
 const Tasks = () => {
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
-    const currentUserId = currentUser?.id || currentUser?._id;
     const isPrivileged = ['ADMIN', 'HR'].includes(currentUser?.role);
     const [searchParams] = useSearchParams();
 
     // 'tasks' lists work with its people attached; 'employees' flips it so the
     // people without work are visible too; 'recurring' shows the daily schedules
     // rather than the individual tasks they generate.
-    const [view, setView] = useState(() =>
-        searchParams.get('view') === 'recurring' ? 'recurring' : 'tasks');
+    const VIEWS = ['tasks', 'recurring', 'self', 'employees'];
+    const [view, setView] = useState(() => {
+        const v = searchParams.get('view');
+        return VIEWS.includes(v) ? v : 'tasks';
+    });
+
+    // Drives the amber count on the Self-Assigned tab, so a manager can see
+    // there is something waiting without opening it.
+    const [pendingSelf, setPendingSelf] = useState(0);
+
+    useEffect(() => {
+        api.get('/tasks/self-assigned', { params: { approvalStatus: 'Pending', limit: 1 } })
+            .then(res => setPendingSelf(res.data.pendingCount || 0))
+            .catch(() => setPendingSelf(0));
+    }, [view]);
 
     const [tasks, setTasks] = useState([]);
     const [projectsList, setProjectsList] = useState([]);
@@ -164,6 +179,14 @@ const Tasks = () => {
                         >
                             <FontAwesomeIcon icon={faRepeat} /> Recurring Tasks
                         </button>
+                        <button
+                            type="button"
+                            className={`type-toggle-btn ${view === 'self' ? 'active' : ''}`}
+                            onClick={() => setView('self')}
+                        >
+                            <FontAwesomeIcon icon={faUserPen} /> Self-Assigned
+                            {pendingSelf > 0 && <span className="sa-tab-count">{pendingSelf}</span>}
+                        </button>
                     </div>
 
                     <span className="task-view-sep" />
@@ -182,7 +205,7 @@ const Tasks = () => {
                 </button>
             </div>
 
-            {view === 'employees' ? <EmployeeTaskBoard /> : view === 'recurring' ? <RecurringTaskList /> : (
+            {view === 'employees' ? <EmployeeTaskBoard /> : view === 'recurring' ? <RecurringTaskList /> : view === 'self' ? <SelfAssignedList /> : (
             <>
 
             {/* --- Search + filters in a single bar --- */}
@@ -299,6 +322,11 @@ const Tasks = () => {
                                                 <span className={`task-status-badge ${slug(task.status)}`}>
                                                     {task.status}
                                                 </span>
+                                                {task.isSelfAssigned && (
+                                                    <span className="ap-badge self" title="The employee logged this themselves">
+                                                        <FontAwesomeIcon icon={faUserPen} /> Self Assigned
+                                                    </span>
+                                                )}
                                                 {task.attachments?.length > 0 && (
                                                     <span className="task-media-count">
                                                         <FontAwesomeIcon icon={faPaperclip} /> {task.attachments.length}
@@ -319,7 +347,7 @@ const Tasks = () => {
                                         <td data-label="Assignees" className="col-assignees">
                                             <div className="avatar-stack" title={task.assignees.map(a => a?.name).join(', ')}>
                                                 {task.assignees.slice(0, 4).map(a => (
-                                                    <div key={a._id} className="assignee-avatar">{initials(a?.name)}</div>
+                                                    <Avatar key={a._id} name={a?.name} profilePic={a?.profilePic} className="assignee-avatar" />
                                                 ))}
                                                 {task.assignees.length > 4 && (
                                                     <div className="assignee-avatar avatar-more">+{task.assignees.length - 4}</div>

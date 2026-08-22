@@ -5,6 +5,7 @@ import { faUserCircle, faSignOutAlt, faBars, faBell, faCheckDouble, faEnvelopeOp
 import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { onSocket, disconnectSocket } from '../utils/socket';
+import Avatar from './Avatar';
 
 const Topbar = ({ onToggleSidebar }) => {
     const navigate = useNavigate();
@@ -15,12 +16,6 @@ const Topbar = ({ onToggleSidebar }) => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
     const notifRef = useRef(null);
-
-    const initials = userName
-        .split(' ')
-        .map(n => n[0])
-        .join('')
-        .toUpperCase();
 
     useEffect(() => {
         fetchNotifications();
@@ -180,7 +175,7 @@ const Topbar = ({ onToggleSidebar }) => {
                         <span className="user-greeting-name">
                             Hi, {userName.split(' ')[0]}
                         </span>
-                        <div className="profile-badge">{initials}</div>
+                        <Avatar name={userName} profilePic={userData?.profilePic} className="profile-badge" />
                     </div>
 
                     <div className="dropdown-menu">

@@ -740,3 +740,26 @@
     height: 26px;
     background: #e2e8f0;
 }
+
+/* A person's photo inline with their name in a meta line, sized to sit on the
+   same baseline as the chips beside it. */
+.byline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.byline-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #215D7B;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    object-fit: cover;
+}

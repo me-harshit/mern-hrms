@@ -6,12 +6,16 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faClipboardList, faSearch, faFolderOpen, faPaperclip,
     faCheckCircle, faExclamationTriangle, faTableColumns, faListUl,
-    faTimes, faComment, faSpinner, faInbox, faGripVertical, faBuilding, faRepeat
+    faTimes, faComment, faSpinner, faInbox, faGripVertical, faBuilding, faRepeat,
+    faPlus, faHourglassHalf, faCircleXmark, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
-import { slug, initials, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
+import Avatar from '../../components/Avatar';
+import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
 import '../../styles/recurring.css';
+import '../../styles/selftask.css';
+import SelfTaskForm from '../../components/SelfTaskForm';
 
 const COLUMNS = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const VIEW_KEY = 'mytasks_view';
@@ -58,16 +62,31 @@ const TaskCard = ({
                         <FontAwesomeIcon icon={faRepeat} /> Daily
                     </span>
                 )}
+                {/* Approval state matters more than anything else on the card,
+                    so it sits with the tags rather than hidden in the detail. */}
+                {task.isSelfAssigned && task.approvalStatus === 'Pending' && (
+                    <span className="ap-badge pending" title="Waiting for your manager to approve">
+                        <FontAwesomeIcon icon={faHourglassHalf} /> Awaiting
+                    </span>
+                )}
+                {task.isSelfAssigned && task.approvalStatus === 'Rejected' && (
+                    <span className="ap-badge rejected" title={task.approvalNote || 'Rejected'}>
+                        <FontAwesomeIcon icon={faCircleXmark} /> Rejected
+                    </span>
+                )}
+                {task.isSelfAssigned && task.approvalStatus === 'Approved' && (
+                    <span className="ap-badge self" title="You logged this task yourself">
+                        <FontAwesomeIcon icon={faUserPen} /> Self Assigned
+                    </span>
+                )}
                 <span className={`tk-due ${due.tone}`}>{due.text}</span>
             </div>
 
             <div className="tk-card-foot">
                 <div className="tk-avatars">
-                    <span className="assignee-avatar me" title={`${currentUser?.name} (you)`}>
-                        {initials(currentUser?.name)}
-                    </span>
+                    <Avatar name={currentUser?.name} profilePic={currentUser?.profilePic} className="assignee-avatar me" title={`${currentUser?.name} (you)`} />
                     {others.slice(0, 2).map(a => (
-                        <span key={a._id} className="assignee-avatar" title={a.name}>{initials(a.name)}</span>
+                        <Avatar key={a._id} name={a.name} profilePic={a.profilePic} className="assignee-avatar" title={a.name} />
                     ))}
                     {others.length > 2 && (
                         <span className="assignee-avatar avatar-more">+{others.length - 2}</span>
@@ -81,7 +100,7 @@ const TaskCard = ({
                         </span>
                     )}
                     {task.completionProof?.length > 0 && (
-                        <span title="Completion proof attached">
+                        <span title="Supporting Documents/Materials attached">
                             <FontAwesomeIcon icon={faCheckCircle} /> {task.completionProof.length}
                         </span>
                     )}
@@ -106,6 +125,10 @@ const MyTasks = () => {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [priority, setPriority] = useState('All');
     const [project, setProject] = useState('All');
+
+    // `editing` doubles as the resubmit target: null means "new task".
+    const [selfFormOpen, setSelfFormOpen] = useState(false);
+    const [editing, setEditing] = useState(null);
 
     const [draggingId, setDraggingId] = useState(null);
     const [dragOverCol, setDragOverCol] = useState(null);
@@ -223,6 +246,14 @@ const MyTasks = () => {
                     </h1>
                     <p className="tk-subtitle">Everything assigned to you, across every project.</p>
                 </div>
+
+                <button
+                    className="gts-btn primary"
+                    style={{ marginLeft: 'auto', marginRight: '10px' }}
+                    onClick={() => { setEditing(null); setSelfFormOpen(true); }}
+                >
+                    <FontAwesomeIcon icon={faPlus} /> Log a task
+                </button>
 
                 <div className="tk-view-toggle" role="group" aria-label="View">
                     <button
@@ -373,6 +404,12 @@ const MyTasks = () => {
                 </p>
             )}
 
+            <SelfTaskForm
+                open={selfFormOpen}
+                task={editing}
+                onClose={() => { setSelfFormOpen(false); setEditing(null); }}
+                onSaved={fetchTasks}
+            />
         </div>
     );
 };
