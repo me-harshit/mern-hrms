@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faSearch, faTimes, faCheck, faBan, faInbox, faTrash,
+    faSearch, faTimes, faCheck, faBan, faInbox, faTrash, faEdit,
     faFolderOpen, faBuilding, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
@@ -129,6 +129,19 @@ const SelfAssignedList = () => {
         }
     };
 
+    // "21 Aug 2026 -> 28 Aug 2026" is wide enough to wrap the column onto three
+    // lines, and the year is the same on both ends nine times out of ten.
+    const timeline = (start, due) => {
+        if (!due) return '—';
+        if (!start) return shortDate(due);
+        const a = new Date(start), b = new Date(due);
+        if (a.getFullYear() === b.getFullYear()) {
+            const left = a.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+            return `${left} → ${shortDate(due)}`;
+        }
+        return `${shortDate(start)} → ${shortDate(due)}`;
+    };
+
     const activeFilterCount = (approvalStatus !== 'All' ? 1 : 0) + (searchTerm ? 1 : 0);
 
     return (
@@ -185,7 +198,7 @@ const SelfAssignedList = () => {
                 </div>
             ) : (
                 <div className="employee-table-container">
-                    <table className="employee-table task-table">
+                    <table className="employee-table task-table sa-table">
                         <thead>
                             <tr>
                                 <th className="col-assignees">Employee</th>
@@ -237,7 +250,7 @@ const SelfAssignedList = () => {
 
                                         <td data-label="Timeline" className="col-due">
                                             <span className="task-due-date">
-                                                {shortDate(task.startDate)} → {shortDate(task.dueDate)}
+                                                {timeline(task.startDate, task.dueDate)}
                                             </span>
                                         </td>
 
@@ -258,6 +271,12 @@ const SelfAssignedList = () => {
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="task-actions-inner">
+                                                <button
+                                                    className="icon-btn" title="Edit task" aria-label="Edit task"
+                                                    disabled={busy} onClick={() => navigate(`/edit-task/${task._id}`)}
+                                                >
+                                                    <FontAwesomeIcon icon={faEdit} />
+                                                </button>
                                                 {task.approvalStatus !== 'Approved' && (
                                                     <button
                                                         className="icon-btn" title="Approve" aria-label="Approve"

@@ -288,10 +288,22 @@ const TaskDetail = () => {
                     )}
 
                     {task.isSelfAssigned && task.approvalStatus === 'Pending' && isAssignee && (
-                        <div className="st-note" style={{ marginBottom: '14px' }}>
+                        <div className="st-note" style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
                             <FontAwesomeIcon icon={faHourglassHalf} />
-                            Waiting on your manager to approve this. You can carry on with it
-                            in the meantime.
+                            <span>
+                                Waiting on your manager to approve this. You can carry on with it
+                                in the meantime.
+                            </span>
+                            {/* Correcting your own request before anyone rules on it
+                                should not require being turned down first. */}
+                            <button
+                                type="button"
+                                className="gts-btn secondary"
+                                style={{ marginLeft: 'auto' }}
+                                onClick={() => setResubmitOpen(true)}
+                            >
+                                <FontAwesomeIcon icon={faEdit} /> Edit
+                            </button>
                         </div>
                     )}
 

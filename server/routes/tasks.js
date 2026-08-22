@@ -389,9 +389,14 @@ router.put('/self/:id', auth, async (req, res) => {
         if (!task.isSelfAssigned || !mine) {
             return res.status(403).json({ message: 'This is not your self-assigned task' });
         }
-        if (task.approvalStatus !== 'Rejected') {
-            return res.status(400).json({ message: 'Only a rejected task can be resubmitted' });
+        // Pending too, not only Rejected: someone who mistypes their own request
+        // should be able to correct it rather than wait to be turned down first.
+        // Once approved it is an ordinary task and goes through the normal edit
+        // route, so an employee cannot quietly rewrite work already signed off.
+        if (!['Rejected', 'Pending'].includes(task.approvalStatus)) {
+            return res.status(400).json({ message: 'This task has been approved — ask your manager to change it' });
         }
+        const wasRejected = task.approvalStatus === 'Rejected';
 
         if (typeof req.body.title === 'string' && req.body.title.trim()) task.title = req.body.title.trim();
         if (typeof req.body.description === 'string') task.description = req.body.description;
@@ -409,7 +414,7 @@ router.put('/self/:id', auth, async (req, res) => {
         }
 
         // Back into the queue, with the old verdict cleared so the reason shown
-        // is never a stale one.
+        // is never a stale one. Harmless on one that was already Pending.
         task.approvalStatus = 'Pending';
         task.approvalNote = "";
         task.approvedBy = null;
@@ -420,8 +425,10 @@ router.put('/self/:id', auth, async (req, res) => {
         const approvers = await getApproversFor(req.user.id);
         await Promise.all(approvers.map(a => notify(
             a._id,
-            'Task resubmitted for approval',
-            `${me?.name || 'An employee'} updated "${task.title}" and sent it back for approval.`,
+            wasRejected ? 'Task resubmitted for approval' : 'Task updated',
+            wasRejected
+                ? `${me?.name || 'An employee'} updated "${task.title}" and sent it back for approval.`
+                : `${me?.name || 'An employee'} changed "${task.title}", which is still waiting on your approval.`,
             `/task/${task._id}`
         )));
 
@@ -929,7 +936,16 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
         }
 
         const isOwner = task.assignedBy.toString() === req.user.id;
-        if (!isOwner && !IS_PRIVILEGED.includes(req.user.role)) {
+        let allowed = isOwner || IS_PRIVILEGED.includes(req.user.role);
+
+        // Same reasoning as the delete route: on a self-assigned task
+        // `assignedBy` is whoever the employee *named*, not necessarily anyone
+        // with authority over it. Whoever can approve it can also correct it.
+        if (!allowed && task.isSelfAssigned) {
+            allowed = await canApproveFor(task.assignees[0], req.user);
+        }
+
+        if (!allowed) {
             discardStagedFiles(req.files);
             return res.status(403).json({ message: 'Only the assigner can edit this task' });
         }
