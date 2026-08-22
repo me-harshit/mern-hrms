@@ -8,6 +8,7 @@ import {
     faBuilding, faPaperclip, faUserTie, faTriangleExclamation, faTrash, faEdit
 } from '@fortawesome/free-solid-svg-icons';
 import TaskMediaGrid from '../../components/TaskMediaGrid';
+import TaskDiscussion from '../../components/TaskDiscussion';
 import Avatar from '../../components/Avatar';
 import { slug, taskContextLabel, confirmDeleteSchedule } from '../../utils/taskHelpers';
 import { prettyDate, todayYmd, parseYmd } from '../../utils/scheduleDates';
@@ -45,6 +46,8 @@ const dayState = (date, occurrence) => {
 const RecurringTaskDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+    const currentUserId = currentUser?.id || currentUser?._id;
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -181,6 +184,22 @@ const RecurringTaskDetail = () => {
                 </div>
             </header>
 
+            <div className="td-layout">
+                <div className="td-main">
+                    <TaskDiscussion
+                        taskId={id}
+                        currentUserId={currentUserId}
+                        basePath="/tasks/recurring"
+                        title="Schedule discussion"
+                    />
+                    <p className="rt-thread-note">
+                        This thread is about the run as a whole. Each day&apos;s task keeps its
+                        own separate discussion.
+                    </p>
+                </div>
+
+                <aside className="td-side">
+
             {/* --- What this schedule is --- */}
             <div className="control-card" style={{ marginBottom: '18px' }}>
                 <div className="td-badges" style={{ marginBottom: '10px' }}>
@@ -310,6 +329,9 @@ const RecurringTaskDetail = () => {
                     </div>
                 );
             })}
+
+                </aside>
+            </div>
 
             <p className="sp-note">
                 Scheduled days are re-checked each morning at 6am. A day is only skipped when it

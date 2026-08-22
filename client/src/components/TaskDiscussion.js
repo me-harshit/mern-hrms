@@ -11,7 +11,12 @@ import { resolveMediaUrl, timeAgo } from '../utils/taskHelpers';
 import MediaLightbox from './MediaLightbox';
 import Avatar from './Avatar';
 
-const TaskDiscussion = ({ taskId, currentUserId }) => {
+/**
+ * `basePath` is what lets a recurring schedule have its own thread: the routes
+ * are identical in shape, only mounted under /tasks/recurring instead. The
+ * socket room is keyed by the id either way, so live updates need no change.
+ */
+const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'Discussion' }) => {
     const [comments, setComments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('');
@@ -22,7 +27,7 @@ const TaskDiscussion = ({ taskId, currentUserId }) => {
 
     const fetchComments = useCallback(async () => {
         try {
-            const res = await api.get(`/tasks/${taskId}/comments`);
+            const res = await api.get(`${basePath}/${taskId}/comments`);
             setComments(res.data);
         } catch (err) {
             console.error('Could not load discussion', err);
@@ -99,7 +104,7 @@ const TaskDiscussion = ({ taskId, currentUserId }) => {
             data.append('message', message);
             images.forEach(f => data.append('attachments', f));
 
-            const res = await api.post(`/tasks/${taskId}/comments`, data, {
+            const res = await api.post(`${basePath}/${taskId}/comments`, data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -121,7 +126,7 @@ const TaskDiscussion = ({ taskId, currentUserId }) => {
         if (!ok.isConfirmed) return;
 
         try {
-            await api.delete(`/tasks/${taskId}/comments/${comment._id}`);
+            await api.delete(`${basePath}/${taskId}/comments/${comment._id}`);
             setComments(prev => prev.filter(c => c._id !== comment._id));
         } catch (err) {
             Swal.fire('Error', err.response?.data?.message || 'Could not delete the message.', 'error');
@@ -146,7 +151,7 @@ const TaskDiscussion = ({ taskId, currentUserId }) => {
     return (
         <section className="td-discussion">
             <header className="td-panel-head">
-                <h2><FontAwesomeIcon icon={faComments} /> Discussion</h2>
+                <h2><FontAwesomeIcon icon={faComments} /> {title}</h2>
                 {comments.length > 0 && <span className="td-count">{comments.length}</span>}
             </header>
 

@@ -14,6 +14,7 @@ const TaskComment = require('../models/TaskComment');
 // Mongoose needs that schema registered. It only worked before because
 // index.js loads the recurring cron, which is a fragile thing to rely on.
 require('../models/RecurringTask');
+const { buildDiscussionHandlers } = require('../utils/taskDiscussion');
 const { emitToTask } = require('../utils/realtime');
 const { deleteFromS3 } = require('../utils/s3Service');
 const fs = require('fs');
@@ -1335,123 +1336,17 @@ router.delete('/:id/media/:mediaId', auth, async (req, res) => {
 // ==========================================
 // 9. DISCUSSION THREAD
 // ==========================================
-
-// Anyone involved in the task can read and post: the assignees, the person who
-// assigned it, and Admin/HR.
-const loadTaskForDiscussion = async (taskId, reqUser) => {
-    const task = await Task.findById(taskId).populate('projectId', 'name');
-    if (!task) return { error: { code: 404, message: 'Task not found' } };
-
-    const isAssignee = task.assignees.some(a => a.toString() === reqUser.id);
-    const isOwner = task.assignedBy.toString() === reqUser.id;
-
-    if (!isAssignee && !isOwner && !IS_PRIVILEGED.includes(reqUser.role)) {
-        return { error: { code: 403, message: 'Unauthorized to view this discussion' } };
-    }
-    return { task };
-};
-
-// GET /api/tasks/:id/comments
-router.get('/:id/comments', auth, async (req, res) => {
-    try {
-        const { task, error } = await loadTaskForDiscussion(req.params.id, req.user);
-        if (error) return res.status(error.code).json({ message: error.message });
-
-        const comments = await TaskComment.find({ taskId: task._id })
-            .populate('author', 'name role employeeId profilePic')
-            .sort({ createdAt: 1 });
-
-        res.json(comments);
-    } catch (err) {
-        console.error('Task Comments Fetch Error:', err.message);
-        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Task not found' });
-        res.status(500).send('Server Error');
-    }
+// The handlers are shared with recurring schedules, which have their own
+// thread — see utils/taskDiscussion.js.
+const taskDiscussion = buildDiscussionHandlers({
+    ownerModel: 'Task',
+    load: (id) => Task.findById(id).populate('projectId', 'name'),
+    link: (task) => `/task/${task._id}`,
+    notFound: 'Task not found'
 });
 
-// POST /api/tasks/:id/comments
-router.post('/:id/comments', auth, taskUpload.array('attachments', 5), async (req, res) => {
-    try {
-        const { task, error } = await loadTaskForDiscussion(req.params.id, req.user);
-        if (error) {
-            discardStagedFiles(req.files);
-            return res.status(error.code).json({ message: error.message });
-        }
-
-        const message = (req.body.message || '').trim();
-        if (!message && (!req.files || req.files.length === 0)) {
-            discardStagedFiles(req.files);
-            return res.status(400).json({ message: 'Write something or attach an image' });
-        }
-
-        // Videos belong in task attachments, where the overnight pipeline can
-        // handle them — a discussion image is expected to appear instantly.
-        if ((req.files || []).some(f => isVideo(f))) {
-            discardStagedFiles(req.files);
-            return res.status(400).json({ message: 'Only images can be attached to a message. Add videos to the task itself.' });
-        }
-
-        const { media } = await processTaskFiles(
-            req.files,
-            task.taskType === 'Regular Office Task'
-                ? s3Folder('Office', '/Discussion')
-                : s3Folder(task.projectId?.name, '/Discussion')
-        );
-
-        const comment = await TaskComment.create({
-            taskId: task._id,
-            author: req.user.id,
-            message,
-            attachments: media.map(m => ({ url: m.url, fileName: m.fileName }))
-        });
-
-        // Everyone involved except whoever just spoke.
-        const author = await User.findById(req.user.id).select('name');
-        const recipients = [
-            ...task.assignees.map(a => a.toString()),
-            task.assignedBy.toString()
-        ].filter((id, i, arr) => id !== req.user.id && arr.indexOf(id) === i);
-
-        const preview = message.length > 80 ? message.slice(0, 80) + '…' : (message || 'shared an image');
-        await Promise.all(recipients.map(id => notify(
-            id,
-            `New message on "${task.title}"`,
-            `${author?.name || 'Someone'}: ${preview}`,
-            `/task/${task._id}`
-        )));
-
-        const populated = await TaskComment.findById(comment._id).populate('author', 'name role employeeId profilePic');
-
-        // Anyone with this task open sees the message appear immediately.
-        emitToTask(task._id, 'task:comment', populated.toObject());
-
-        res.status(201).json(populated);
-    } catch (err) {
-        discardStagedFiles(req.files);
-        console.error('Task Comment Error:', err);
-        res.status(500).json({ message: 'Server Error while posting message' });
-    }
-});
-
-// DELETE /api/tasks/:id/comments/:commentId
-router.delete('/:id/comments/:commentId', auth, async (req, res) => {
-    try {
-        const comment = await TaskComment.findOne({ _id: req.params.commentId, taskId: req.params.id });
-        if (!comment) return res.status(404).json({ message: 'Message not found' });
-
-        // Your own words, or Admin/HR moderating.
-        if (comment.author.toString() !== req.user.id && !IS_PRIVILEGED.includes(req.user.role)) {
-            return res.status(403).json({ message: 'You can only delete your own messages' });
-        }
-
-        await comment.deleteOne();
-        emitToTask(req.params.id, 'task:comment-deleted', { _id: comment._id });
-        res.json({ message: 'Message deleted' });
-    } catch (err) {
-        console.error('Task Comment Delete Error:', err.message);
-        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Message not found' });
-        res.status(500).send('Server Error');
-    }
-});
+router.get('/:id/comments', auth, taskDiscussion.list);
+router.post('/:id/comments', auth, taskUpload.array('attachments', 5), taskDiscussion.create);
+router.delete('/:id/comments/:commentId', auth, taskDiscussion.remove);
 
 module.exports = router;

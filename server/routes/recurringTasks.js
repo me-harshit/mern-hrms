@@ -29,6 +29,7 @@ const {
 } = require('../utils/recurringSchedule');
 
 const Holiday = require('../models/Holiday');
+const { buildDiscussionHandlers } = require('../utils/taskDiscussion');
 
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
 
@@ -804,5 +805,24 @@ router.delete('/:id', auth, async (req, res) => {
         res.status(500).json({ message: 'Server Error while deleting the schedule' });
     }
 });
+
+// ==========================================
+// 7. DISCUSSION THREAD ON THE SCHEDULE
+// ==========================================
+/**
+ * Separate from the threads on the days it generates: a note about the run as a
+ * whole ("stop tagging the client on these") belongs with the schedule, not
+ * buried in one arbitrary morning's task.
+ */
+const scheduleDiscussion = buildDiscussionHandlers({
+    ownerModel: 'RecurringTask',
+    load: (id) => RecurringTask.findById(id).populate('projectId', 'name'),
+    link: (schedule) => `/tasks/recurring/${schedule._id}`,
+    notFound: 'Schedule not found'
+});
+
+router.get('/:id/comments', auth, scheduleDiscussion.list);
+router.post('/:id/comments', auth, taskUpload.array('attachments', 5), scheduleDiscussion.create);
+router.delete('/:id/comments/:commentId', auth, scheduleDiscussion.remove);
 
 module.exports = router;

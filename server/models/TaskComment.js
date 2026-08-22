@@ -6,7 +6,15 @@ const mongoose = require('mongoose');
  * query that only needs the summary fields.
  */
 const taskCommentSchema = new mongoose.Schema({
-    taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', required: true },
+    /**
+     * Which collection `taskId` points into. Recurring schedules have their own
+     * thread, separate from the threads on the individual days they generate.
+     * Defaults to 'Task' so every comment written before this existed keeps
+     * behaving identically.
+     */
+    ownerModel: { type: String, enum: ['Task', 'RecurringTask'], default: 'Task' },
+
+    taskId: { type: mongoose.Schema.Types.ObjectId, refPath: 'ownerModel', required: true },
     author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
     message: { type: String, default: "", trim: true },
@@ -19,6 +27,6 @@ const taskCommentSchema = new mongoose.Schema({
     }]
 }, { timestamps: true });
 
-taskCommentSchema.index({ taskId: 1, createdAt: 1 });
+taskCommentSchema.index({ taskId: 1, ownerModel: 1, createdAt: 1 });
 
 module.exports = mongoose.model('TaskComment', taskCommentSchema);
