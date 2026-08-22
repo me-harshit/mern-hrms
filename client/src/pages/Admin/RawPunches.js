@@ -190,7 +190,7 @@ const RawPunches = () => {
                                     
                                     <td data-label="Date & Time">
                                         <div className="fw-600 text-dark-gray">
-                                            {new Date(log.timestamp).toLocaleDateString()}
+                                            {new Date(log.timestamp).toLocaleDateString('en-GB')}
                                         </div>
                                         <div className="text-small text-muted">
                                             {new Date(log.timestamp).toLocaleTimeString()}

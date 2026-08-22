@@ -378,7 +378,7 @@ const TaskDetail = () => {
                                 {task.statusUpdatedBy && (
                                     <p className="td-muted-line">
                                         Last moved by <strong>{task.statusUpdatedBy.name}</strong>
-                                        {task.completedAt && ` · completed ${new Date(task.completedAt).toLocaleDateString()}`}
+                                        {task.completedAt && ` · completed ${new Date(task.completedAt).toLocaleDateString('en-GB')}`}
                                     </p>
                                 )}
                             </div>
@@ -466,12 +466,12 @@ const TaskDetail = () => {
                                 </div>
                                 <div>
                                     <dt><FontAwesomeIcon icon={faCalendarAlt} /> Start</dt>
-                                    <dd>{task.startDate ? new Date(task.startDate).toLocaleDateString() : '—'}</dd>
+                                    <dd>{task.startDate ? new Date(task.startDate).toLocaleDateString('en-GB') : '—'}</dd>
                                 </div>
                                 <div>
                                     <dt><FontAwesomeIcon icon={faCalendarAlt} /> Due</dt>
                                     <dd className={due.tone === 'overdue' ? 'overdue' : ''}>
-                                        {new Date(task.dueDate).toLocaleDateString()}
+                                        {new Date(task.dueDate).toLocaleDateString('en-GB')}
                                     </dd>
                                 </div>
                             </dl>

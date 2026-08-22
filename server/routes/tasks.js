@@ -173,7 +173,7 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
         }
 
         const assigner = await User.findById(req.user.id).select('name');
-        const due = new Date(dueDate).toLocaleDateString();
+        const due = new Date(dueDate).toLocaleDateString('en-GB');
         await Promise.all(assigneeIds.map(id => notify(
             id,
             'New Task Assigned',
@@ -1049,7 +1049,7 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
         await Promise.all(addedIds.map(id => notify(
             id,
             'New Task Assigned',
-            `You have been added to "${task.title}" (due ${new Date(task.dueDate).toLocaleDateString()}).`,
+            `You have been added to "${task.title}" (due ${new Date(task.dueDate).toLocaleDateString('en-GB')}).`,
             `/task/${task._id}`
         )));
 
@@ -1060,7 +1060,7 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
             await Promise.all(unchangedAssignees.map(id => notify(
                 id,
                 'Task Deadline Updated',
-                `The due date for "${task.title}" is now ${new Date(task.dueDate).toLocaleDateString()}.`,
+                `The due date for "${task.title}" is now ${new Date(task.dueDate).toLocaleDateString('en-GB')}.`,
                 `/task/${task._id}`
             )));
         }

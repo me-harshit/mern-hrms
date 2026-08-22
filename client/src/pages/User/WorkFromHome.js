@@ -153,9 +153,9 @@ const WorkFromHome = () => {
                             wfhHistory.map(req => (
                                 <tr key={req._id}>
                                     <td data-label="Dates" className="text-dark-gray text-small fw-600">
-                                        {new Date(req.fromDate).toLocaleDateString()}
+                                        {new Date(req.fromDate).toLocaleDateString('en-GB')}
                                         <span className="text-muted mx-1">to</span>
-                                        {new Date(req.toDate).toLocaleDateString()}
+                                        {new Date(req.toDate).toLocaleDateString('en-GB')}
                                     </td>
                                     <td data-label="Days">{req.days}</td>
                                     <td data-label="Reason" className="note-cell text-muted text-small">

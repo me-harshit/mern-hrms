@@ -319,9 +319,9 @@ const Projects = () => {
                                         </div>
                                         <div className="text-small text-muted" style={{ marginTop: '4px' }}>
                                             <FontAwesomeIcon icon={faCalendarAlt} style={{ marginRight: '5px' }} />
-                                            {proj.startDate ? new Date(proj.startDate).toLocaleDateString() : 'TBD'}
+                                            {proj.startDate ? new Date(proj.startDate).toLocaleDateString('en-GB') : 'TBD'}
                                             &nbsp;→&nbsp;
-                                            {proj.endDate ? new Date(proj.endDate).toLocaleDateString() : 'TBD'}
+                                            {proj.endDate ? new Date(proj.endDate).toLocaleDateString('en-GB') : 'TBD'}
                                         </div>
                                     </td>
                                    

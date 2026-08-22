@@ -153,7 +153,7 @@ const Topbar = ({ onToggleSidebar }) => {
                                         >
                                             <p className="notif-title">{notif.title}</p>
                                             <p className="notif-message">{notif.message}</p>
-                                            <span className="notif-time">{new Date(notif.createdAt).toLocaleDateString()}</span>
+                                            <span className="notif-time">{new Date(notif.createdAt).toLocaleDateString('en-GB')}</span>
                                         </div>
                                     ))
                                 ) : (

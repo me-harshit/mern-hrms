@@ -265,9 +265,9 @@ const EmployeeRequests = () => {
                                     )}
 
                                     <td data-label="Dates" className="text-dark-gray text-small fw-600">
-                                        {new Date(req.fromDate).toLocaleDateString()}
+                                        {new Date(req.fromDate).toLocaleDateString('en-GB')}
                                         <span className="text-muted mx-1">➜</span>
-                                        {new Date(req.toDate).toLocaleDateString()}
+                                        {new Date(req.toDate).toLocaleDateString('en-GB')}
                                     </td>
 
                                     <td data-label="Duration" className="fw-500">
@@ -392,11 +392,11 @@ const EmployeeRequests = () => {
 
                                 <div className="detail-group">
                                     <span className="detail-label">From Date</span>
-                                    <span className="detail-value">{new Date(selectedRequest.fromDate).toLocaleDateString()}</span>
+                                    <span className="detail-value">{new Date(selectedRequest.fromDate).toLocaleDateString('en-GB')}</span>
                                 </div>
                                 <div className="detail-group">
                                     <span className="detail-label">To Date</span>
-                                    <span className="detail-value">{new Date(selectedRequest.toDate).toLocaleDateString()}</span>
+                                    <span className="detail-value">{new Date(selectedRequest.toDate).toLocaleDateString('en-GB')}</span>
                                 </div>
 
                                 <div className="detail-group" style={{ gridColumn: 'span 2' }}>
