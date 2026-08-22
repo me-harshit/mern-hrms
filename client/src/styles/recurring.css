@@ -932,3 +932,11 @@
     color: #94a3b8;
     line-height: 1.5;
 }
+
+/* The line under a recurring task's discussion. */
+.tt-note {
+    margin: 10px 2px 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    line-height: 1.5;
+}

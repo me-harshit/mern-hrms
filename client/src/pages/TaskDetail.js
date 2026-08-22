@@ -8,7 +8,7 @@ import {
     faHourglassHalf, faCircleXmark, faUserPen, faRotateLeft
 } from '@fortawesome/free-solid-svg-icons';
 import api from '../utils/api';
-import TaskDiscussion from '../components/TaskDiscussion';
+import TaskThreads from '../components/TaskThreads';
 import TaskMediaGrid from '../components/TaskMediaGrid';
 import ScreenRecorder from '../components/ScreenRecorder';
 import Avatar from '../components/Avatar';
@@ -245,9 +245,9 @@ const TaskDetail = () => {
                         {task.recurringTaskId && (
                             <span
                                 className="rt-day-badge"
-                                title={isManagement ? 'View the whole schedule' : 'Part of a daily task'}
-                                style={{ cursor: isManagement ? 'pointer' : 'default' }}
-                                onClick={() => isManagement && navigate(`/tasks/recurring/${task.recurringTaskId._id}`)}
+                                title="Open the whole schedule"
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => navigate(`/tasks/recurring/${task.recurringTaskId._id}`)}
                             >
                                 <FontAwesomeIcon icon={faRepeat} />
                                 Day {task.recurringDayNumber} of {task.recurringTaskId.targetCount}
@@ -266,7 +266,10 @@ const TaskDetail = () => {
             {/* ---------- Two columns: discussion left, details right ---------- */}
             <div className="td-layout">
                 <div className="td-main">
-                    <TaskDiscussion taskId={task._id} currentUserId={currentUserId} />
+                    {/* A generated day carries two conversations: today's, and the
+                        run's. TaskThreads shows both rather than hiding the one
+                        the messages are actually in. */}
+                    <TaskThreads task={task} currentUserId={currentUserId} />
                 </div>
 
                 <aside className="td-side">

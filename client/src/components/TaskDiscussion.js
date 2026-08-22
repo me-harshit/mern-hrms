@@ -2,13 +2,16 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faSpinner, faPaperPlane, faTrash, faImage, faComments
+    faSpinner, faPaperPlane, faTrash, faImage, faComments, faFilm
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import api from '../utils/api';
 import { getSocket, onSocket } from '../utils/socket';
 import { resolveMediaUrl, timeAgo } from '../utils/taskHelpers';
 import MediaLightbox from './MediaLightbox';
+import ScreenRecorder from './ScreenRecorder';
+import AudioRecorder from './AudioRecorder';
+import AudioNote from './AudioNote';
 import Avatar from './Avatar';
 
 /**
@@ -73,10 +76,21 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
         }
     }, [comments]);
 
+    // A voice note carries the waveform measured while recording, so the player
+    // never has to download and decode the audio just to draw it.
+    const [audioMeta, setAudioMeta] = useState(null);
+
+    const handleRecordingAttach = (file) => setImages(prev => [...prev, file]);
+
+    const handleVoiceAttach = (file, meta) => {
+        setImages(prev => [...prev, file]);
+        setAudioMeta(meta);
+    };
+
     const handleImagePick = async (e) => {
         const picked = Array.from(e.target.files).filter(f => {
             if (!f.type.startsWith('image/')) {
-                Swal.fire('Images only', 'Attach videos to the task itself, not to a message.', 'info');
+                Swal.fire('Images here', 'Use the record buttons for video or voice.', 'info');
                 return false;
             }
             return true;
@@ -103,6 +117,10 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
             const data = new FormData();
             data.append('message', message);
             images.forEach(f => data.append('attachments', f));
+            if (audioMeta) {
+                data.append('waveform', JSON.stringify(audioMeta.waveform || []));
+                data.append('durationMs', String(audioMeta.durationMs || 0));
+            }
 
             const res = await api.post(`${basePath}/${taskId}/comments`, data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
@@ -111,6 +129,7 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
             setComments(prev => (prev.some(c => c._id === res.data._id) ? prev : [...prev, res.data]));
             setMessage('');
             setImages([]);
+            setAudioMeta(null);
         } catch (err) {
             Swal.fire('Error', err.response?.data?.message || 'Could not send your message.', 'error');
         } finally {
@@ -135,8 +154,13 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
 
     // Flattened so the lightbox can page through the whole conversation's
     // images, not just the ones in a single message.
+    // Images only: the lightbox is a picture viewer, and a voice note or a
+    // screen recording has its own player in the bubble. Comments written before
+    // `type` existed were always images.
     const galleryItems = comments.flatMap(c =>
-        (c.attachments || []).map(a => ({ ...a, type: 'image', _id: `${c._id}-${a.url}` }))
+        (c.attachments || [])
+            .filter(a => (a.type || 'image') === 'image')
+            .map(a => ({ ...a, type: 'image', _id: `${c._id}-${a.url}` }))
     );
     const galleryIndexOf = (url) => galleryItems.findIndex(g => g.url === url);
 
@@ -184,15 +208,37 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
                                         {c.message && <p className="discussion-text">{c.message}</p>}
                                         {c.attachments?.length > 0 && (
                                             <div className="discussion-images">
-                                                {c.attachments.map((a, i) => (
-                                                    <button
-                                                        key={i} type="button" className="discussion-image-btn"
-                                                        onClick={() => setLightboxIndex(galleryIndexOf(a.url))}
-                                                        title="View image"
-                                                    >
-                                                        <img src={resolveMediaUrl(a.url)} alt={a.fileName || 'attachment'} />
-                                                    </button>
-                                                ))}
+                                                {c.attachments.map((a, i) => {
+                                                    // Older comments predate `type` and were always images.
+                                                    const kind = a.type || 'image';
+
+                                                    if (kind === 'audio') {
+                                                        return <AudioNote key={i} media={a} mine={mine} />;
+                                                    }
+
+                                                    if (kind === 'video') {
+                                                        return (
+                                                            <div key={i} className="dv-video">
+                                                                <video src={resolveMediaUrl(a.url)} controls preload="metadata" />
+                                                                {a.status === 'processing_compression' && (
+                                                                    <span className="dv-processing">
+                                                                        <FontAwesomeIcon icon={faFilm} /> Optimising overnight
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <button
+                                                            key={i} type="button" className="discussion-image-btn"
+                                                            onClick={() => setLightboxIndex(galleryIndexOf(a.url))}
+                                                            title="View image"
+                                                        >
+                                                            <img src={resolveMediaUrl(a.url)} alt={a.fileName || 'attachment'} />
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
@@ -214,6 +260,11 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
                         ))}
                     </div>
                 )}
+
+                <div className="discussion-record-row">
+                    <AudioRecorder onAttach={handleVoiceAttach} disabled={sending} />
+                    <ScreenRecorder onAttach={handleRecordingAttach} />
+                </div>
 
                 <div className="discussion-input-row">
                     <textarea

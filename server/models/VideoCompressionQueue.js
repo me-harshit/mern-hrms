@@ -15,7 +15,7 @@ const videoCompressionQueueSchema = new mongoose.Schema({
      * place. Defaults to 'Task' so every row written before this existed keeps
      * behaving identically.
      */
-    ownerModel: { type: String, enum: ['Task', 'RecurringTask'], default: 'Task' },
+    ownerModel: { type: String, enum: ['Task', 'RecurringTask', 'TaskComment'], default: 'Task' },
 
     taskId: { type: mongoose.Schema.Types.ObjectId, refPath: 'ownerModel', required: true },
 

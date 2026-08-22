@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const { uploadToS3 } = require('./s3Service');
 
 const VIDEO_EXTS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+const AUDIO_EXTS = ['.mp3', '.m4a', '.wav', '.ogg', '.oga', '.aac'];
 
 /**
  * Project names like "AI Expo" or "LW Sope (VR)" would put raw spaces and
@@ -17,9 +18,17 @@ const s3Folder = (projectName, suffix = '') => {
     return `Tasks/${safe}${suffix}`;
 };
 
+// Checked before isVideo, and mimetype first: a voice note is .webm too, so
+// the extension alone would call it a video and send it to the night job.
+const isAudio = (file) =>
+    file.mimetype.startsWith('audio/') ||
+    AUDIO_EXTS.includes(path.extname(file.originalname).toLowerCase());
+
 const isVideo = (file) =>
-    file.mimetype.startsWith('video/') ||
-    VIDEO_EXTS.includes(path.extname(file.originalname).toLowerCase());
+    !isAudio(file) && (
+        file.mimetype.startsWith('video/') ||
+        VIDEO_EXTS.includes(path.extname(file.originalname).toLowerCase())
+    );
 
 /**
  * Turns the files multer staged on disk into task media entries.
@@ -41,7 +50,27 @@ const processTaskFiles = async (files, subFolder = 'Tasks/General') => {
         // entry before the parent document is ever saved.
         const mediaId = new mongoose.Types.ObjectId();
 
-        if (isVideo(file)) {
+        if (isAudio(file)) {
+            // Small enough to go straight to S3 — a voice note is seconds of
+            // Opus, not the hundreds of megabytes a screen capture can be.
+            const buffer = fs.readFileSync(file.path);
+            const url = await uploadToS3(
+                { buffer, mimetype: file.mimetype, originalname: file.originalname },
+                subFolder
+            );
+
+            fs.unlink(file.path, (err) => {
+                if (err) console.error('[TASK MEDIA] Could not remove staged audio:', err.message);
+            });
+
+            media.push({
+                _id: mediaId,
+                url,
+                fileName: file.originalname,
+                type: 'audio',
+                status: 'ready'
+            });
+        } else if (isVideo(file)) {
             media.push({
                 _id: mediaId,
                 url: `/uploads/tasks/${file.filename}`,
@@ -91,4 +120,4 @@ const discardStagedFiles = (files) => {
     }
 };
 
-module.exports = { processTaskFiles, discardStagedFiles, isVideo, s3Folder };
+module.exports = { processTaskFiles, discardStagedFiles, isVideo, isAudio, s3Folder };

@@ -48,6 +48,7 @@ const RecurringTaskDetail = () => {
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
     const currentUserId = currentUser?.id || currentUser?._id;
+    const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS', 'TEAM LEAD'].includes(currentUser?.role);
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -127,7 +128,8 @@ const RecurringTaskDetail = () => {
     const { schedule, byAssignee } = data;
 
     // Roll the whole log up once for the stat tiles.
-    const all = schedule.occurrences || [];
+    const all = (schedule.occurrences || []).filter(o =>
+        isManagement || String(o.assignee) === String(currentUserId));
     const stats = {
         done: all.filter(o => o.outcome === 'completed').length,
         missed: all.filter(o => o.outcome === 'missed').length,
@@ -156,6 +158,9 @@ const RecurringTaskDetail = () => {
                     </div>
                 </div>
 
+                {/* Steering the schedule is a management job; an assignee is
+                    here to read the brief and join the discussion. */}
+                {isManagement && (
                 <div className="rt-head-actions">
                     <button className="gts-btn secondary" onClick={() => navigate(`/tasks/recurring/${id}/edit`)}>
                         <FontAwesomeIcon icon={faEdit} /> Edit
@@ -182,6 +187,7 @@ const RecurringTaskDetail = () => {
                         <FontAwesomeIcon icon={faTrash} />
                     </button>
                 </div>
+                )}
             </header>
 
             <div className="td-layout">
@@ -190,11 +196,11 @@ const RecurringTaskDetail = () => {
                         taskId={id}
                         currentUserId={currentUserId}
                         basePath="/tasks/recurring"
-                        title="Schedule discussion"
+                        title="Discussion"
                     />
                     <p className="rt-thread-note">
-                        This thread is about the run as a whole. Each day&apos;s task keeps its
-                        own separate discussion.
+                        One thread for the whole run — the same conversation everyone sees on
+                        each day&apos;s task, however many days it covers.
                     </p>
                 </div>
 
@@ -270,7 +276,9 @@ const RecurringTaskDetail = () => {
             </div>
 
             {/* --- One calendar per person --- */}
-            {byAssignee.map(person => {
+            {byAssignee
+                .filter(person => isManagement || String(person.user._id) === String(currentUserId))
+                .map(person => {
                 const occByDate = {};
                 person.occurrences.forEach(o => { occByDate[o.date] = o; });
 

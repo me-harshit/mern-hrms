@@ -1,0 +1,310 @@
+/* ==========================================================================
+   VOICE NOTES + WAVEFORMS
+   The recorder that sits in the discussion composer, and the player
+   that renders a posted note.
+   ========================================================================== */
+
+/* ---------- the waveform itself ---------- */
+.wf {
+    flex: 1;
+    min-width: 60px;
+    max-width: 100%;
+    display: block;
+}
+
+.wf.is-seekable {
+    cursor: pointer;
+}
+
+.wf-bar {
+    fill: #cbd5e1;
+    transition: fill 0.12s ease;
+}
+
+.wf-bar.is-played {
+    fill: #215D7B;
+}
+
+/* ---------- recorder ---------- */
+.ar {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.ar.is-active {
+    flex: 1;
+}
+
+.ar-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #475569;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ar-trigger:hover:not(:disabled) {
+    border-color: #dc2626;
+    color: #dc2626;
+    background: #fef2f2;
+}
+
+.ar-trigger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ar-hint {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.ar-live,
+.ar-preview {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 7px 10px;
+    min-width: 0;
+}
+
+.ar-dot {
+    color: #cbd5e1;
+    font-size: 0.5rem;
+    flex-shrink: 0;
+}
+
+.ar-dot.is-live {
+    color: #dc2626;
+    animation: ar-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes ar-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+}
+
+/* The live signal. Bars are appended as they are sampled, so the row scrolls
+   right to left on its own without any animation to drive it. */
+.ar-bars {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    justify-content: flex-end;
+}
+
+.ar-bar {
+    width: 3px;
+    min-height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #2d7fa5, #215D7B);
+    flex-shrink: 0;
+    transition: height 0.08s linear;
+}
+
+.ar-time {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.ar-time em {
+    font-style: normal;
+    font-weight: 400;
+    color: #94a3b8;
+    margin-left: 2px;
+}
+
+.ar-icon,
+.ar-play {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.ar-icon:hover { border-color: #cbd5e1; color: #1e293b; }
+.ar-icon.is-stop:hover { border-color: #fecaca; color: #dc2626; background: #fef2f2; }
+.ar-icon.is-discard:hover { border-color: #fecaca; color: #dc2626; background: #fef2f2; }
+
+.ar-play {
+    background: #215D7B;
+    border-color: #215D7B;
+    color: #fff;
+}
+
+.ar-play:hover {
+    background: #1a4a62;
+}
+
+.ar-attach {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: #215D7B;
+    color: #fff;
+    border-radius: 7px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.ar-attach:hover {
+    background: #1a4a62;
+}
+
+.ar-error {
+    font-size: 0.76rem;
+    color: #dc2626;
+    margin-left: 8px;
+}
+
+/* ---------- a posted note ---------- */
+.an {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 7px 11px;
+    min-width: 190px;
+    max-width: 320px;
+    margin-top: 6px;
+}
+
+/* Inside your own bubble the surface is already dark, so the note has to
+   invert or it disappears into it. */
+.an.is-mine {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.an.is-mine .wf-bar { fill: rgba(255, 255, 255, 0.45); }
+.an.is-mine .wf-bar.is-played { fill: #fff; }
+.an.is-mine .an-time { color: rgba(255, 255, 255, 0.85); }
+
+.an-play {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background: #215D7B;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+}
+
+.an.is-mine .an-play {
+    background: #fff;
+    color: #215D7B;
+}
+
+.an-play:hover {
+    opacity: 0.88;
+}
+
+.an-time {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ---------- a screen recording posted in a thread ---------- */
+.dv-video {
+    margin-top: 6px;
+    max-width: 320px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+    position: relative;
+}
+
+.dv-video video {
+    width: 100%;
+    display: block;
+    max-height: 220px;
+}
+
+.dv-processing {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    background: rgba(15, 23, 42, 0.78);
+    color: #fde68a;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+@media (max-width: 560px) {
+    .ar-live,
+    .ar-preview {
+        flex-wrap: wrap;
+    }
+
+    .an {
+        min-width: 0;
+        max-width: 100%;
+    }
+}
+
+/* The two recorders sit above the text row so neither competes with it. */
+.discussion-record-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+/* While a recorder is mid-take it takes the whole row; the other one waits. */
+.discussion-record-row .ar.is-active {
+    width: 100%;
+}
+
+.discussion-record-row .ar.is-active ~ .screen-recorder-container {
+    display: none;
+}

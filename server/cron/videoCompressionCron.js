@@ -6,6 +6,7 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 
 const Task = require('../models/Task');
 const RecurringTask = require('../models/RecurringTask');
+const TaskComment = require('../models/TaskComment');
 const VideoCompressionQueue = require('../models/VideoCompressionQueue');
 const { uploadToS3 } = require('../utils/s3Service');
 const { s3Folder } = require('../utils/taskMedia');
@@ -45,7 +46,8 @@ const compressVideo = (inputPath, outputPath) => new Promise((resolve, reject) =
 // A queued video belongs either to a Task or to a RecurringTask's brief. Both
 // keep their media in a top-level `attachments` array of the same shape, so the
 // only difference is which collection to update.
-const ownerFor = (job) => (job.ownerModel === 'RecurringTask' ? RecurringTask : Task);
+const OWNERS = { Task, RecurringTask, TaskComment };
+const ownerFor = (job) => OWNERS[job.ownerModel] || Task;
 
 // Both media arrays live at the top level, so a positional match on the media
 // _id is all that's needed.

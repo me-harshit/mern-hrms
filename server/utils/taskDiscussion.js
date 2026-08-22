@@ -2,7 +2,8 @@ const TaskComment = require('../models/TaskComment');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { emitToTask } = require('./realtime');
-const { processTaskFiles, discardStagedFiles, s3Folder, isVideo } = require('./taskMedia');
+const { processTaskFiles, discardStagedFiles, s3Folder } = require('./taskMedia');
+const VideoCompressionQueue = require('../models/VideoCompressionQueue');
 const { IS_PRIVILEGED } = require('./taskScoping');
 
 /**
@@ -83,27 +84,51 @@ const buildDiscussionHandlers = ({ ownerModel, load, link, notFound = 'Not found
                 return res.status(400).json({ message: 'Write something or attach an image' });
             }
 
-            // Videos belong on the parent, where the overnight pipeline can
-            // handle them — a discussion image is expected to appear instantly.
-            if ((req.files || []).some(f => isVideo(f))) {
-                discardStagedFiles(req.files);
-                return res.status(400).json({ message: 'Only images can be attached to a message. Add videos to the task itself.' });
-            }
+            // Images, voice notes and screen recordings all go through the same
+            // pipeline the rest of the app uses: images and audio land on S3 at
+            // once, a screen recording stages on the VPS so it plays straight
+            // away and is compressed overnight.
+            const subFolder = doc.taskType === 'Regular Office Task'
+                ? s3Folder('Office', '/Discussion')
+                : s3Folder(doc.projectId?.name, '/Discussion');
 
-            const { media } = await processTaskFiles(
-                req.files,
-                doc.taskType === 'Regular Office Task'
-                    ? s3Folder('Office', '/Discussion')
-                    : s3Folder(doc.projectId?.name, '/Discussion')
-            );
+            const { media, pendingVideos } = await processTaskFiles(req.files, subFolder);
+
+            // The browser measures the voice note while recording it, so the
+            // player can draw the waveform without re-downloading and decoding
+            // the audio for every message in the thread.
+            let waveform = null;
+            try {
+                if (req.body.waveform) waveform = JSON.parse(req.body.waveform);
+            } catch (e) { /* a bad payload just means no waveform */ }
+
+            media.forEach(m => {
+                if (m.type !== 'audio') return;
+                m.durationMs = parseInt(req.body.durationMs, 10) || 0;
+                if (Array.isArray(waveform) && waveform.length) {
+                    m.waveform = waveform.slice(0, 200).map(Number).filter(n => !Number.isNaN(n));
+                }
+            });
 
             const comment = await TaskComment.create({
                 taskId: doc._id,
                 ownerModel,
                 author: req.user.id,
                 message,
-                attachments: media.map(m => ({ url: m.url, fileName: m.fileName }))
+                attachments: media
             });
+
+            if (pendingVideos.length > 0) {
+                await VideoCompressionQueue.insertMany(pendingVideos.map(v => ({
+                    ownerModel: 'TaskComment',
+                    taskId: comment._id,
+                    mediaId: v.mediaId,
+                    field: 'attachments',
+                    localPath: v.localPath,
+                    originalName: v.originalName,
+                    projectName: doc.taskType === 'Regular Office Task' ? 'Office' : (doc.projectId?.name || 'General')
+                })));
+            }
 
             // Everyone involved except whoever just spoke.
             const author = await User.findById(req.user.id).select('name');
@@ -112,7 +137,11 @@ const buildDiscussionHandlers = ({ ownerModel, load, link, notFound = 'Not found
                 doc.assignedBy.toString()
             ].filter((id, i, arr) => id !== req.user.id && arr.indexOf(id) === i);
 
-            const preview = message.length > 80 ? message.slice(0, 80) + '…' : (message || 'shared an image');
+            const kind = media[0]?.type;
+            const fallback = kind === 'audio' ? 'sent a voice note'
+                : kind === 'video' ? 'shared a recording'
+                    : 'shared an image';
+            const preview = message.length > 80 ? message.slice(0, 80) + '…' : (message || fallback);
             await Promise.all(recipients.map(id => notify(
                 id,
                 `New message on "${doc.title}"`,

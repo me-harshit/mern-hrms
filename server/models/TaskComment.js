@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { mediaSchema } = require('./Task');
 
 /**
  * Discussion thread on a task. Kept in its own collection rather than embedded
@@ -19,12 +20,15 @@ const taskCommentSchema = new mongoose.Schema({
 
     message: { type: String, default: "", trim: true },
 
-    // Images only — videos stay in task attachments / completion proof, where
-    // the overnight compression pipeline handles them.
-    attachments: [{
-        url: { type: String, required: true },
-        fileName: { type: String, default: "" }
-    }]
+    /**
+     * Images, voice notes and screen recordings.
+     *
+     * Uses the same shape as task media so the compression pipeline, the
+     * lightbox and the players all work on it unchanged — images and audio are
+     * `ready` at once, a screen recording is `processing_compression` until the
+     * midnight job moves it to S3.
+     */
+    attachments: [mediaSchema]
 }, { timestamps: true });
 
 taskCommentSchema.index({ taskId: 1, ownerModel: 1, createdAt: 1 });
