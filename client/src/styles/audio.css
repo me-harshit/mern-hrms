@@ -290,21 +290,3 @@
         max-width: 100%;
     }
 }
-
-/* The two recorders sit above the text row so neither competes with it. */
-.discussion-record-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-}
-
-/* While a recorder is mid-take it takes the whole row; the other one waits. */
-.discussion-record-row .ar.is-active {
-    width: 100%;
-}
-
-.discussion-record-row .ar.is-active ~ .screen-recorder-container {
-    display: none;
-}

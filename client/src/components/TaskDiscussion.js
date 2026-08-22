@@ -2,13 +2,15 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faSpinner, faPaperPlane, faTrash, faImage, faComments, faFilm
+    faSpinner, faPaperPlane, faTrash, faImage, faComments, faFilm,
+    faPaperclip, faMicrophone, faVideo, faPen, faXmark, faCheck
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import api from '../utils/api';
 import { getSocket, onSocket } from '../utils/socket';
 import { resolveMediaUrl, timeAgo } from '../utils/taskHelpers';
 import MediaLightbox from './MediaLightbox';
+import '../styles/discussion.css';
 import ScreenRecorder from './ScreenRecorder';
 import AudioRecorder from './AudioRecorder';
 import AudioNote from './AudioNote';
@@ -62,10 +64,15 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
             setComments(prev => prev.filter(c => c._id !== _id));
         });
 
+        const offEdit = onSocket('task:comment-edited', (updated) => {
+            setComments(prev => prev.map(c => (c._id === updated._id ? updated : c)));
+        });
+
         return () => {
             socket.emit('task:leave', taskId);
             offNew();
             offDel();
+            offEdit();
         };
     }, [taskId]);
 
@@ -79,6 +86,30 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
     // A voice note carries the waveform measured while recording, so the player
     // never has to download and decode the audio just to draw it.
     const [audioMeta, setAudioMeta] = useState(null);
+
+    // Which recorder, if any, has taken over the composer row.
+    const [mode, setMode] = useState('text');      // text | voice | screen
+    const [attachOpen, setAttachOpen] = useState(false);
+    const attachRef = useRef(null);
+
+    // The message being reworded, and its draft text.
+    const [editingId, setEditingId] = useState(null);
+    const [editDraft, setEditDraft] = useState('');
+
+    // The attach menu is a popover, so it closes the way popovers do.
+    useEffect(() => {
+        if (!attachOpen) return;
+        const onDown = (e) => {
+            if (attachRef.current && !attachRef.current.contains(e.target)) setAttachOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setAttachOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [attachOpen]);
 
     const handleRecordingAttach = (file) => setImages(prev => [...prev, file]);
 
@@ -134,6 +165,25 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
             Swal.fire('Error', err.response?.data?.message || 'Could not send your message.', 'error');
         } finally {
             setSending(false);
+        }
+    };
+
+    const beginEdit = (comment) => {
+        setEditingId(comment._id);
+        setEditDraft(comment.message || '');
+    };
+
+    const saveEdit = async (comment) => {
+        const text = editDraft.trim();
+        if (!text && (comment.attachments || []).length === 0) return;
+        if (text === (comment.message || '')) { setEditingId(null); return; }
+
+        try {
+            const res = await api.put(`${basePath}/${taskId}/comments/${comment._id}`, { message: text });
+            setComments(prev => prev.map(c => (c._id === comment._id ? res.data : c)));
+            setEditingId(null);
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not edit the message.', 'error');
         }
     };
 
@@ -198,14 +248,61 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
                                     <div className="discussion-meta">
                                         <span className="discussion-author">{mine ? 'You' : (c.author?.name || 'Unknown')}</span>
                                         <span className="discussion-time">{timeAgo(c.createdAt)}</span>
-                                        {mine && (
-                                            <button className="discussion-delete" title="Delete message" onClick={() => remove(c)}>
-                                                <FontAwesomeIcon icon={faTrash} />
-                                            </button>
+                                        {mine && editingId !== c._id && (
+                                            <>
+                                                {/* Only the words can change; swapping the
+                                                    attachments after people replied would
+                                                    change what was agreed. */}
+                                                {c.message && (
+                                                    <button
+                                                        className="discussion-delete"
+                                                        title="Edit message"
+                                                        onClick={() => beginEdit(c)}
+                                                    >
+                                                        <FontAwesomeIcon icon={faPen} />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    className="discussion-delete"
+                                                    title="Delete message"
+                                                    onClick={() => remove(c)}
+                                                >
+                                                    <FontAwesomeIcon icon={faTrash} />
+                                                </button>
+                                            </>
                                         )}
                                     </div>
                                     <div className="discussion-bubble">
-                                        {c.message && <p className="discussion-text">{c.message}</p>}
+                                        {editingId === c._id ? (
+                                            <div className="dc-edit">
+                                                <textarea
+                                                    className="dc-edit-input"
+                                                    value={editDraft}
+                                                    autoFocus
+                                                    rows="2"
+                                                    onChange={(e) => setEditDraft(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(c); }
+                                                        if (e.key === 'Escape') setEditingId(null);
+                                                    }}
+                                                />
+                                                <div className="dc-edit-actions">
+                                                    <button type="button" className="dc-edit-btn" onClick={() => setEditingId(null)}>
+                                                        <FontAwesomeIcon icon={faXmark} /> Cancel
+                                                    </button>
+                                                    <button type="button" className="dc-edit-btn is-save" onClick={() => saveEdit(c)}>
+                                                        <FontAwesomeIcon icon={faCheck} /> Save
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            c.message && (
+                                                <p className="discussion-text">
+                                                    {c.message}
+                                                    {c.editedAt && <span className="dc-edited" title="This message was edited">edited</span>}
+                                                </p>
+                                            )
+                                        )}
                                         {c.attachments?.length > 0 && (
                                             <div className="discussion-images">
                                                 {c.attachments.map((a, i) => {
@@ -250,47 +347,109 @@ const TaskDiscussion = ({ taskId, currentUserId, basePath = '/tasks', title = 'D
             </div>
 
             <div className="discussion-composer">
-                {images.length > 0 && (
-                    <div className="file-chips-list" style={{ marginBottom: '8px' }}>
+                {images.length > 0 && mode === 'text' && (
+                    <div className="dc-chips">
                         {images.map((f, i) => (
-                            <div key={i} className="file-chip">
-                                <span className="file-chip-name">{f.name}</span>
-                                <button type="button" className="file-chip-remove" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}>✕</button>
-                            </div>
+                            <span key={i} className="dc-chip">
+                                <FontAwesomeIcon icon={f.type.startsWith('audio') ? faMicrophone
+                                    : f.type.startsWith('video') ? faVideo : faImage} />
+                                <span className="dc-chip-name">{f.name}</span>
+                                <button type="button" className="dc-chip-x"
+                                    onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}>
+                                    <FontAwesomeIcon icon={faXmark} />
+                                </button>
+                            </span>
                         ))}
                     </div>
                 )}
 
-                <div className="discussion-record-row">
-                    <AudioRecorder onAttach={handleVoiceAttach} disabled={sending} />
-                    <ScreenRecorder onAttach={handleRecordingAttach} />
-                </div>
-
-                <div className="discussion-input-row">
-                    <textarea
-                        className="discussion-input"
-                        rows="1"
-                        placeholder="Write a message..."
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        onKeyDown={onKeyDown}
-                        disabled={sending}
+                {/* Recording takes over the row entirely: half a composer with a
+                    waveform crammed beside it reads as broken. */}
+                {mode === 'voice' && (
+                    <AudioRecorder
+                        autoStart
+                        onAttach={handleVoiceAttach}
+                        onClose={() => setMode('text')}
                     />
+                )}
 
-                    <label className="icon-btn" title="Attach image" style={{ cursor: 'pointer' }}>
-                        <FontAwesomeIcon icon={faImage} />
-                        <input type="file" accept="image/*" multiple hidden onChange={handleImagePick} disabled={sending} />
-                    </label>
+                {mode === 'screen' && (
+                    <ScreenRecorder
+                        autoStart
+                        onAttach={handleRecordingAttach}
+                        onClose={() => setMode('text')}
+                    />
+                )}
 
-                    <button
-                        className="icon-btn discussion-send"
-                        title="Send"
-                        onClick={send}
-                        disabled={sending || (!message.trim() && images.length === 0)}
-                    >
-                        <FontAwesomeIcon icon={sending ? faSpinner : faPaperPlane} spin={sending} />
-                    </button>
-                </div>
+                {mode === 'text' && (
+                    <div className="dc-row">
+                        <div className="dc-attach" ref={attachRef}>
+                            <button
+                                type="button"
+                                className={`dc-btn ${attachOpen ? 'is-open' : ''}`}
+                                onClick={() => setAttachOpen(o => !o)}
+                                title="Attach"
+                                aria-haspopup="menu"
+                                aria-expanded={attachOpen}
+                                disabled={sending}
+                            >
+                                <FontAwesomeIcon icon={faPaperclip} />
+                            </button>
+
+                            {attachOpen && (
+                                <div className="dc-menu" role="menu">
+                                    <label className="dc-menu-item" role="menuitem">
+                                        <span className="dc-menu-icon is-file"><FontAwesomeIcon icon={faImage} /></span>
+                                        <span>
+                                            <strong>Attach file</strong>
+                                            <small>Images from your device</small>
+                                        </span>
+                                        <input type="file" accept="image/*" multiple hidden
+                                            onChange={(e) => { setAttachOpen(false); handleImagePick(e); }} />
+                                    </label>
+
+                                    <button type="button" className="dc-menu-item" role="menuitem"
+                                        onClick={() => { setAttachOpen(false); setMode('screen'); }}>
+                                        <span className="dc-menu-icon is-screen"><FontAwesomeIcon icon={faVideo} /></span>
+                                        <span>
+                                            <strong>Record screen</strong>
+                                            <small>Capture with narration</small>
+                                        </span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <textarea
+                            className="dc-input"
+                            rows="1"
+                            placeholder="Write a message..."
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            onKeyDown={onKeyDown}
+                            disabled={sending}
+                        />
+
+                        <button
+                            type="button"
+                            className="dc-btn is-mic"
+                            title="Record a voice note"
+                            onClick={() => setMode('voice')}
+                            disabled={sending}
+                        >
+                            <FontAwesomeIcon icon={faMicrophone} />
+                        </button>
+
+                        <button
+                            className="dc-btn is-send"
+                            title="Send"
+                            onClick={send}
+                            disabled={sending || (!message.trim() && images.length === 0)}
+                        >
+                            <FontAwesomeIcon icon={sending ? faSpinner : faPaperPlane} spin={sending} />
+                        </button>
+                    </div>
+                )}
             </div>
 
             {lightboxIndex !== null && lightboxIndex >= 0 && (

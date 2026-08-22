@@ -823,6 +823,7 @@ const scheduleDiscussion = buildDiscussionHandlers({
 
 router.get('/:id/comments', auth, scheduleDiscussion.list);
 router.post('/:id/comments', auth, taskUpload.array('attachments', 5), scheduleDiscussion.create);
+router.put('/:id/comments/:commentId', auth, scheduleDiscussion.update);
 router.delete('/:id/comments/:commentId', auth, scheduleDiscussion.remove);
 
 module.exports = router;

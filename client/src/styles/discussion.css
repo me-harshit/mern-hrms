@@ -1,0 +1,373 @@
+/* ==========================================================================
+   DISCUSSION
+   A chat surface: quiet thread, one clear composer row, and the recorders
+   taking that row over rather than crowding it.
+   Overrides the older .discussion-* rules in tasks.css.
+   ========================================================================== */
+
+/* The panel already has a fixed height from the pinned column, so a second
+   380px cap inside it just produced dead space and a needless inner scrollbar.
+   The thread takes whatever the panel has and only scrolls once there are more
+   messages than fit. */
+.td-discussion .discussion-thread {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    padding: 16px 14px;
+    gap: 16px;
+    background: #fbfcfd;
+}
+
+/* ---------- a message ---------- */
+.td-discussion .discussion-bubble {
+    background: #fff;
+    border: 1px solid #e8edf3;
+    border-radius: 14px 14px 14px 4px;
+    padding: 10px 13px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* Your own messages are the accent colour, which is what makes a thread
+   scannable at a glance rather than a wall of identical cards. */
+.td-discussion .discussion-msg.mine .discussion-bubble {
+    background: #215D7B;
+    border-color: #215D7B;
+    border-radius: 14px 14px 4px 14px;
+}
+
+.td-discussion .discussion-msg.mine .discussion-text {
+    color: #fff;
+}
+
+.td-discussion .discussion-text {
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
+.dc-edited {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    margin-left: 7px;
+    font-style: italic;
+}
+
+.discussion-msg.mine .dc-edited {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* The controls stay out of the way until the message is hovered. */
+.td-discussion .discussion-delete {
+    opacity: 0;
+    transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.td-discussion .discussion-msg:hover .discussion-delete,
+.td-discussion .discussion-delete:focus-visible {
+    opacity: 1;
+}
+
+/* ---------- editing in place ---------- */
+.dc-edit {
+    min-width: 220px;
+}
+
+.dc-edit-input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 0.86rem;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    color: #1e293b;
+    background: #fff;
+}
+
+.dc-edit-input:focus {
+    border-color: #215D7B;
+}
+
+.dc-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 7px;
+}
+
+.dc-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #475569;
+    border-radius: 7px;
+    padding: 5px 11px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.dc-edit-btn:hover { border-color: #cbd5e1; }
+.dc-edit-btn.is-save { background: #215D7B; border-color: #215D7B; color: #fff; }
+.dc-edit-btn.is-save:hover { background: #1a4a62; }
+
+/* ---------- composer ---------- */
+.td-discussion .discussion-composer {
+    border-top: 1px solid #e9edf2;
+    background: #fff;
+    padding: 12px;
+}
+
+.dc-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.dc-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 22px;
+    padding: 10px 16px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #1e293b;
+    background: #f8fafc;
+    resize: none;
+    outline: none;
+    max-height: 120px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dc-input:focus {
+    border-color: #215D7B;
+    background: #fff;
+}
+
+.dc-btn {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border-radius: 50%;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.86rem;
+    transition: all 0.15s ease;
+}
+
+.dc-btn:hover:not(:disabled) {
+    border-color: #215D7B;
+    color: #215D7B;
+    background: #f0f9ff;
+}
+
+.dc-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.dc-btn.is-open {
+    border-color: #215D7B;
+    color: #215D7B;
+    background: #f0f9ff;
+}
+
+.dc-btn.is-mic:hover:not(:disabled) {
+    border-color: #fecaca;
+    color: #dc2626;
+    background: #fef2f2;
+}
+
+.dc-btn.is-send {
+    background: #215D7B;
+    border-color: #215D7B;
+    color: #fff;
+}
+
+.dc-btn.is-send:hover:not(:disabled) {
+    background: #1a4a62;
+}
+
+/* ---------- attach menu ---------- */
+.dc-attach {
+    position: relative;
+}
+
+.dc-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 40;
+    width: 232px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dc-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    border: none;
+    background: none;
+    border-radius: 8px;
+    padding: 8px 9px;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.dc-menu-item:hover {
+    background: #f1f5f9;
+}
+
+.dc-menu-item strong {
+    display: block;
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.dc-menu-item small {
+    display: block;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    margin-top: 1px;
+}
+
+.dc-menu-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.dc-menu-icon.is-file { background: #e0f2fe; color: #075985; }
+.dc-menu-icon.is-screen { background: #ede9fe; color: #5b21b6; }
+
+/* ---------- staged attachments ---------- */
+.dc-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 9px;
+}
+
+.dc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    padding: 5px 6px 5px 11px;
+    font-size: 0.75rem;
+    color: #475569;
+    max-width: 220px;
+}
+
+.dc-chip > svg {
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.dc-chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dc-chip-x {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: #e2e8f0;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.6rem;
+    flex-shrink: 0;
+}
+
+.dc-chip-x:hover {
+    background: #fecaca;
+    color: #dc2626;
+}
+
+.recorder-waiting {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ==========================================================================
+   VOICE NOTES INSIDE A BUBBLE
+
+   The previous rules assumed your own bubble was light; it is now the brand
+   colour, and the note was drawn in near-white on near-white. Each side gets
+   its own treatment rather than one set of colours hoping to work on both.
+   ========================================================================== */
+
+/* Someone else's message: light bubble, so the note is a tinted panel. */
+.discussion-bubble .an {
+    background: #eef2f7;
+    border: 1px solid #e2e8f0;
+}
+
+.discussion-bubble .an .wf-bar { fill: #b6c2d1; }
+.discussion-bubble .an .wf-bar.is-played { fill: #215D7B; }
+.discussion-bubble .an .an-play { background: #215D7B; color: #fff; }
+.discussion-bubble .an .an-time { color: #64748b; }
+
+/* Your own: dark bubble, so it inverts. */
+.discussion-msg.mine .discussion-bubble .an {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.discussion-msg.mine .discussion-bubble .an .wf-bar { fill: rgba(255, 255, 255, 0.42); }
+.discussion-msg.mine .discussion-bubble .an .wf-bar.is-played { fill: #fff; }
+.discussion-msg.mine .discussion-bubble .an .an-play { background: #fff; color: #215D7B; }
+.discussion-msg.mine .discussion-bubble .an .an-time { color: rgba(255, 255, 255, 0.88); }
+
+/* A screen recording sits flush in either bubble. */
+.discussion-bubble .dv-video {
+    max-width: 260px;
+}
+
+@media (max-width: 560px) {
+    .dc-menu {
+        width: 210px;
+    }
+}
+
+/* The line naming which thread this is. Part of the pinned stack, so it keeps
+   its height and the discussion gives way instead. */
+.td-main > .tt-note,
+.td-main .rt-thread-note {
+    flex-shrink: 0;
+    margin: 0 2px;
+}

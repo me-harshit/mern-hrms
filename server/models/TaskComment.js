@@ -20,6 +20,10 @@ const taskCommentSchema = new mongoose.Schema({
 
     message: { type: String, default: "", trim: true },
 
+    // Set the first time the author rewrites it, so the thread can say so
+    // rather than silently showing different words than people replied to.
+    editedAt: { type: Date, default: null },
+
     /**
      * Images, voice notes and screen recordings.
      *

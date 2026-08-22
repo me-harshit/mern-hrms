@@ -1852,6 +1852,12 @@
     /* 65px topbar + 70px main-content padding + ~97px page header. */
     height: calc(100vh - 240px);
     min-height: 440px;
+    /* A stack, so anything under the discussion (the note explaining which
+       thread this is) sits inside the pinned height instead of hanging out the
+       bottom and over the page below it. */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .td-side {
@@ -2057,8 +2063,9 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    /* Fills the pinned layout rather than setting its own viewport height. */
-    height: 100%;
+    /* Takes the space the stack has left rather than claiming all of it, which
+       is what pushed the note below the column. */
+    flex: 1;
     min-height: 0;
 }
 

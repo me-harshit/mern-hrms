@@ -20,7 +20,7 @@ const fmt = (ms) => {
  * waveform and duration measured during recording, so the server can store them
  * alongside the audio.
  */
-const AudioRecorder = ({ onAttach, disabled }) => {
+const AudioRecorder = ({ onAttach, disabled, autoStart = false, onClose }) => {
     const {
         isSupported, status, error, recordingTimeMs, liveLevels,
         recordedBlob, waveform, maxMs,
@@ -34,6 +34,17 @@ const AudioRecorder = ({ onAttach, disabled }) => {
 
     // An object URL that outlives its blob leaks; revoke it when it changes.
     React.useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+    const startedRef = React.useRef(false);
+
+    // Mounting already-recording is the point when the composer swaps the text
+    // box for the waves: the mic click was the start instruction.
+    React.useEffect(() => {
+        if (autoStart && !startedRef.current && status === 'idle') {
+            startedRef.current = true;
+            startRecording();
+        }
+    }, [autoStart, status, startRecording]);
 
     const [playing, setPlaying] = React.useState(false);
     const [progress, setProgress] = React.useState(0);
@@ -56,6 +67,7 @@ const AudioRecorder = ({ onAttach, disabled }) => {
         );
         onAttach(file, { waveform, durationMs: recordingTimeMs });
         discardRecording();
+        onClose?.();
     };
 
     const togglePlay = () => {
@@ -67,7 +79,7 @@ const AudioRecorder = ({ onAttach, disabled }) => {
 
     return (
         <div className={`ar ${status !== 'idle' ? 'is-active' : ''}`}>
-            {status === 'idle' && (
+            {status === 'idle' && !autoStart && (
                 <button type="button" className="ar-trigger" onClick={startRecording} disabled={disabled}
                     title="Record a voice note">
                     <FontAwesomeIcon icon={faMicrophone} />
@@ -110,7 +122,8 @@ const AudioRecorder = ({ onAttach, disabled }) => {
                     <button type="button" className="ar-icon is-stop" onClick={stopRecording} title="Stop">
                         <FontAwesomeIcon icon={faStop} />
                     </button>
-                    <button type="button" className="ar-icon is-discard" onClick={discardRecording} title="Discard">
+                    <button type="button" className="ar-icon is-discard"
+                        onClick={() => { discardRecording(); onClose?.(); }} title="Cancel">
                         <FontAwesomeIcon icon={faTrash} />
                     </button>
                 </div>
@@ -134,7 +147,8 @@ const AudioRecorder = ({ onAttach, disabled }) => {
 
                     <span className="ar-time">{fmt(recordingTimeMs)}</span>
 
-                    <button type="button" className="ar-icon is-discard" onClick={discardRecording} title="Discard">
+                    <button type="button" className="ar-icon is-discard"
+                        onClick={() => { discardRecording(); onClose?.(); }} title="Discard">
                         <FontAwesomeIcon icon={faTrash} />
                     </button>
                     <button type="button" className="ar-attach" onClick={attach} title="Attach to message">

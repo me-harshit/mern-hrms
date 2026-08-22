@@ -1347,6 +1347,7 @@ const taskDiscussion = buildDiscussionHandlers({
 
 router.get('/:id/comments', auth, taskDiscussion.list);
 router.post('/:id/comments', auth, taskUpload.array('attachments', 5), taskDiscussion.create);
+router.put('/:id/comments/:commentId', auth, taskDiscussion.update);
 router.delete('/:id/comments/:commentId', auth, taskDiscussion.remove);
 
 module.exports = router;

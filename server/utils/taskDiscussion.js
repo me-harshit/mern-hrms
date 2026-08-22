@@ -163,6 +163,50 @@ const buildDiscussionHandlers = ({ ownerModel, load, link, notFound = 'Not found
         }
     };
 
+    /**
+     * Rewording your own message.
+     *
+     * Only the author, and only the text — swapping the attachments after
+     * people have replied would change what the thread appears to be about.
+     * Admin/HR can delete a message but not put words in someone's mouth.
+     */
+    const update = async (req, res) => {
+        try {
+            const { error } = await loadFor(req.params.id, req.user);
+            if (error) return res.status(error.code).json({ message: error.message });
+
+            const comment = await TaskComment.findOne({
+                _id: req.params.commentId,
+                taskId: req.params.id,
+                ownerModel
+            });
+            if (!comment) return res.status(404).json({ message: 'Message not found' });
+
+            if (comment.author.toString() !== req.user.id) {
+                return res.status(403).json({ message: 'You can only edit your own messages' });
+            }
+
+            const message = (req.body.message || '').trim();
+            if (!message && comment.attachments.length === 0) {
+                return res.status(400).json({ message: 'A message cannot be left empty' });
+            }
+
+            comment.message = message;
+            comment.editedAt = new Date();
+            await comment.save();
+
+            const populated = await TaskComment.findById(comment._id)
+                .populate('author', 'name role employeeId profilePic');
+
+            emitToTask(req.params.id, 'task:comment-edited', populated.toObject());
+            res.json(populated);
+        } catch (err) {
+            console.error('Discussion Edit Error:', err.message);
+            if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Message not found' });
+            res.status(500).json({ message: 'Server Error while editing the message' });
+        }
+    };
+
     const remove = async (req, res) => {
         try {
             const comment = await TaskComment.findOne({
@@ -187,7 +231,7 @@ const buildDiscussionHandlers = ({ ownerModel, load, link, notFound = 'Not found
         }
     };
 
-    return { list, create, remove };
+    return { list, create, update, remove };
 };
 
 module.exports = { buildDiscussionHandlers, canJoinDiscussion };

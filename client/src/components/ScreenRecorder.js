@@ -4,7 +4,13 @@ import { faVideo, faStop, faPlay, faPause, faCheck, faTrash, faMicrophone } from
 import { useScreenRecorder } from '../hooks/useScreenRecorder';
 import '../styles/tasks.css';
 
-const ScreenRecorder = ({ onAttach }) => {
+/**
+ * `autoStart` opens the screen picker the moment this mounts, for callers that
+ * already treated the user's click as "start recording" — the composer's attach
+ * menu, where a second Record button would be a click for nothing.
+ * `onClose` lets that caller put its own UI back when the take is dropped.
+ */
+const ScreenRecorder = ({ onAttach, autoStart = false, onClose }) => {
     const {
         isSupported,
         status,
@@ -20,6 +26,15 @@ const ScreenRecorder = ({ onAttach }) => {
     } = useScreenRecorder();
 
     const videoRef = useRef(null);
+    const startedRef = useRef(false);
+
+    // Once only: re-firing on every render would reopen the picker endlessly.
+    useEffect(() => {
+        if (autoStart && !startedRef.current && status === 'idle') {
+            startedRef.current = true;
+            startRecording();
+        }
+    }, [autoStart, status, startRecording]);
 
     // Format time: mm:ss
     const formatTime = (ms) => {
@@ -57,21 +72,29 @@ const ScreenRecorder = ({ onAttach }) => {
             const file = new File([recordedBlob], filename, { type: 'video/webm' });
             onAttach(file);
             discardRecording(); // reset the recorder for next use
+            onClose?.();
         }
     };
 
     return (
         <div className="screen-recorder-container">
-            {status === 'idle' && (
+            {status === 'idle' && !autoStart && (
                 <button type="button" className="gts-btn secondary" onClick={startRecording}>
                     <FontAwesomeIcon icon={faVideo} /> Record Screen
                 </button>
             )}
 
             {status === 'requesting' && (
-                <button type="button" className="gts-btn secondary" disabled>
-                    Selecting Screen...
-                </button>
+                <div className="recorder-waiting">
+                    <button type="button" className="gts-btn secondary" disabled>
+                        Selecting Screen...
+                    </button>
+                    {onClose && (
+                        <button type="button" className="gts-btn secondary" onClick={onClose}>
+                            Cancel
+                        </button>
+                    )}
+                </div>
             )}
 
             {(status === 'recording' || status === 'paused') && (
@@ -114,8 +137,9 @@ const ScreenRecorder = ({ onAttach }) => {
                         <video ref={videoRef} controls className="live-preview-video" />
                     </div>
                     <div className="preview-controls">
-                        <button type="button" className="gts-btn secondary" onClick={discardRecording}>
-                            <FontAwesomeIcon icon={faTrash} /> Discard & Re-record
+                        <button type="button" className="gts-btn secondary"
+                            onClick={() => { discardRecording(); onClose?.(); }}>
+                            <FontAwesomeIcon icon={faTrash} /> Discard
                         </button>
                         <button type="button" className="gts-btn primary" onClick={handleAttach}>
                             <FontAwesomeIcon icon={faCheck} /> Attach Recording
