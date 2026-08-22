@@ -528,6 +528,7 @@ Instead, populate `recurringTaskId` on the task detail page and render the templ
 | `GET /api/tasks/recurring` | List, scoped like `/managed` |
 | `GET /api/tasks/recurring/:id` | Detail + `occurrences[]` for the compliance view |
 | `PUT /api/tasks/recurring/:id` | Edit brief, pause, resume, end early, extend |
+| `DELETE /api/tasks/recurring/:id` | Soft delete (`?clearOpen=true` also archives unfinished days) |
 
 The preview endpoint is **advisory only**. Leave approved *after* the schedule is created won't appear in it, and that is fine — the cron re-checks every morning and is the sole authority. Worth a line of copy on the form so nobody reads the preview as a guarantee.
 
@@ -631,8 +632,134 @@ Both get their 5 tasks; the runs end on different days because roll-forward is p
 - **Task cards are a uniform height**, board and list alike. Not by hard-coding one — title, description and the tag row are each pinned to an exact line count, so the total comes out identical and there is no dead padding. Three things had to be fixed to get there: a long title pushed the card taller (`min-height` → exact `height`), a flex-grown description leaked a third line under the `-webkit-line-clamp` ellipsis (the clamp draws the ellipsis but does not hide overflow once the box is taller than the clamp), and the `Daily` badge was 2px taller than the other chips, which alone put recurring cards out of line. The empty-description block is still rendered, as "No description", because omitting it would shorten the card.
 - **The board shows only a "Daily" chip**, not the day number. The precise position needs the schedule document, and fetching one per card to render a badge is not worth it; the detail page has the full count.
 
+### 13.13 Deleting a schedule
+
+**End** and **Delete** are different actions and both exist. End stops generation but keeps the schedule in the list — you still want to read the compliance record. Delete removes it from the list.
+
+Delete is **soft** (`isArchived`), matching `DELETE /api/tasks/:id`. It has to be: generated tasks reference the schedule for their brief and their "Day 3 of 10", and a hard delete would strip both from work people already did. Deleting also forces `status: 'Cancelled'`, which is what actually stops tomorrow's run — the cron looks for `status: 'Active'`, not for `isArchived`.
+
+The admin chooses what happens to days already generated, defaulting to **leaving them alone**:
+
+- default — every generated task stays exactly as it is, including today's, which the employee can still finish
+- `?clearOpen=true` — completed days are kept as a record; anything unfinished is archived off boards, and its occurrence flips `pending` → `not-applicable` so the compliance calendar shows it as withdrawn rather than **missed**
+
+The list filter is `{ isArchived: { $ne: true } }`, not `false` — schedules created before the field existed have no such key, and an equality match would hide all of them. Same trap as §15.1.
+
+### 13.14 Converting a one-off task into a schedule
+
+`POST /api/tasks/recurring/from-task/:taskId`, surfaced as a **Make this a daily task** switch on the Edit Task page. Copies the brief, assignees and media onto a new schedule and **archives the original** — the schedule replaces it rather than sitting beside a duplicate of itself.
+
+The fiddly part is media. A video still awaiting the nightly compression has a `VideoCompressionQueue` row pointing at the *task*; left alone, the job would write the S3 url back to the archived task while the schedule kept a staged path that then gets deleted. That is the §13.7 trap arriving by a different route, so the queue rows are re-pointed at the schedule (`ownerModel: 'RecurringTask'`) as part of the move. There is a test for exactly that.
+
+Refused for: a task that already belongs to a schedule, an archived one, and a self-assigned task still awaiting approval. Only the assigner or Admin/HR may convert.
+
+Edit Task was also rebuilt to match Add Task — same two-column grid, same cards, same popover date picker, same sticky footer, and `EmployeeMultiSelect` in place of its own hand-rolled search list. The two pages do the same job and looked unrelated.
+
 ### Still open
 
 - **`EditTask` still uses native date inputs.** Only `AddTask` was moved to the popup picker. Editing an existing task is a different enough context that this was left alone, but the two forms now look slightly different.
 - **Night shift.** 06:00 IST suits the day shift; a night-shift employee gets the task mid-shift. `attendanceCron` already splits DAY/NIGHT and this likely needs the same.
 - **Missed days do not roll forward.** Only system skips extend a schedule; someone simply not posting does not earn an extra day.
+
+---
+
+## 14. Profile page redesign
+
+The employee profile page (`client/src/pages/User/Profile.js`), rebuilt around the settings pattern Vercel and Linear use. The brand accent stays #215D7B rather than going monochrome.
+
+**The ask:** Change Password sat *outside* the profile box as its own floating card, reading like an unrelated feature bolted on. It is now the card's last section ("Security"), with its action in the card's footer bar.
+
+| File | |
+|---|---|
+| `client/src/styles/profile.css` | **new** — the `pf-*` system |
+| `client/src/pages/User/Profile.js` | rebuilt render; logic (fetch, avatar upload, update) unchanged |
+| `client/src/components/ChangePassword.js` | renders as a section of the profile card, not a card of its own |
+| `client/src/styles/App.css` | 17 dead profile rules removed (-1.9KB) |
+
+**Design decisions**
+
+- **One bordered card**, hairline-separated into sections. `1px #e6e8eb` and no shadow, replacing a 16px radius with `0 4px 20px` shadow.
+- **Tinted footer bars** (`#fafbfc`) hold each section's buttons with a helper note on the left, instead of buttons floating at the end of a form or absolutely positioned in a corner.
+- **Three-column field grid**; small muted labels (`0.72rem`, `#8b95a1`) over medium-weight values (`#111827`).
+- **Icons removed from data rows.** Fourteen grey glyphs, one per field, added noise without information. They survive only on section headings.
+- **Unset fields show a quiet em dash**, not "Not provided" in the same weight as real data.
+
+**Dead CSS removal.** Every candidate was checked against all of `client/src` first: `.profile-actions`, `.save-btn`, `.cancel-btn`, `.form-grid`, `.role-tag` and `.profile-form` are shared with other pages and stayed. Two traps: a responsive `@media` block held overrides for the deleted rules (easy to miss — the main rules were gone but these were not), and `.profile-details-grid` shared a selector list with `.form-grid`, so only the dead selector could come out, not the block.
+
+---
+
+## 15. Self-assigned tasks
+
+An employee logging work they were handed verbally, which then needs sign-off. Two entry points: **My Tasks → "Log a task"** for the employee, and **All Tasks → Self-Assigned** for whoever approves.
+
+### 15.1 It rides on the existing Task model
+
+No new collection. `assignedBy` already means "who gave out this work", which is exactly what "select who has assigned them" asks for — the employee names them and the field keeps its meaning. Four fields were added:
+
+| Field | Notes |
+|---|---|
+| `isSelfAssigned` | Boolean, default `false` |
+| `approvalStatus` | `Approved` / `Pending` / `Rejected`, **default `Approved`** |
+| `approvalNote` | The rejection reason |
+| `approvedBy` / `approvedAt` | Who decided, and when |
+
+**The default only covers *new* documents — this bit me.** A Mongoose default is applied when a document is written, not to documents already stored. Every task created before this field existed has **no `approvalStatus` at all**, so the first version of the `/managed` filter (`{ approvalStatus: 'Approved' }`) matched none of them and the admin task list came back empty on any database with real history. Live still worked only because it was running the older code.
+
+The filter is therefore `{ approvalStatus: { $nin: ['Pending', 'Rejected'] } }` — `$nin` matches a **missing** field, so untouched historical tasks keep showing without any backfill. `{ recurringTaskId: null }` was already safe for the same reason (`{field: null}` matches missing fields); `isSelfAssigned: true` is safe because legacy tasks genuinely are not self-assigned. There is a regression test for exactly this in `testSelfAssignedTasks.js`, inserting a raw legacy document and asserting it still appears.
+
+### 15.2 Who approves
+
+The employee's own chain of command — everyone in their `reportingManagerEmail[]` and `teamLeadsEmail[]` — plus Admin/HR, who can always step in. First to act decides.
+
+Deliberately **not** the person named in `assignedBy`: an employee can name any colleague, and naming someone must not hand them approval rights they don't otherwise have. That separation is why `getApproversFor()` reads the reporting chain rather than the task.
+
+Two guards worth keeping: rejecting **requires a reason** (a rejection with no note leaves the employee nothing to act on), and nobody can approve their own request even if they are a manager.
+
+### 15.3 Lifecycle
+
+```
+employee logs it          -> Pending   (approvers notified)
+  |                                     appears on their board, fully workable
+  |-- approved            -> Approved  (now an ordinary task; joins Normal Tasks)
+  |-- rejected + reason   -> Rejected  (stays on their board with the reason)
+        |
+        `-- edit & resubmit -> Pending (old verdict cleared, approvers notified)
+```
+
+A pending task is **fully workable** — draggable, status changeable, proof attachable. Work usually starts before the paperwork clears, and blocking it would just push people back to not recording it at all.
+
+### 15.4 Endpoints
+
+| Route | Who |
+|---|---|
+| `POST /api/tasks/self` | **Any signed-in user** — the only create path not gated on `CAN_ASSIGN`. Guard rails are that they can only assign it to themselves, and it lands `Pending` |
+| `PUT /api/tasks/self/:id` | The employee, resubmitting their own rejected request |
+| `PUT /api/tasks/:id/approval` | An approver for that employee |
+| `GET /api/tasks/self-assigned` | `CAN_ASSIGN`; a Team Lead sees only their own team, enforced server-side |
+
+`/tasks/managed` now filters to `approvalStatus: 'Approved'`, so pending and rejected requests stay out of the Normal Tasks tab and live only under Self-Assigned. Once approved, a self-assigned task appears in both — correctly, since it is then ordinary work.
+
+Route order matters: `GET /self-assigned` is a single segment like `/:id`, so it is registered before it.
+
+### 15.5 UI
+
+| Where | What |
+|---|---|
+| My Tasks header | **"Log a task"** opens a dialog: title, details, who asked, priority, type/project, timeline (the same range picker the Assign form uses) |
+| My Tasks cards | `Awaiting` / `Rejected` / `Self` badge in the tag row |
+| Task detail | Same badge, plus the rejection reason and **Edit and resubmit** for the assignee |
+| All Tasks | Fourth tab **Self-Assigned**, with an amber count of what is waiting. Employee name and photo, who they say asked them, timeline, status, approve/reject |
+
+The dialog doubles as the resubmit form — same fields, so the same component with `task` supplied.
+
+**Layout.** Landscape (940px, two columns): what the work *is* on the left (title, details), everything *about* it on the right (who asked, priority, type/project, timeline). One tall column made a short form scroll on a laptop. The details textarea flexes so both columns finish level.
+
+**Who asked you** is `<PersonPicker>`, not a `<select>`. A native select listing the whole company cannot be searched or scanned. It is the single-select counterpart to `EmployeeMultiSelect`, sharing its search / click-away / Escape behaviour, with a deliberately short list (~4 rows) so it stays a dropdown rather than taking over the dialog — and so it clears the dialog body instead of being clipped by its scroll.
+
+Two layout traps worth remembering: the `<form>` between the flex dialog and the scrolling body has to pass the height constraint through (`display:flex; min-height:0`), or the footer gets pushed off instead of the body scrolling. And `.st-note` is a flex row, so its message must sit in a single `<span>` — bare text nodes and an inline `<strong>` each become their own flex item and the sentence breaks into columns.
+
+### 15.6 Verified
+
+`node server/scripts/testSelfAssignedTasks.js` — **35 assertions**, covering creation and validation, that exactly the right approvers are notified and unrelated managers are not, that a pending task is workable but hidden from Normal Tasks, that unrelated leads and other employees cannot decide, that rejection needs a reason, resubmission clears the stale verdict, nobody approves their own, and that a Team Lead's list is scoped to their team while Admin sees everyone.
+
+The recurring suite (73) still passes, which matters here: it exercises `/managed`, and confirms cron-generated tasks pick up the `Approved` default rather than disappearing behind the new filter.

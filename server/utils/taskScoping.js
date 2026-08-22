@@ -36,7 +36,7 @@ const getScopedEmployees = async (reqUser) => {
     const filter = await getScopedEmployeeFilter(reqUser);
     if (!filter) return [];
 
-    return User.find(filter).select('name email role employeeId').sort({ name: 1 });
+    return User.find(filter).select('name email role employeeId profilePic').sort({ name: 1 });
 };
 
 // Which projects this user may file tasks against. Any Active project is fair
@@ -48,11 +48,52 @@ const getScopedProjects = async () => {
     return Project.find({ status: 'Active' }).select('name status').sort({ name: 1 });
 };
 
+/**
+ * Who may approve a self-assigned task for `employeeId` (TaskPlan.md §15).
+ *
+ * The employee's own chain of command, plus Admin/HR who can always step in.
+ * `User.reportingManagerEmail[]` and `teamLeadsEmail[]` are the existing
+ * mapping the rest of the app already scopes by, so this introduces no new
+ * notion of "my manager".
+ *
+ * Deliberately not the person named in `assignedBy`: an employee can name any
+ * colleague as having given them the work, and naming someone must not hand
+ * them approval rights they don't otherwise have.
+ */
+const getApproversFor = async (employeeId) => {
+    const employee = await User.findById(employeeId)
+        .select('reportingManagerEmail teamLeadsEmail');
+    if (!employee) return [];
+
+    const chain = [
+        ...(employee.reportingManagerEmail || []),
+        ...(employee.teamLeadsEmail || [])
+    ].filter(Boolean).map(e => e.toLowerCase());
+
+    return User.find({
+        status: 'ACTIVE',
+        $or: [
+            { email: { $in: chain } },
+            { role: { $in: IS_PRIVILEGED } }
+        ]
+    }).select('_id name email role');
+};
+
+// Is this specific user allowed to decide on that employee's request?
+const canApproveFor = async (employeeId, reqUser) => {
+    if (IS_PRIVILEGED.includes(reqUser.role)) return true;
+
+    const approvers = await getApproversFor(employeeId);
+    return approvers.some(a => a._id.toString() === reqUser.id);
+};
+
 module.exports = {
     CAN_ASSIGN,
     IS_PRIVILEGED,
     CAN_ASSIGN_ANYONE,
     getScopedEmployeeFilter,
     getScopedEmployees,
-    getScopedProjects
+    getScopedProjects,
+    getApproversFor,
+    canApproveFor
 };

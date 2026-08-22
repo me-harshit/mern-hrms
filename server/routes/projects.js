@@ -54,7 +54,7 @@ router.get('/all', auth, async (req, res) => {
         const totalPages = Math.ceil(totalRecords / limit);
 
         const projects = await Project.find(query)
-            .populate('projectLead', 'name email')
+            .populate('projectLead', 'name email profilePic')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);

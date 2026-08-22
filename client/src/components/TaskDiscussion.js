@@ -7,8 +7,9 @@ import {
 import imageCompression from 'browser-image-compression';
 import api from '../utils/api';
 import { getSocket, onSocket } from '../utils/socket';
-import { resolveMediaUrl, initials, timeAgo } from '../utils/taskHelpers';
+import { resolveMediaUrl, timeAgo } from '../utils/taskHelpers';
 import MediaLightbox from './MediaLightbox';
+import Avatar from './Avatar';
 
 const TaskDiscussion = ({ taskId, currentUserId }) => {
     const [comments, setComments] = useState([]);
@@ -163,7 +164,7 @@ const TaskDiscussion = ({ taskId, currentUserId }) => {
                         const mine = c.author?._id === currentUserId;
                         return (
                             <div key={c._id} className={`discussion-msg ${mine ? 'mine' : ''}`}>
-                                <div className="assignee-avatar">{initials(c.author?.name)}</div>
+                                <Avatar name={c.author?.name} profilePic={c.author?.profilePic} className="assignee-avatar" />
                                 <div className="discussion-bubble-wrap">
                                     <div className="discussion-meta">
                                         <span className="discussion-author">{mine ? 'You' : (c.author?.name || 'Unknown')}</span>

@@ -4,11 +4,12 @@ import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faPlus, faSearch, faTimes, faPause, faPlay, faBan,
+    faPlus, faSearch, faTimes, faPause, faPlay, faBan, faTrash,
     faFolderOpen, faBuilding, faCalendarCheck
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
-import { slug, initials, taskContextLabel } from '../utils/taskHelpers';
+import { slug, taskContextLabel, confirmDeleteSchedule } from '../utils/taskHelpers';
+import Avatar from './Avatar';
 import '../styles/App.css';
 import '../styles/tasks.css';
 import '../styles/recurring.css';
@@ -86,6 +87,28 @@ const RecurringTaskList = () => {
             fetchSchedules();
         } catch (err) {
             Swal.fire('Error', err.response?.data?.message || 'Could not update the schedule.', 'error');
+        }
+    };
+
+    const remove = async (schedule) => {
+        const choice = await confirmDeleteSchedule(schedule.title);
+        if (!choice) return;
+
+        try {
+            const res = await api.delete(`/tasks/recurring/${schedule._id}`, {
+                params: { clearOpen: choice.clearOpen }
+            });
+            Swal.fire({
+                icon: 'success',
+                title: 'Schedule deleted',
+                text: res.data.clearedTasks
+                    ? `${res.data.clearedTasks} unfinished day(s) removed from boards.`
+                    : 'Tasks it already created were left as they are.',
+                toast: true, position: 'top-end', timer: 2600, showConfirmButton: false
+            });
+            fetchSchedules();
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not delete the schedule.', 'error');
         }
     };
 
@@ -194,7 +217,7 @@ const RecurringTaskList = () => {
                                         <td data-label="Assignees" className="col-assignees">
                                             <div className="avatar-stack" title={s.assignees.map(a => a?.name).join(', ')}>
                                                 {s.assignees.slice(0, 4).map(a => (
-                                                    <div key={a._id} className="assignee-avatar">{initials(a?.name)}</div>
+                                                    <Avatar key={a._id} name={a?.name} profilePic={a?.profilePic} className="assignee-avatar" />
                                                 ))}
                                                 {s.assignees.length > 4 && (
                                                     <div className="assignee-avatar avatar-more">+{s.assignees.length - 4}</div>
@@ -240,11 +263,15 @@ const RecurringTaskList = () => {
                                                     </button>
                                                 )}
                                                 {['Active', 'Paused'].includes(s.status) && (
-                                                    <button className="icon-btn danger" title="End schedule" aria-label="End schedule"
+                                                    <button className="icon-btn" title="End schedule (keep it in the list)" aria-label="End schedule"
                                                         onClick={() => act(s, 'cancel')}>
                                                         <FontAwesomeIcon icon={faBan} />
                                                     </button>
                                                 )}
+                                                <button className="icon-btn danger" title="Delete schedule" aria-label="Delete schedule"
+                                                    onClick={() => remove(s)}>
+                                                    <FontAwesomeIcon icon={faTrash} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>

@@ -1,0 +1,339 @@
+/* ==========================================================================
+   PROFILE PAGE
+   One bordered card holding every section, hairline-separated — the settings
+   pattern Vercel and Linear use: restrained borders instead of shadows, a lot
+   of whitespace, small muted labels over medium-weight values, and each
+   section's action sitting in a tinted footer bar rather than floating.
+   The brand accent stays #215D7B rather than Vercel's monochrome black.
+   ========================================================================== */
+
+.pf-page {
+    max-width: 940px;
+    margin: 0 auto;
+}
+
+.pf-page-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px;
+}
+
+.pf-page-sub {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin: 0 0 22px;
+}
+
+.pf-card {
+    background: #fff;
+    border: 1px solid #e6e8eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* ---------- hero ---------- */
+.pf-hero {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 26px 28px;
+    flex-wrap: wrap;
+}
+
+.pf-avatar-wrap {
+    position: relative;
+    width: 76px;
+    height: 76px;
+    flex-shrink: 0;
+}
+
+.pf-avatar,
+.pf-avatar-img {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pf-avatar {
+    background: linear-gradient(135deg, #215D7B, #2d7fa5);
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.pf-avatar-img {
+    border: 1px solid #e6e8eb;
+}
+
+.pf-avatar-edit {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #e6e8eb;
+    color: #4b5563;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.66rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.pf-avatar-edit:hover {
+    border-color: #215D7B;
+    color: #215D7B;
+}
+
+.pf-identity {
+    min-width: 0;
+}
+
+.pf-name {
+    font-size: 1.3rem;
+    font-weight: 650;
+    color: #111827;
+    letter-spacing: -0.02em;
+    margin: 0 0 5px;
+    line-height: 1.2;
+}
+
+.pf-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.83rem;
+    color: #6b7280;
+}
+
+.pf-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: #d1d5db;
+}
+
+.pf-role {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: #eef4f7;
+    color: #215D7B;
+    border: 1px solid #d8e6ed;
+}
+
+.pf-hero-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+/* ---------- sections ---------- */
+.pf-section {
+    border-top: 1px solid #eef0f2;
+    padding: 22px 28px;
+}
+
+.pf-section-head {
+    margin-bottom: 18px;
+}
+
+.pf-section-title {
+    font-size: 0.92rem;
+    font-weight: 650;
+    color: #111827;
+    letter-spacing: -0.01em;
+    margin: 0 0 3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pf-section-title svg {
+    color: #9ca3af;
+    font-size: 0.8rem;
+}
+
+.pf-section-desc {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ---------- read-only fields ---------- */
+.pf-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px 26px;
+}
+
+.pf-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.pf-span-2 {
+    grid-column: span 2;
+}
+
+.pf-field-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #8b95a1;
+    margin-bottom: 5px;
+}
+
+.pf-field-value {
+    font-size: 0.87rem;
+    font-weight: 500;
+    color: #111827;
+    line-height: 1.5;
+    margin: 0;
+    word-break: break-word;
+}
+
+.pf-field-value.is-empty {
+    color: #c3c9d0;
+    font-weight: 400;
+}
+
+.pf-field-sub {
+    display: block;
+    font-size: 0.78rem;
+    color: #6b7280;
+    font-weight: 400;
+    margin-top: 2px;
+}
+
+.pf-mono {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+}
+
+/* ---------- footer action bar ---------- */
+.pf-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    background: #fafbfc;
+    border-top: 1px solid #eef0f2;
+    padding: 13px 28px;
+}
+
+.pf-bar-note {
+    font-size: 0.78rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+.pf-bar-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+/* ---------- edit form ---------- */
+.pf-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px 20px;
+}
+
+.pf-form-grid .input-label,
+.pf-pw-grid .input-label {
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: #4b5563;
+    margin-bottom: 6px;
+    display: block;
+}
+
+/* ---------- password section ---------- */
+.pf-pw-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 20px;
+}
+
+.pf-pw-wrap {
+    position: relative;
+}
+
+.pf-pw-wrap .custom-input {
+    padding-right: 38px;
+    width: 100%;
+}
+
+.pf-pw-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 2px;
+    font-size: 0.82rem;
+}
+
+.pf-pw-toggle:hover {
+    color: #4b5563;
+}
+
+.pf-pw-rules {
+    font-size: 0.76rem;
+    color: #6b7280;
+    margin: 12px 0 0;
+    line-height: 1.6;
+}
+
+@media (max-width: 860px) {
+    .pf-grid,
+    .pf-grid.cols-2,
+    .pf-pw-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .pf-grid,
+    .pf-grid.cols-2,
+    .pf-form-grid,
+    .pf-pw-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .pf-span-2 {
+        grid-column: span 1;
+    }
+
+    .pf-hero,
+    .pf-section,
+    .pf-bar {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .pf-hero-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+}

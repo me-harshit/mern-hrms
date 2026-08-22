@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faChevronDown, faUserPlus } from '@fortawesome/free-solid-svg-icons';
-
-const initials = (name = '') =>
-    name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+import Avatar from './Avatar';
 
 /**
  * Select2-style picker: a compact control that shows the picked people as chips
@@ -96,7 +94,7 @@ const EmployeeMultiSelect = ({
                 ) : (
                     selectedEmployees.map(emp => (
                         <span key={emp._id} className="ms-chip">
-                            <span className="ms-chip-avatar">{initials(emp.name)}</span>
+                            <Avatar name={emp.name} profilePic={emp.profilePic} className="ms-chip-avatar" />
                             <span className="ms-chip-name">{emp.name}</span>
                             <button
                                 type="button"
@@ -154,7 +152,7 @@ const EmployeeMultiSelect = ({
                             return (
                                 <label key={emp._id} className={`ms-option ${isPicked ? 'selected' : ''}`}>
                                     <input type="checkbox" checked={isPicked} onChange={() => toggle(emp._id)} />
-                                    <div className="assignee-avatar">{initials(emp.name)}</div>
+                                    <Avatar name={emp.name} profilePic={emp.profilePic} className="assignee-avatar" />
                                     <div className="assignee-meta">
                                         <span className="assignee-name">{emp.name}</span>
                                         <span className="assignee-role">{emp.employeeId || emp.role}</span>

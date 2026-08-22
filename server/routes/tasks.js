@@ -22,7 +22,9 @@ const {
     IS_PRIVILEGED,
     getScopedEmployeeFilter,
     getScopedEmployees,
-    getScopedProjects
+    getScopedProjects,
+    getApproversFor,
+    canApproveFor
 } = require('../utils/taskScoping');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
@@ -176,8 +178,8 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
 
         const populated = await Task.findById(task._id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId');
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic');
 
         res.status(201).json(populated);
     } catch (err) {
@@ -223,8 +225,8 @@ router.get('/my', auth, async (req, res) => {
         const totalRecords = await Task.countDocuments(query);
         const tasks = await Task.find(query)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
             .sort({ dueDate: 1 })
             .skip(skip)
             .limit(limit);
@@ -264,6 +266,291 @@ router.get('/my/open-count', auth, async (req, res) => {
         res.json({ count });
     } catch (err) {
         res.status(500).json({ count: 0 });
+    }
+});
+
+// ==========================================
+// 3b. SELF-ASSIGNED TASKS  (TaskPlan.md §15)
+// ==========================================
+
+/**
+ * An employee logging work they were handed verbally.
+ *
+ * Unlike every other create path this is open to *any* signed-in user — that is
+ * the point of the feature. The guard rails instead are: they can only assign it
+ * to themselves, and it lands as `Pending` until someone in their chain of
+ * command approves it.
+ */
+router.post('/self', auth, taskUpload.array('attachments', 10), async (req, res) => {
+    try {
+        const { title, description, projectId, priority, startDate, dueDate, assignedById } = req.body;
+        const taskType = TASK_TYPES.includes(req.body.taskType) ? req.body.taskType : 'Project Task';
+        const isOfficeTask = taskType === 'Regular Office Task';
+
+        if (!title || !dueDate) {
+            discardStagedFiles(req.files);
+            return res.status(400).json({ message: 'Title and due date are required' });
+        }
+        if (!assignedById) {
+            discardStagedFiles(req.files);
+            return res.status(400).json({ message: 'Say who asked you to do this' });
+        }
+        if (!isOfficeTask && !projectId) {
+            discardStagedFiles(req.files);
+            return res.status(400).json({ message: 'Pick a project, or switch this to a Regular Office task' });
+        }
+
+        // Naming someone is a statement of fact, not a grant of permission — any
+        // active colleague is allowed here, and approval rights are worked out
+        // separately from the employee's own reporting chain.
+        const namedBy = await User.findOne({ _id: assignedById, status: 'ACTIVE' }).select('name');
+        if (!namedBy) {
+            discardStagedFiles(req.files);
+            return res.status(400).json({ message: 'That person is not an active employee' });
+        }
+
+        let project = null;
+        if (!isOfficeTask) {
+            const allowedProjects = await getScopedProjects();
+            project = allowedProjects.find(p => p._id.toString() === projectId);
+            if (!project) {
+                discardStagedFiles(req.files);
+                return res.status(400).json({ message: 'That project is not available' });
+            }
+        }
+
+        const subFolder = folderForTask(taskType, project?.name);
+        const { media, pendingVideos } = await processTaskFiles(req.files, subFolder);
+
+        const task = new Task({
+            title,
+            description: description || "",
+            taskType,
+            projectId: isOfficeTask ? null : projectId,
+            assignedBy: assignedById,
+            priority: priority || 'Medium',
+            startDate: startDate || null,
+            dueDate,
+            attachments: media,
+            // The whole point: they are the only assignee.
+            assignees: [req.user.id],
+            isSelfAssigned: true,
+            approvalStatus: 'Pending'
+        });
+
+        await task.save();
+
+        if (pendingVideos.length > 0) {
+            await VideoCompressionQueue.insertMany(pendingVideos.map(v => ({
+                taskId: task._id,
+                mediaId: v.mediaId,
+                field: 'attachments',
+                localPath: v.localPath,
+                originalName: v.originalName,
+                projectName: isOfficeTask ? 'Office' : project.name
+            })));
+        }
+
+        // Everyone who could act on it hears about it; whoever gets there first
+        // decides.
+        const me = await User.findById(req.user.id).select('name');
+        const approvers = await getApproversFor(req.user.id);
+        await Promise.all(approvers.map(a => notify(
+            a._id,
+            'Task needs approval',
+            `${me?.name || 'An employee'} logged "${title}" as self-assigned and it needs your approval.`,
+            `/task/${task._id}`
+        )));
+
+        const populated = await Task.findById(task._id)
+            .populate('projectId', 'name')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic');
+
+        res.status(201).json(populated);
+    } catch (err) {
+        discardStagedFiles(req.files);
+        console.error('Self Task Creation Error:', err);
+        res.status(500).json({ message: 'Server Error while creating the task' });
+    }
+});
+
+/**
+ * The employee fixing up a rejected request and sending it back.
+ * Only their own, only while it is Rejected — an approved task is edited through
+ * the ordinary edit route like any other.
+ */
+router.put('/self/:id', auth, async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        const mine = task.assignees.some(a => a.toString() === req.user.id);
+        if (!task.isSelfAssigned || !mine) {
+            return res.status(403).json({ message: 'This is not your self-assigned task' });
+        }
+        if (task.approvalStatus !== 'Rejected') {
+            return res.status(400).json({ message: 'Only a rejected task can be resubmitted' });
+        }
+
+        if (typeof req.body.title === 'string' && req.body.title.trim()) task.title = req.body.title.trim();
+        if (typeof req.body.description === 'string') task.description = req.body.description;
+        if (['Low', 'Medium', 'High', 'Urgent'].includes(req.body.priority)) task.priority = req.body.priority;
+        if (req.body.dueDate) task.dueDate = req.body.dueDate;
+        if (req.body.startDate !== undefined) task.startDate = req.body.startDate || null;
+
+        if (TASK_TYPES.includes(req.body.taskType)) {
+            task.taskType = req.body.taskType;
+            task.projectId = req.body.taskType === 'Regular Office Task' ? null : (req.body.projectId || task.projectId);
+        }
+        if (req.body.assignedById) {
+            const namedBy = await User.findOne({ _id: req.body.assignedById, status: 'ACTIVE' }).select('_id');
+            if (namedBy) task.assignedBy = req.body.assignedById;
+        }
+
+        // Back into the queue, with the old verdict cleared so the reason shown
+        // is never a stale one.
+        task.approvalStatus = 'Pending';
+        task.approvalNote = "";
+        task.approvedBy = null;
+        task.approvedAt = null;
+        await task.save();
+
+        const me = await User.findById(req.user.id).select('name');
+        const approvers = await getApproversFor(req.user.id);
+        await Promise.all(approvers.map(a => notify(
+            a._id,
+            'Task resubmitted for approval',
+            `${me?.name || 'An employee'} updated "${task.title}" and sent it back for approval.`,
+            `/task/${task._id}`
+        )));
+
+        const populated = await Task.findById(task._id)
+            .populate('projectId', 'name')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic');
+
+        res.json(populated);
+    } catch (err) {
+        console.error('Self Task Resubmit Error:', err);
+        res.status(500).json({ message: 'Server Error while resubmitting' });
+    }
+});
+
+/**
+ * Approve or reject. Open to the employee's reporting managers and team leads,
+ * plus Admin/HR — first one to act decides.
+ */
+router.put('/:id/approval', auth, async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (!task.isSelfAssigned) {
+            return res.status(400).json({ message: 'This task did not need approval' });
+        }
+
+        const { decision, note } = req.body;
+        if (!['Approved', 'Rejected'].includes(decision)) {
+            return res.status(400).json({ message: 'Decision must be Approved or Rejected' });
+        }
+        if (decision === 'Rejected' && !(note || '').trim()) {
+            return res.status(400).json({ message: 'Give a reason when rejecting, so it can be fixed' });
+        }
+
+        const employeeId = task.assignees[0];
+        if (!await canApproveFor(employeeId, req.user)) {
+            return res.status(403).json({ message: 'You are not an approver for this employee' });
+        }
+        // Their own request is not theirs to wave through.
+        if (employeeId.toString() === req.user.id) {
+            return res.status(403).json({ message: 'You cannot approve your own task' });
+        }
+
+        task.approvalStatus = decision;
+        task.approvalNote = (note || '').trim();
+        task.approvedBy = req.user.id;
+        task.approvedAt = new Date();
+        await task.save();
+
+        const actor = await User.findById(req.user.id).select('name');
+        await notify(
+            employeeId,
+            decision === 'Approved' ? 'Task approved' : 'Task rejected',
+            decision === 'Approved'
+                ? `${actor?.name || 'Your manager'} approved "${task.title}".`
+                : `${actor?.name || 'Your manager'} rejected "${task.title}": ${task.approvalNote}`,
+            `/task/${task._id}`
+        );
+
+        const populated = await Task.findById(task._id)
+            .populate('projectId', 'name')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
+            .populate('approvedBy', 'name profilePic');
+
+        res.json(populated);
+    } catch (err) {
+        console.error('Task Approval Error:', err);
+        res.status(500).json({ message: 'Server Error while recording the decision' });
+    }
+});
+
+/**
+ * The admin's Self-Assigned tab: every self-logged task in this user's scope,
+ * whatever its approval state, with the employee attached.
+ */
+router.get('/self-assigned', auth, async (req, res) => {
+    try {
+        if (!CAN_ASSIGN.includes(req.user.role)) return res.status(403).json({ message: 'Access Denied' });
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const andConditions = [{ isSelfAssigned: true, isArchived: false }];
+
+        // A Team Lead sees their own team's requests, not the whole company's.
+        if (!IS_PRIVILEGED.includes(req.user.role)) {
+            const scopeFilter = await getScopedEmployeeFilter(req.user);
+            const scoped = scopeFilter ? await User.find(scopeFilter).select('_id') : [];
+            andConditions.push({ assignees: { $in: scoped.map(u => u._id) } });
+        }
+
+        if (req.query.approvalStatus && req.query.approvalStatus !== 'All') {
+            andConditions.push({ approvalStatus: req.query.approvalStatus });
+        }
+        if (req.query.employeeId && req.query.employeeId !== 'All') {
+            andConditions.push({ assignees: req.query.employeeId });
+        }
+        if (req.query.search) {
+            andConditions.push({ title: new RegExp(req.query.search, 'i') });
+        }
+
+        const query = { $and: andConditions };
+
+        const totalRecords = await Task.countDocuments(query);
+        const tasks = await Task.find(query)
+            .populate('projectId', 'name')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
+            .populate('approvedBy', 'name profilePic')
+            .sort({ approvalStatus: 1, createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        // The number the tab badge shows.
+        const pendingCount = await Task.countDocuments({
+            $and: [...andConditions.filter(c => !c.approvalStatus), { approvalStatus: 'Pending' }]
+        });
+
+        res.json({
+            data: tasks,
+            pendingCount,
+            pagination: { totalRecords, totalPages: Math.ceil(totalRecords / limit) || 1, currentPage: page, limit }
+        });
+    } catch (err) {
+        console.error('Self-Assigned List Error:', err);
+        res.status(500).send('Server Error');
     }
 });
 
@@ -308,6 +595,16 @@ router.get('/managed', auth, async (req, res) => {
         if (req.query.excludeRecurring === 'true') {
             andConditions.push({ recurringTaskId: null });
         }
+        // Pending and rejected requests belong to the Self-Assigned tab. Once
+        // approved a self-assigned task is an ordinary task and shows up here
+        // like any other.
+        //
+        // Written as $nin rather than `{ approvalStatus: 'Approved' }` because a
+        // schema default only applies when a document is *written*: every task
+        // created before this field existed has no approvalStatus at all, and an
+        // equality match would hide every one of them. $nin matches a missing
+        // field, so untouched historical tasks keep showing.
+        andConditions.push({ approvalStatus: { $nin: ['Pending', 'Rejected'] } });
         if (req.query.overdue === 'true') {
             andConditions.push({ dueDate: { $lt: new Date() } });
             andConditions.push({ status: { $ne: 'Completed' } });
@@ -322,8 +619,8 @@ router.get('/managed', auth, async (req, res) => {
         const totalRecords = await Task.countDocuments(query);
         const tasks = await Task.find(query)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -370,8 +667,8 @@ router.get('/user/:userId', auth, async (req, res) => {
         const totalRecords = await Task.countDocuments(query);
         const tasks = await Task.find(query)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name employeeId')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name employeeId profilePic')
             .sort({ dueDate: 1 })
             .skip(skip)
             .limit(limit);
@@ -519,7 +816,7 @@ router.get('/by-employee', auth, async (req, res) => {
         })
             .select('title status priority startDate dueDate createdAt taskType projectId assignedBy assignees attachments')
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
+            .populate('assignedBy', 'name profilePic')
             .lean();
 
         const tasksByEmp = new Map(pageIds.map(id => [id.toString(), []]));
@@ -577,10 +874,10 @@ router.get('/:id', auth, async (req, res) => {
     try {
         const task = await Task.findById(req.params.id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name email')
-            .populate('assignees', 'name email employeeId')
-            .populate('statusUpdatedBy', 'name')
-            .populate('completionProof.uploadedBy', 'name')
+            .populate('assignedBy', 'name email profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
+            .populate('statusUpdatedBy', 'name profilePic')
+            .populate('completionProof.uploadedBy', 'name profilePic')
             // A generated task carries no brief of its own — it points back at
             // the schedule's (TaskPlan.md 13.7). Null for ordinary tasks.
             .populate('recurringTaskId', 'title targetCount attachments occurrences');
@@ -738,8 +1035,8 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
 
         const populated = await Task.findById(task._id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId');
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic');
 
         res.json(populated);
     } catch (err) {
@@ -852,9 +1149,9 @@ router.put('/:id/status', auth, taskUpload.array('completionProof', 10), async (
 
         const populated = await Task.findById(task._id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId')
-            .populate('statusUpdatedBy', 'name');
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
+            .populate('statusUpdatedBy', 'name profilePic');
 
         res.json(populated);
     } catch (err) {
@@ -930,9 +1227,9 @@ router.post('/:id/media', auth, taskUpload.array('attachments', 10), async (req,
 
         const populated = await Task.findById(task._id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId')
-            .populate('statusUpdatedBy', 'name');
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
+            .populate('statusUpdatedBy', 'name profilePic');
 
         res.status(201).json(populated);
     } catch (err) {
@@ -981,9 +1278,9 @@ router.delete('/:id/media/:mediaId', auth, async (req, res) => {
 
         const populated = await Task.findById(task._id)
             .populate('projectId', 'name')
-            .populate('assignedBy', 'name')
-            .populate('assignees', 'name email employeeId')
-            .populate('statusUpdatedBy', 'name');
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
+            .populate('statusUpdatedBy', 'name profilePic');
 
         res.json(populated);
     } catch (err) {
@@ -1019,7 +1316,7 @@ router.get('/:id/comments', auth, async (req, res) => {
         if (error) return res.status(error.code).json({ message: error.message });
 
         const comments = await TaskComment.find({ taskId: task._id })
-            .populate('author', 'name role employeeId')
+            .populate('author', 'name role employeeId profilePic')
             .sort({ createdAt: 1 });
 
         res.json(comments);
@@ -1081,7 +1378,7 @@ router.post('/:id/comments', auth, taskUpload.array('attachments', 5), async (re
             `/task/${task._id}`
         )));
 
-        const populated = await TaskComment.findById(comment._id).populate('author', 'name role employeeId');
+        const populated = await TaskComment.findById(comment._id).populate('author', 'name role employeeId profilePic');
 
         // Anyone with this task open sees the message appear immediately.
         emitToTask(task._id, 'task:comment', populated.toObject());

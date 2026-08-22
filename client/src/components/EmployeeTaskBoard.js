@@ -9,7 +9,8 @@ import {
     faUserGroup
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
-import { slug, initials, taskContextLabel, dueLabel, shortDate } from '../utils/taskHelpers';
+import { slug, taskContextLabel, dueLabel, shortDate } from '../utils/taskHelpers';
+import Avatar from './Avatar';
 
 // Opens on the people who are carrying work — that's the question this view
 // gets asked most. The "No tasks at all" tile is one click away.
@@ -264,7 +265,7 @@ const EmployeeTaskBoard = () => {
                                         }
                                     }}
                                 >
-                                    <div className="assignee-avatar">{initials(emp.name)}</div>
+                                    <Avatar name={emp.name} profilePic={emp.profilePic} className="assignee-avatar" />
 
                                     <div className="emp-identity">
                                         <span className="emp-name">{emp.name}</span>

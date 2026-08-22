@@ -105,7 +105,7 @@ router.get('/', auth, async (req, res) => {
 router.get('/directory', auth, async (req, res) => {
     try {
         // We use .select() to ensure sensitive data (passwords, salaries) is NEVER sent
-        const employees = await User.find({}).select('name role employeeId').sort({ name: 1 });
+        const employees = await User.find({}).select('name role employeeId profilePic').sort({ name: 1 });
         res.json(employees);
     } catch (err) {
         console.error(err.message);

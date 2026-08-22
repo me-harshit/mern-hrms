@@ -5,10 +5,11 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faRepeat, faPause, faPlay, faBan, faFolderOpen,
-    faBuilding, faPaperclip, faUserTie, faTriangleExclamation
+    faBuilding, faPaperclip, faUserTie, faTriangleExclamation, faTrash
 } from '@fortawesome/free-solid-svg-icons';
 import TaskMediaGrid from '../../components/TaskMediaGrid';
-import { slug, initials, taskContextLabel } from '../../utils/taskHelpers';
+import Avatar from '../../components/Avatar';
+import { slug, taskContextLabel, confirmDeleteSchedule } from '../../utils/taskHelpers';
 import { prettyDate, todayYmd, parseYmd } from '../../utils/scheduleDates';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
@@ -84,6 +85,18 @@ const RecurringTaskDetail = () => {
         }
     };
 
+    const remove = async () => {
+        const choice = await confirmDeleteSchedule(data?.schedule?.title || 'this schedule');
+        if (!choice) return;
+
+        try {
+            await api.delete(`/tasks/recurring/${id}`, { params: { clearOpen: choice.clearOpen } });
+            navigate('/tasks?view=recurring');
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not delete the schedule.', 'error');
+        }
+    };
+
     if (loading) {
         return (
             <div className="attendance-container fade-in">
@@ -147,6 +160,9 @@ const RecurringTaskDetail = () => {
                             <FontAwesomeIcon icon={faBan} /> End
                         </button>
                     )}
+                    <button className="gts-btn secondary" onClick={remove}>
+                        <FontAwesomeIcon icon={faTrash} /> Delete
+                    </button>
                 </div>
             </div>
 
@@ -158,8 +174,19 @@ const RecurringTaskDetail = () => {
                         <FontAwesomeIcon icon={schedule.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
                         <span className="task-context-label">{taskContextLabel(schedule)}</span>
                     </span>
-                    <span className="task-media-count">
-                        <FontAwesomeIcon icon={faUserTie} /> {schedule.assignedBy?.name || 'Unknown'}
+                    <span className="task-media-count byline">
+                        {schedule.assignedBy ? (
+                            <>
+                                <Avatar
+                                    name={schedule.assignedBy.name}
+                                    profilePic={schedule.assignedBy.profilePic}
+                                    className="byline-avatar"
+                                />
+                                {schedule.assignedBy.name}
+                            </>
+                        ) : (
+                            <><FontAwesomeIcon icon={faUserTie} /> Unknown</>
+                        )}
                     </span>
                 </div>
 
@@ -216,7 +243,7 @@ const RecurringTaskDetail = () => {
                 return (
                     <div className="rc-person" key={person.user._id}>
                         <div className="rc-person-head">
-                            <div className="assignee-avatar">{initials(person.user.name)}</div>
+                            <Avatar name={person.user.name} profilePic={person.user.profilePic} className="assignee-avatar" />
                             <span className="rc-person-name">{person.user.name}</span>
 
                             {person.status === 'Stalled' && (
