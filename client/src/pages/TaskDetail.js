@@ -486,7 +486,12 @@ const TaskDetail = () => {
                                 </div>
                             </dl>
 
-                            {hasTimeWindow(task) && (
+                            {/* The assignee sees this even without an explicit time window —
+                                the fallback shift-end is still a real cutoff, and it's their
+                                own workday it's counting down. Someone just looking in on the
+                                task (an admin who didn't set a time) doesn't get the same
+                                unsolicited precision. */}
+                            {hasTimeWindow(task, { requireExplicit: !isAssignee }) && (
                                 <div className="td-countdown">
                                     <TaskCountdown task={task} />
                                 </div>

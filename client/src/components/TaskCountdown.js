@@ -2,20 +2,26 @@ import React, { useEffect, useState } from 'react';
 import '../styles/taskCountdown.css';
 
 /**
- * A live-reducing progress bar for a task's explicit time window
- * (TaskPlan.md §16). Deliberately not shown for tasks that only have the
- * shift-end fallback — that instant isn't something the assigner actually
- * chose, so putting a countdown on it would read as a precision the app
- * doesn't have.
+ * A live-reducing progress bar for how much of a task's window is left
+ * (TaskPlan.md §16).
+ *
+ * By default this only counts an *explicit* window (both startTime and
+ * dueTime chosen by the assigner) — admin-facing lists stay uncluttered for
+ * the common case where nobody set one. Pass `{ requireExplicit: false }` to
+ * show it regardless, measuring against the shift-end fallback instead; this
+ * is what the employee-facing pages use, since "how much of today is left"
+ * is useful to an employee even when nobody typed in an exact due time.
  *
  * hasTimeWindow() is the gate every call site uses to decide whether to
  * mount <TaskCountdown> at all, rather than TaskCountdown early-returning
- * internally — a card list can have dozens of tasks with no window, and
- * each of those would otherwise still subscribe to the shared clock below
- * for nothing every render.
+ * internally — a card list can have dozens of tasks, and each of those would
+ * otherwise still subscribe to the shared clock below for nothing.
  */
-export const hasTimeWindow = (task) =>
-    Boolean(task && task.startTime && task.dueTime && task.status !== 'Completed');
+export const hasTimeWindow = (task, { requireExplicit = true } = {}) => {
+    if (!task || task.status === 'Completed') return false;
+    if (requireExplicit) return Boolean(task.startTime && task.dueTime);
+    return Boolean(task.dueDate);
+};
 
 // One ticking clock shared by every mounted countdown, rather than a
 // setInterval per card — a board can have a few dozen of these at once.
@@ -64,12 +70,20 @@ const istInstant = (dueDate, hhmm) => new Date(`${new Date(dueDate).toISOString(
 const TaskCountdown = ({ task, compact = false }) => {
     const now = useClockNow();
 
-    const start = istInstant(task.dueDate, task.startTime);
+    // An explicit start time wins; otherwise the window is "since this task
+    // became live" — its start date if the assigner gave it one (a
+    // self-assigned task's timeline can run days), or when it was created.
+    const start = task.startTime
+        ? istInstant(task.dueDate, task.startTime)
+        : new Date(task.startDate || task.createdAt || task.dueDate).getTime();
     // overdueAt is the same instant the server's own overdue queries use —
     // preferring it here keeps this bar and every "Overdue" badge elsewhere
-    // in perfect agreement. Falls back to recomputing it only if a caller
+    // in perfect agreement, whether that instant is an explicit due time or
+    // the shift-end fallback. Falls back to recomputing it only if a caller
     // somehow has the time fields but not overdueAt.
-    const end = task.overdueAt ? new Date(task.overdueAt).getTime() : istInstant(task.dueDate, task.dueTime);
+    const end = task.overdueAt
+        ? new Date(task.overdueAt).getTime()
+        : (task.dueTime ? istInstant(task.dueDate, task.dueTime) : new Date(task.dueDate).getTime());
     if (!(end > start)) return null; // a malformed window shouldn't render nonsense
 
     const total = end - start;
