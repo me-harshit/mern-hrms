@@ -171,7 +171,7 @@ const Tasks = () => {
                             className={`type-toggle-btn ${view === 'tasks' ? 'active' : ''}`}
                             onClick={() => setView('tasks')}
                         >
-                            <FontAwesomeIcon icon={faClipboardList} /> Normal Tasks
+                            <FontAwesomeIcon icon={faClipboardList} /> Regular Tasks
                         </button>
                         <button
                             type="button"
@@ -354,6 +354,11 @@ const Tasks = () => {
                                                     <div className="assignee-avatar avatar-more">+{task.assignees.length - 4}</div>
                                                 )}
                                             </div>
+                                            {task.assignedBy?.name && (
+                                                <span className="assignee-by-note" title={`Assigned by ${task.assignedBy.name}`}>
+                                                    by {task.assignedBy.name}
+                                                </span>
+                                            )}
                                         </td>
 
                                         <td data-label="Priority" className="col-priority">

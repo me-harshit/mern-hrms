@@ -89,11 +89,19 @@ const normaliseDates = (raw, { allowPast = false } = {}) => {
 // not an id — which silently locks the schedule's own creator out.
 const idOf = (v) => String(v && v._id ? v._id : v);
 
-// Who is allowed to look at a schedule.
-const canTouchSchedule = (schedule, reqUser) =>
-    idOf(schedule.assignedBy) === reqUser.id ||
-    IS_PRIVILEGED.includes(reqUser.role) ||
-    schedule.assignees.some(a => idOf(a) === reqUser.id);
+// Who is allowed to look at a schedule. Its only caller is the GET detail
+// route (view-only) — a Team Lead reaching a schedule this way only ever
+// reads it, so widening this to their team doesn't touch edit/delete rights,
+// which stay assigner-or-privileged as decided elsewhere.
+const canTouchSchedule = async (schedule, reqUser) => {
+    if (idOf(schedule.assignedBy) === reqUser.id) return true;
+    if (IS_PRIVILEGED.includes(reqUser.role)) return true;
+    if (schedule.assignees.some(a => idOf(a) === reqUser.id)) return true;
+
+    const visibility = await getTaskVisibilityFilter(reqUser);
+    if (!visibility) return false;
+    return Boolean(await RecurringTask.exists({ _id: schedule._id, ...visibility }));
+};
 
 // ==========================================
 // 1. PREVIEW — powers the calendar
@@ -517,7 +525,7 @@ router.get('/:id', auth, async (req, res) => {
             .populate('occurrences.taskId', 'status title');
 
         if (!schedule) return res.status(404).json({ message: 'Schedule not found' });
-        if (!canTouchSchedule(schedule, req.user)) return res.status(403).json({ message: 'Access Denied' });
+        if (!(await canTouchSchedule(schedule, req.user))) return res.status(403).json({ message: 'Access Denied' });
 
         // The calendar is drawn per person, so group the log that way rather
         // than making the client bucket a flat array.

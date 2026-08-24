@@ -935,7 +935,20 @@ router.get('/:id', auth, async (req, res) => {
         const isAssignee = task.assignees.some(a => a && a._id.toString() === req.user.id);
         const isOwner = task.assignedBy._id.toString() === req.user.id;
 
-        if (!isAssignee && !isOwner && !IS_PRIVILEGED.includes(req.user.role)) {
+        let allowed = isAssignee || isOwner || IS_PRIVILEGED.includes(req.user.role);
+
+        // Neither assignee nor owner and not privileged doesn't rule out a Team
+        // Lead looking at their own team's work — getTaskVisibilityFilter is
+        // what /managed and /my already use for that; this checks the one task
+        // already loaded against the same rule instead of duplicating it.
+        if (!allowed) {
+            const visibility = await getTaskVisibilityFilter(req.user);
+            if (visibility) {
+                allowed = Boolean(await Task.exists({ _id: task._id, ...visibility }));
+            }
+        }
+
+        if (!allowed) {
             return res.status(403).json({ message: 'Unauthorized to view this task' });
         }
 
