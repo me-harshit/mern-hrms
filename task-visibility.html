@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task Visibility — Calendar &amp; Workload</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+  :root{
+    --bg:#0a0d13; --panel:#12161f; --panel-2:#171c27; --border:#232938; --border-soft:#1b202c;
+    --text:#e7eaf1; --text-mid:#a7afc2; --text-dim:#5f6879;
+    --green:#3ddc97; --green-dim:#1a3d31; --amber:#f5b942; --amber-dim:#3d2f14;
+    --red:#f45b69; --red-dim:#3d1a20; --blue:#5b8cff; --blue-dim:#182238;
+    --purple:#a78bfa; --purple-dim:#2a2140;
+    --mono:'IBM Plex Mono',monospace; --sans:'Inter',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1440px;margin:0 auto;padding:20px 24px 60px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+  h1{font-family:var(--mono);font-size:15px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 2px;font-weight:600;}
+  .sub{color:var(--text-dim);font-size:12px;font-family:var(--mono);}
+
+  .tabs{display:flex;gap:6px;margin-bottom:18px;background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;padding:4px;width:fit-content;}
+  .tab-btn{background:none;border:none;color:var(--text-mid);font-family:var(--sans);font-weight:600;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;}
+  .tab-btn.active{background:var(--blue);color:#0a0d13;}
+  .view{display:none;} .view.active{display:block;}
+
+  /* KPI strip shared */
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;}
+  .kpi{background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;padding:14px 16px;position:relative;}
+  .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+  .kpi.k1::before{background:var(--blue);} .kpi.k2::before{background:var(--green);}
+  .kpi.k3::before{background:var(--text-dim);} .kpi.k4::before{background:var(--amber);}
+  .kpi.k5::before{background:var(--red);}
+  .kpi .num{font-family:var(--mono);font-size:24px;font-weight:600;line-height:1;}
+  .kpi .lbl{color:var(--text-mid);font-size:11px;margin-top:6px;text-transform:uppercase;letter-spacing:.05em;}
+
+  /* ---------- Calendar ---------- */
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .cal-head h2{font-family:var(--mono);font-size:15px;margin:0;letter-spacing:.03em;}
+  .cal-nav{display:flex;gap:6px;}
+  .cal-nav button{background:var(--panel-2);border:1px solid var(--border);color:var(--text-mid);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:14px;}
+  .cal-legend{display:flex;gap:14px;font-size:11px;color:var(--text-mid);font-family:var(--mono);margin-bottom:10px;}
+  .cal-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .cal-legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
+  .cal-dow{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);text-align:center;padding-bottom:4px;text-transform:uppercase;}
+  .cal-day{
+    background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;min-height:92px;padding:8px;cursor:pointer;
+    display:flex;flex-direction:column;gap:6px;transition:border-color .12s;
+  }
+  .cal-day:hover{border-color:var(--blue);}
+  .cal-day.empty{background:transparent;border:none;cursor:default;}
+  .cal-day.today{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset;}
+  .cal-day .dnum{font-family:var(--mono);font-size:12px;color:var(--text-mid);}
+  .cal-day.today .dnum{color:var(--blue);font-weight:700;}
+  .cal-bars{display:flex;flex-direction:column;gap:3px;margin-top:auto;}
+  .cal-bar{height:5px;border-radius:3px;}
+  .cal-count{font-family:var(--mono);font-size:9.5px;color:var(--text-dim);margin-top:2px;}
+  .cal-count.has-overdue{color:var(--red);}
+
+  /* Day detail panel */
+  .day-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-top:16px;display:none;}
+  .day-panel.show{display:block;}
+  .day-panel h3{margin:0 0 12px;font-family:var(--mono);font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-mid);}
+  .dp-item{display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:8px;font-size:12.5px;margin-bottom:6px;}
+  .dp-item .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .dp-item .t{flex:1;}
+  .dp-item .who{color:var(--text-dim);font-family:var(--mono);font-size:10.5px;}
+
+  /* ---------- Workload grid ---------- */
+  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;}
+  .filters input,.filters select{background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:7px 10px;font-family:var(--sans);font-size:13px;outline:none;}
+  .filters input{min-width:200px;}
+
+  .dept-section{margin-bottom:22px;}
+  .dept-title{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-family:var(--mono);font-size:12.5px;color:var(--text-mid);text-transform:uppercase;letter-spacing:.05em;}
+  .dept-title .count{background:var(--panel-2);border:1px solid var(--border);padding:1px 8px;border-radius:20px;color:var(--text-dim);}
+  .emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}
+  .emp-card{background:var(--panel);border:1px solid var(--border-soft);border-radius:11px;padding:12px;position:relative;overflow:hidden;}
+  .emp-card.has-overdue{border-color:var(--red);}
+  .emp-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+  .emp-card.status-heavy::after{background:var(--red);}
+  .emp-card.status-loaded::after{background:var(--amber);}
+  .emp-card.status-light::after{background:var(--green);}
+  .emp-card.status-empty::after{background:var(--text-dim);}
+  .ec-top{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+  .avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;color:#0a0d13;flex-shrink:0;}
+  .ec-name{font-size:13px;font-weight:600;}
+  .ec-role{font-size:10px;color:var(--text-dim);font-family:var(--mono);}
+  .ec-badges{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;}
+  .badge{font-family:var(--mono);font-size:9.5px;padding:2px 7px;border-radius:20px;text-transform:uppercase;font-weight:600;}
+  .badge.pending{background:var(--panel-2);color:var(--text-mid);}
+  .badge.progress{background:var(--blue-dim);color:var(--blue);}
+  .badge.done{background:var(--green-dim);color:var(--green);}
+  .badge.hold{background:var(--amber-dim);color:var(--amber);}
+  .badge.overdue{background:var(--red-dim);color:var(--red);}
+  .ec-foot{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--text-dim);}
+  .ec-foot .open{color:var(--text);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>// Task Visibility</h1>
+      <div class="sub" id="dateLine"></div>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-view="calendar">📅 Calendar</button>
+    <button class="tab-btn" data-view="grid">🔲 Workload Grid</button>
+  </div>
+
+  <div class="kpis" id="kpiStrip"></div>
+
+  <!-- CALENDAR VIEW -->
+  <div class="view active" id="view-calendar">
+    <div class="cal-head">
+      <h2 id="calMonthLabel"></h2>
+      <div class="cal-nav">
+        <button id="prevMonth">←</button>
+        <button id="nextMonth">→</button>
+      </div>
+    </div>
+    <div class="cal-legend">
+      <span><i style="background:var(--red)"></i>Overdue</span>
+      <span><i style="background:var(--amber)"></i>Pending</span>
+      <span><i style="background:var(--blue)"></i>In progress</span>
+      <span><i style="background:var(--green)"></i>Done</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="day-panel" id="dayPanel"></div>
+  </div>
+
+  <!-- GRID VIEW -->
+  <div class="view" id="view-grid">
+    <div class="filters">
+      <input type="text" id="searchBox" placeholder="Search employee or role…">
+      <select id="deptFilter"><option value="">All departments</option></select>
+      <select id="loadFilter">
+        <option value="">All workloads</option>
+        <option value="status-empty">No tasks</option>
+        <option value="status-light">Light load</option>
+        <option value="status-loaded">Loaded</option>
+        <option value="status-heavy">Overdue / heavy</option>
+      </select>
+    </div>
+    <div id="deptSections"></div>
+  </div>
+</div>
+
+<script>
+// ---------- Mock data ----------
+const firstNames = ["Ankit","Ankita","Arjun","Arti","Ashwin","Harshit","Kanchan","Sanya","Mehul","Asif","Priya","Rohan","Neha","Karan","Meera","Vikram","Isha","Rahul","Tanvi","Aditya","Yash","Diya","Siddharth","Riya","Nikhil","Pooja","Aman","Simran","Varun","Kritika","Sahil","Megha","Rohit","Swati","Vivek","Payal","Deepak","Ritika","Gaurav","Divya"];
+const lastNames = ["Tiwari","Prasad","Bharti","Sharma","Himanshu","Maurya","Verma","Gupta","Mehta","Singh","Kapoor","Rao","Nair","Reddy","Joshi","Malhotra","Chopra","Agarwal","Desai","Menon"];
+const departments = ["IT","Marketing","SEO","Digital Marketing","Accounts","Management"];
+const roles = {IT:["Sr. Web Developer","Web Developer","QA Engineer"], Marketing:["SEO Executive","Content Lead","Other"], SEO:["SEO Executive","SEO Analyst"], "Digital Marketing":["Digital Marketing Exec","Social Media Lead"], Accounts:["Accountant","Finance Exec"], Management:["Manager","Project Manager"]};
+const taskTitles = ["Off-Page SEO Submission","Blog Post & Off-Page Activities","Daily Blog & Dataset Updates","Daily LinkedIn Wishes","Target Armenia","Target Serbia","Target Romania","Vendor Sync Fix","Client Report","Invoice Reconciliation","Sprint Testing","UI Polish Pass","Dataset Cleanup","Social Calendar Update"];
+const taskTypes = ["Normal","Recurring","Self-Assigned"];
+
+function seedRandom(seed){ let s=seed; return ()=>{ s=(s*9301+49297)%233280; return s/233280; }; }
+const rand = seedRandom(77);
+function pickR(arr){ return arr[Math.floor(rand()*arr.length)]; }
+
+const today = new Date(2026,7,23); // Aug 23 2026
+const employees = [];
+for(let i=0;i<55;i++){
+  const dept = pickR(departments);
+  employees.push({
+    id:i, name: pickR(firstNames)+" "+pickR(lastNames), dept, role: pickR(roles[dept])
+  });
+}
+
+const tasks = [];
+let tid=0;
+employees.forEach(emp=>{
+  const n = Math.floor(rand()*5); // 0-4 tasks per person
+  for(let j=0;j<n;j++){
+    const dayOffset = Math.floor(rand()*24)-14; // -14 to +9 days from today
+    const due = new Date(today); due.setDate(today.getDate()+dayOffset);
+    let status;
+    if(dayOffset < 0){ status = rand()<0.55 ? "Overdue" : "Done"; }
+    else if(dayOffset===0){ status = pickR(["Pending","In Progress","Overdue"]); }
+    else { status = pickR(["Pending","In Progress","On Hold"]); }
+    tasks.push({
+      id: tid++, title: pickR(taskTitles), type: pickR(taskTypes),
+      assignee: emp.id, due, status
+    });
+  }
+});
+
+// ---------- Helpers ----------
+const colors = ["#5b8cff","#3ddc97","#f5b942","#f45b69","#a78bfa","#4dd0e1","#ff8a65","#9575cd"];
+function initials(n){ return n.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
+function avatarColor(n){ let h=0; for(const c of n) h+=c.charCodeAt(0); return colors[h % colors.length]; }
+function dateKey(d){ return d.toISOString().split('T')[0]; }
+function statusColor(s){ return {Overdue:'var(--red)', Pending:'var(--amber)', "In Progress":'var(--blue)', Done:'var(--green)', "On Hold":'var(--amber)'}[s] || 'var(--text-dim)'; }
+
+document.getElementById('dateLine').textContent = today.toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+// ---------- KPIs ----------
+function renderKPIs(){
+  const withOpen = employees.filter(e => tasks.some(t=>t.assignee===e.id && t.status!=="Done"));
+  const withOverdue = employees.filter(e => tasks.some(t=>t.assignee===e.id && t.status==="Overdue"));
+  const noTasks = employees.filter(e => !tasks.some(t=>t.assignee===e.id));
+  const nothingOpen = employees.filter(e => tasks.some(t=>t.assignee===e.id) && !tasks.some(t=>t.assignee===e.id && t.status!=="Done"));
+  document.getElementById('kpiStrip').innerHTML = `
+    <div class="kpi k1"><div class="num">${employees.length}</div><div class="lbl">In scope</div></div>
+    <div class="kpi k2"><div class="num">${withOpen.length}</div><div class="lbl">Has open tasks</div></div>
+    <div class="kpi k3"><div class="num">${noTasks.length}</div><div class="lbl">No tasks at all</div></div>
+    <div class="kpi k4"><div class="num">${nothingOpen.length}</div><div class="lbl">Nothing open</div></div>
+    <div class="kpi k5"><div class="num">${withOverdue.length}</div><div class="lbl">Has overdue</div></div>
+  `;
+}
+renderKPIs();
+
+// ---------- Tabs ----------
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  });
+});
+
+// ---------- Calendar ----------
+let calMonth = today.getMonth(), calYear = today.getFullYear();
+function renderCalendar(){
+  const label = new Date(calYear,calMonth,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  document.getElementById('calMonthLabel').textContent = label;
+  const grid = document.getElementById('calGrid');
+  const dows = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  let html = dows.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+  const firstDay = new Date(calYear,calMonth,1).getDay();
+  const daysInMonth = new Date(calYear,calMonth+1,0).getDate();
+  for(let i=0;i<firstDay;i++) html += `<div class="cal-day empty"></div>`;
+
+  for(let d=1; d<=daysInMonth; d++){
+    const dateObj = new Date(calYear,calMonth,d);
+    const key = dateKey(dateObj);
+    const dayTasks = tasks.filter(t=>dateKey(t.due)===key);
+    const isToday = dateKey(today)===key;
+    const overdueCount = dayTasks.filter(t=>t.status==="Overdue").length;
+    const statusCounts = {};
+    dayTasks.forEach(t=>{ statusCounts[t.status]=(statusCounts[t.status]||0)+1; });
+    const bars = Object.entries(statusCounts).map(([s,c])=>
+      `<div class="cal-bar" style="background:${statusColor(s)};width:${Math.min(100, c*22)}%"></div>`
+    ).join('');
+    html += `<div class="cal-day ${isToday?'today':''}" data-date="${key}">
+      <div class="dnum">${d}</div>
+      <div class="cal-bars">${bars}</div>
+      ${dayTasks.length ? `<div class="cal-count ${overdueCount?'has-overdue':''}">${dayTasks.length} task${dayTasks.length>1?'s':''}${overdueCount?` · ${overdueCount} overdue`:''}</div>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('.cal-day[data-date]').forEach(el=>{
+    el.addEventListener('click', ()=> showDayPanel(el.dataset.date));
+  });
+}
+function showDayPanel(key){
+  const panel = document.getElementById('dayPanel');
+  const dayTasks = tasks.filter(t=>dateKey(t.due)===key);
+  if(dayTasks.length===0){ panel.classList.remove('show'); return; }
+  const dt = new Date(key+'T00:00:00');
+  panel.innerHTML = `<h3>${dt.toLocaleDateString('en-IN',{weekday:'long',month:'long',day:'numeric'})} — ${dayTasks.length} task${dayTasks.length>1?'s':''} due</h3>` +
+    dayTasks.map(t=>{
+      const emp = employees.find(e=>e.id===t.assignee);
+      return `<div class="dp-item"><span class="dot" style="background:${statusColor(t.status)}"></span>
+        <span class="t">${t.title} <span style="color:var(--text-dim)">(${t.type})</span></span>
+        <span class="who">${emp.name} · ${t.status}</span></div>`;
+    }).join('');
+  panel.classList.add('show');
+}
+document.getElementById('prevMonth').addEventListener('click', ()=>{
+  calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar();
+  document.getElementById('dayPanel').classList.remove('show');
+});
+document.getElementById('nextMonth').addEventListener('click', ()=>{
+  calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar();
+  document.getElementById('dayPanel').classList.remove('show');
+});
+renderCalendar();
+
+// ---------- Workload grid ----------
+const deptSelect = document.getElementById('deptFilter');
+departments.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d; deptSelect.appendChild(o); });
+
+function empLoadClass(counts){
+  if(counts.total===0) return 'status-empty';
+  if(counts.Overdue>0) return 'status-heavy';
+  if(counts.total>=3) return 'status-loaded';
+  return 'status-light';
+}
+
+function renderGrid(){
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const deptF = deptSelect.value;
+  const loadF = document.getElementById('loadFilter').value;
+
+  const container = document.getElementById('deptSections');
+  container.innerHTML = '';
+
+  const grouped = {};
+  departments.forEach(d=>grouped[d]=[]);
+  employees.forEach(e=>grouped[e.dept].push(e));
+
+  departments.forEach(dept=>{
+    if(deptF && deptF!==dept) return;
+    let list = grouped[dept];
+    if(q) list = list.filter(e=> e.name.toLowerCase().includes(q) || e.role.toLowerCase().includes(q));
+    if(list.length===0) return;
+
+    const cards = list.map(e=>{
+      const eTasks = tasks.filter(t=>t.assignee===e.id);
+      const counts = {Pending:0,"In Progress":0,Done:0,"On Hold":0,Overdue:0,total:0};
+      eTasks.forEach(t=>{ counts[t.status] = (counts[t.status]||0)+1; if(t.status!=="Done") counts.total++; });
+      const loadClass = empLoadClass(counts);
+      if(loadF && loadF!==loadClass) return '';
+      const badgeMap = [['Overdue','overdue'],['Pending','pending'],['In Progress','progress'],['On Hold','hold'],['Done','done']];
+      const badges = badgeMap.filter(([k])=>counts[k]>0).map(([k,cls])=>`<span class="badge ${cls}">${counts[k]} ${k}</span>`).join('');
+      return `<div class="emp-card ${loadClass} ${counts.Overdue>0?'has-overdue':''}">
+        <div class="ec-top">
+          <div class="avatar" style="background:${avatarColor(e.name)}">${initials(e.name)}</div>
+          <div><div class="ec-name">${e.name}</div><div class="ec-role">${e.role}</div></div>
+        </div>
+        <div class="ec-badges">${badges || '<span class="badge pending">No tasks</span>'}</div>
+        <div class="ec-foot"><span>${eTasks.length} total assigned</span><span class="open">${counts.total} open</span></div>
+      </div>`;
+    }).filter(Boolean);
+
+    if(cards.length===0) return;
+    container.innerHTML += `<div class="dept-section">
+      <div class="dept-title">${dept} <span class="count">${cards.length}</span></div>
+      <div class="emp-grid">${cards.join('')}</div>
+    </div>`;
+  });
+
+  if(container.innerHTML === ''){
+    container.innerHTML = '<div style="color:var(--text-dim);font-family:var(--mono);font-size:13px;text-align:center;padding:40px 0;">No matches.</div>';
+  }
+}
+document.getElementById('searchBox').addEventListener('input', renderGrid);
+deptSelect.addEventListener('change', renderGrid);
+document.getElementById('loadFilter').addEventListener('change', renderGrid);
+renderGrid();
+</script>
+</body>
+</html>

@@ -1,10 +1,11 @@
+const mongoose = require('mongoose');
 const TaskComment = require('../models/TaskComment');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { emitToTask } = require('./realtime');
 const { processTaskFiles, discardStagedFiles, s3Folder } = require('./taskMedia');
 const VideoCompressionQueue = require('../models/VideoCompressionQueue');
-const { IS_PRIVILEGED } = require('./taskScoping');
+const { IS_PRIVILEGED, getTaskVisibilityFilter } = require('./taskScoping');
 
 /**
  * One discussion implementation, used by both one-off tasks and recurring
@@ -27,13 +28,21 @@ const notify = async (recipientId, title, message, link) => {
 };
 
 /**
- * Anyone involved can read and post: the assignees, whoever assigned it, and
- * Admin/HR.
+ * Anyone involved can read and post: the assignees, whoever assigned it,
+ * Admin/HR, and — same rule the task lists already use — a Team Lead whose
+ * own team member is on it, however the thread came to exist.
  */
-const canJoinDiscussion = (doc, reqUser) =>
-    doc.assignees.some(a => a.toString() === reqUser.id) ||
-    doc.assignedBy.toString() === reqUser.id ||
-    IS_PRIVILEGED.includes(reqUser.role);
+const canJoinDiscussion = async (doc, reqUser, ownerModel) => {
+    if (doc.assignees.some(a => a.toString() === reqUser.id)) return true;
+    if (doc.assignedBy.toString() === reqUser.id) return true;
+    if (IS_PRIVILEGED.includes(reqUser.role)) return true;
+
+    const visibility = await getTaskVisibilityFilter(reqUser);
+    if (!visibility) return false;
+
+    const Model = mongoose.model(ownerModel);
+    return Boolean(await Model.exists({ _id: doc._id, ...visibility }));
+};
 
 /**
  * @param {object}   opts
@@ -47,7 +56,7 @@ const buildDiscussionHandlers = ({ ownerModel, load, link, notFound = 'Not found
     const loadFor = async (id, reqUser) => {
         const doc = await load(id);
         if (!doc) return { error: { code: 404, message: notFound } };
-        if (!canJoinDiscussion(doc, reqUser)) {
+        if (!(await canJoinDiscussion(doc, reqUser, ownerModel))) {
             return { error: { code: 403, message: 'Unauthorized to view this discussion' } };
         }
         return { doc };

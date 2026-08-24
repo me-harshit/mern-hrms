@@ -275,6 +275,19 @@
     color: #475569;
 }
 
+/* Who handed the task out — a fixed-width column, so this truncates rather
+   than wrapping; the full name is still on the title tooltip. */
+.assignee-by-note {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
 /* --- Upload note --- */
 .task-upload-note {
     display: flex;
@@ -3032,6 +3045,7 @@
 .emp-stat-icon.free { background: #f1f5f9; color: #475569; }
 .emp-stat-icon.idle { background: #fef3c7; color: #b45309; }
 .emp-stat-icon.late { background: #fee2e2; color: #b91c1c; }
+.emp-stat-icon.today { background: #ede9fe; color: #6d28d9; }
 
 .emp-stat-text {
     display: flex;

@@ -88,7 +88,7 @@ const TaskCard = ({
                 <span className={`tk-due ${due.tone}`}>{due.text}</span>
             </div>
 
-            {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
+            {hasTimeWindow(task, { requireExplicit: false }) && <TaskCountdown task={task} compact />}
 
             <div className="tk-card-foot">
                 <div className="tk-avatars">

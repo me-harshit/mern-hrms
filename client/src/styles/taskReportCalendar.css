@@ -1,0 +1,283 @@
+/* ==========================================================================
+   TASK REPORT — CALENDAR
+   Self-contained, like TaskTimeWindow/TaskCountdown — this component is
+   meant to be dropped into a page without depending on that page having
+   loaded tasks.css first.
+   ========================================================================== */
+
+.trc {
+    background: #fff;
+    border: 1px solid #e9edf2;
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.trc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.trc-head h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.trc-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.trc-nav button {
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #475569;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.trc-nav button:hover { border-color: #215D7B; color: #215D7B; }
+
+.trc-today-btn {
+    width: auto !important;
+    padding: 0 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+/* ---------- legend ---------- */
+.trc-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.76rem;
+    color: #64748b;
+    margin-bottom: 12px;
+}
+
+.trc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.dot.pending, .trc-bar.pending { background: #94a3b8; }
+.dot.inprogress, .trc-bar.inprogress { background: #2563eb; }
+.dot.onhold, .trc-bar.onhold { background: #d97706; }
+.dot.completed, .trc-bar.completed { background: #16a34a; }
+.dot.blocked, .trc-bar.blocked { background: #dc2626; }
+
+.trc-loading {
+    padding: 40px 0;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.85rem;
+}
+
+/* ---------- grid ---------- */
+.trc-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.trc-dow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    text-align: center;
+    padding-bottom: 4px;
+}
+
+.trc-cell {
+    min-height: 78px;
+    background: #f8fafc;
+    border: 1px solid #eef1f6;
+    border-radius: 9px;
+    padding: 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.trc-cell:hover:not(.empty) { border-color: #215D7B; background: #fff; }
+.trc-cell.empty { background: transparent; border: none; cursor: default; }
+.trc-cell.is-today { border-color: #215D7B; box-shadow: inset 0 0 0 1px #215D7B; }
+.trc-cell.is-selected { background: #eaf3f7; border-color: #215D7B; }
+
+.trc-daynum {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.trc-cell.is-today .trc-daynum { color: #215D7B; font-weight: 700; }
+
+.trc-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+}
+
+.trc-bar { height: 4px; border-radius: 2px; }
+
+.trc-count {
+    font-size: 0.62rem;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.trc-count.has-overdue { color: #dc2626; }
+
+/* ---------- day panel ---------- */
+.trc-panel {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e9edf2;
+}
+
+.trc-panel h3 {
+    margin: 0 0 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.trc-empty {
+    color: #94a3b8;
+    font-size: 0.82rem;
+    margin: 0;
+}
+
+.trc-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.trc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 11px;
+    background: #f8fafc;
+    border: 1px solid #eef1f6;
+    border-radius: 9px;
+    text-decoration: none;
+    color: inherit;
+    font-size: 0.82rem;
+}
+
+.trc-item:hover { border-color: #215D7B; background: #fff; }
+
+.trc-item-title {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trc-item-type {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.trc-item-who {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    color: #64748b;
+    max-width: 140px;
+}
+
+.trc-item-who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.trc-item-status {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 20px;
+    text-transform: uppercase;
+}
+
+.trc-item-status.pending { background: #f1f5f9; color: #475569; }
+.trc-item-status.inprogress { background: #dbeafe; color: #1d4ed8; }
+.trc-item-status.onhold { background: #fef3c7; color: #b45309; }
+.trc-item-status.completed { background: #dcfce7; color: #15803d; }
+.trc-item-status.blocked { background: #fee2e2; color: #b91c1c; }
+
+/* ---------- today idle ---------- */
+.trc-idle {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.trc-idle h4 {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #6d28d9;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.trc-idle-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.trc-idle-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f5f3ff;
+    border: 1px solid #ede9fe;
+    color: #4c1d95;
+    border-radius: 20px;
+    padding: 3px 10px 3px 3px;
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.assignee-avatar.tiny {
+    width: 20px;
+    height: 20px;
+    font-size: 0.6rem;
+}
+
+@media (max-width: 720px) {
+    .trc-item { flex-wrap: wrap; }
+    .trc-item-who { max-width: 100%; }
+}
