@@ -5,7 +5,8 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faSave, faPaperclip, faInfoCircle, faUsers, faSpinner,
-    faClipboardList, faFilm, faFolderOpen, faBuilding, faCalendarDay, faRepeat
+    faClipboardList, faFilm, faFolderOpen, faBuilding, faCalendarDay, faRepeat,
+    faFileCode
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
@@ -182,6 +183,7 @@ const EditTask = () => {
         for (let file of selectedFiles) {
             const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif|webp)$/i);
             const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|mov|avi|mkv)$/i);
+            const isDocument = file.type === 'text/html' || file.name.match(/\.(html|htm)$/i);
 
             if (isImage) {
                 try {
@@ -198,8 +200,10 @@ const EditTask = () => {
                 } else {
                     processed.push(file);
                 }
+            } else if (isDocument) {
+                processed.push(file);
             } else {
-                Swal.fire('Unsupported File', `"${file.name}" is not an image or video.`, 'warning');
+                Swal.fire('Unsupported File', `"${file.name}" is not an image, video, or HTML document.`, 'warning');
             }
         }
 
@@ -505,7 +509,7 @@ const EditTask = () => {
 
                         <section className="task-form-card">
                             <div className="expense-section-title">
-                                <FontAwesomeIcon icon={faPaperclip} /> Reference Images &amp; Videos
+                                <FontAwesomeIcon icon={faPaperclip} /> Reference Images, Videos &amp; Documents
                             </div>
 
                             {existingAttachments.length > 0 && (
@@ -516,6 +520,15 @@ const EditTask = () => {
                                             <div key={m._id} className="task-media-item">
                                                 {m.type === 'video' ? (
                                                     <video src={resolveMediaUrl(m.url)} controls preload="metadata" />
+                                                ) : m.type === 'document' ? (
+                                                    <a
+                                                        className="task-media-doc"
+                                                        href={resolveMediaUrl(m.url)} target="_blank" rel="noopener noreferrer"
+                                                        title={m.fileName || 'Open document'}
+                                                    >
+                                                        <FontAwesomeIcon icon={faFileCode} />
+                                                        <span>{m.fileName || 'Document'}</span>
+                                                    </a>
                                                 ) : (
                                                     <img src={resolveMediaUrl(m.url)} alt={m.fileName || 'attachment'} />
                                                 )}
@@ -539,7 +552,7 @@ const EditTask = () => {
                             <div className="task-file-drop">
                                 <input
                                     className="custom-file-input" type="file" multiple
-                                    accept="image/*,video/*" onChange={handleFileChange}
+                                    accept="image/*,video/*,.html,.htm,text/html" onChange={handleFileChange}
                                 />
                             </div>
 

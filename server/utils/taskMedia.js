@@ -5,6 +5,7 @@ const { uploadToS3 } = require('./s3Service');
 
 const VIDEO_EXTS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
 const AUDIO_EXTS = ['.mp3', '.m4a', '.wav', '.ogg', '.oga', '.aac'];
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 
 /**
  * Project names like "AI Expo" or "LW Sope (VR)" would put raw spaces and
@@ -30,13 +31,21 @@ const isVideo = (file) =>
         VIDEO_EXTS.includes(path.extname(file.originalname).toLowerCase())
     );
 
+const isImage = (file) =>
+    file.mimetype.startsWith('image/') ||
+    IMAGE_EXTS.includes(path.extname(file.originalname).toLowerCase());
+
 /**
  * Turns the files multer staged on disk into task media entries.
  *
- * Images  -> pushed to S3 right away, local copy deleted, marked `ready`.
- * Videos  -> left on the VPS and served from /uploads/tasks/... so they are
- *            watchable immediately, marked `processing_compression`. The
- *            midnight cron compresses them and swaps the url to S3.
+ * Images    -> pushed to S3 right away, local copy deleted, marked `ready`.
+ * Videos    -> left on the VPS and served from /uploads/tasks/... so they are
+ *              watchable immediately, marked `processing_compression`. The
+ *              midnight cron compresses them and swaps the url to S3.
+ * Documents -> anything the upload filter allows that isn't audio/video/image
+ *              (currently just HTML briefs) — pushed to S3 like an image, but
+ *              tagged `document` rather than `image` so the client renders a
+ *              file tile instead of trying to draw it as a picture.
  *
  * Returns { media, pendingVideos } where pendingVideos carries what the caller
  * needs to write into VideoCompressionQueue once the parent Task has an _id.
@@ -85,7 +94,10 @@ const processTaskFiles = async (files, subFolder = 'Tasks/General') => {
                 originalName: file.originalname
             });
         } else {
-            // Small enough to round-trip through memory safely.
+            // Small enough to round-trip through memory safely. uploadToS3
+            // only runs its resize step for an image/* mimetype, so a
+            // document's bytes go up untouched either way — this branch just
+            // needs to record the right `type` for the client to render.
             const buffer = fs.readFileSync(file.path);
             const url = await uploadToS3(
                 { buffer, mimetype: file.mimetype, originalname: file.originalname },
@@ -94,14 +106,14 @@ const processTaskFiles = async (files, subFolder = 'Tasks/General') => {
 
             // The staged copy has served its purpose.
             fs.unlink(file.path, (err) => {
-                if (err) console.error('[TASK MEDIA] Could not remove staged image:', err.message);
+                if (err) console.error('[TASK MEDIA] Could not remove staged file:', err.message);
             });
 
             media.push({
                 _id: mediaId,
                 url,
                 fileName: file.originalname,
-                type: 'image',
+                type: isImage(file) ? 'image' : 'document',
                 status: 'ready'
             });
         }

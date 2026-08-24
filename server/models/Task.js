@@ -4,14 +4,15 @@ const { computeOverdueAt } = require('../utils/taskOverdue');
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
 
-// A single image/video attached to a task.
-// Images go straight to S3. Videos are staged on the VPS first (`url` points at
-// /uploads/tasks/...) and only swap to an S3 url after the nightly compression
-// job runs — that's why `status` exists.
+// A single file attached to a task — an image, video, audio note, or a
+// generic document (currently just HTML briefs).
+// Images and documents go straight to S3. Videos are staged on the VPS first
+// (`url` points at /uploads/tasks/...) and only swap to an S3 url after the
+// nightly compression job runs — that's why `status` exists.
 const mediaSchema = new mongoose.Schema({
     url: { type: String, required: true },
     fileName: { type: String, default: "" },
-    type: { type: String, enum: ['image', 'video', 'audio'], required: true },
+    type: { type: String, enum: ['image', 'video', 'audio', 'document'], required: true },
 
     // Audio notes only. The peaks are computed in the browser at record time
     // and stored, so a player can draw the waveform without fetching and

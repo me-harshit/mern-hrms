@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFilm, faExclamationTriangle, faExpand, faTrash, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faFilm, faExclamationTriangle, faExpand, faTrash, faSpinner, faFileCode } from '@fortawesome/free-solid-svg-icons';
 import { resolveMediaUrl } from '../utils/taskHelpers';
 import MediaLightbox from './MediaLightbox';
 
 /**
- * Images and videos attached to a task. A video that hasn't been through the
- * nightly compression job yet still plays — it's just served from the VPS
- * rather than S3 — so it gets a chip rather than being hidden.
+ * Images, videos and documents attached to a task. A video that hasn't been
+ * through the nightly compression job yet still plays — it's just served
+ * from the VPS rather than S3 — so it gets a chip rather than being hidden.
  *
- * Clicking opens the in-page lightbox instead of navigating away.
+ * Clicking an image or video opens the in-page lightbox. A document (an HTML
+ * brief) opens directly in a new tab instead — the lightbox only knows how
+ * to draw a picture or a <video>, and embedding someone's uploaded HTML in
+ * an iframe on our own page is a self-XSS surface not worth opening for it.
  */
 const TaskMediaGrid = ({ media, onDelete, deletingId }) => {
     const [lightboxIndex, setLightboxIndex] = useState(null);
@@ -34,6 +37,15 @@ const TaskMediaGrid = ({ media, onDelete, deletingId }) => {
                                     <FontAwesomeIcon icon={faExpand} />
                                 </button>
                             </>
+                        ) : m.type === 'document' ? (
+                            <a
+                                className="task-media-doc"
+                                href={resolveMediaUrl(m.url)} target="_blank" rel="noopener noreferrer"
+                                title={m.fileName || 'Open document'}
+                            >
+                                <FontAwesomeIcon icon={faFileCode} />
+                                <span>{m.fileName || 'Document'}</span>
+                            </a>
                         ) : (
                             <button
                                 className="task-media-open"

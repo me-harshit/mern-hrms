@@ -348,7 +348,7 @@ const TaskDetail = () => {
                                 <ScreenRecorder onAttach={handleProofRecordingAttach} />
                                 <input
                                     className="custom-file-input" type="file" multiple
-                                    accept="image/*,video/*" onChange={handleProofChange} disabled={saving}
+                                    accept="image/*,video/*,.html,.htm,text/html" onChange={handleProofChange} disabled={saving}
                                     style={{ marginTop: '10px' }}
                                 />
                                 <p className="td-field-hint">
@@ -567,7 +567,7 @@ const TaskDetail = () => {
                                             <FontAwesomeIcon icon={addingMedia ? faSpinner : faPlus} spin={addingMedia} />
                                             {addingMedia ? 'Uploading...' : 'Add reference media'}
                                             <input
-                                                type="file" multiple accept="image/*,video/*" hidden
+                                                type="file" multiple accept="image/*,video/*,.html,.htm,text/html" hidden
                                                 onChange={addReferenceMedia} disabled={addingMedia}
                                             />
                                         </label>
