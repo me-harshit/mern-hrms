@@ -75,7 +75,12 @@ const TaskCard = ({
                     </span>
                 )}
                 {task.isSelfAssigned && task.approvalStatus === 'Approved' && (
-                    <span className="ap-badge self" title="You logged this task yourself">
+                    <span
+                        className="ap-badge self"
+                        title={task.approvedBy
+                            ? `You logged this · approved by ${task.approvedBy.name}`
+                            : 'You logged this task yourself'}
+                    >
                         <FontAwesomeIcon icon={faUserPen} /> Self Assigned
                     </span>
                 )}

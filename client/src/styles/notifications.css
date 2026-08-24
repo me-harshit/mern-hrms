@@ -1,0 +1,251 @@
+/* ==========================================================================
+   NOTIFICATIONS PAGE
+   Filter bar, and a list where the category is readable at a glance
+   instead of every row looking identical.
+   ========================================================================== */
+
+.nf-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.nf-header .gts-btn {
+    margin-left: auto;
+}
+
+.nf-subtitle {
+    margin: 4px 0 0;
+    font-size: 0.83rem;
+    color: #6b7280;
+}
+
+/* ---------- filter bar ---------- */
+.nf-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+
+.nf-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 220px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 11px;
+    color: #94a3b8;
+}
+
+.nf-search:focus-within {
+    border-color: #215D7B;
+}
+
+.nf-search input {
+    border: none;
+    outline: none;
+    flex: 1;
+    font-family: inherit;
+    font-size: 0.86rem;
+    color: #1e293b;
+    background: transparent;
+}
+
+.nf-select {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 11px;
+    font-family: inherit;
+    font-size: 0.83rem;
+    color: #475569;
+    background: #fff;
+    cursor: pointer;
+    min-height: 40px;
+}
+
+.nf-select:hover {
+    border-color: #cbd5e1;
+}
+
+/* An active filter is marked, so it is obvious why the list looks short. */
+.nf-select.is-active {
+    border-color: #215D7B;
+    color: #215D7B;
+    font-weight: 600;
+    background: #f0f9ff;
+}
+
+.nf-daterange {
+    min-width: 240px;
+}
+
+.nf-clear {
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #dc2626;
+    border-radius: 8px;
+    padding: 8px 13px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 40px;
+}
+
+.nf-clear:hover {
+    background: #fee2e2;
+}
+
+.nf-result-count {
+    font-size: 0.79rem;
+    color: #64748b;
+    margin: 0 0 10px 2px;
+}
+
+/* ---------- the list ---------- */
+.nf-list {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.nf-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 15px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.nf-item:last-child {
+    border-bottom: none;
+}
+
+.nf-item:hover {
+    background: #f8fafc;
+}
+
+/* Unread carries a left rule rather than a wash, so it stays legible once the
+   row is also hovered. */
+.nf-item.unread {
+    background: #fcfdff;
+    box-shadow: inset 3px 0 0 #215D7B;
+}
+
+.nf-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+/* Each category keeps the colour it has elsewhere in the app. */
+.nf-icon.task        { background: #ede9fe; color: #5b21b6; }
+.nf-icon.leave       { background: #e0f2fe; color: #075985; }
+.nf-icon.short_leave { background: #fef3c7; color: #92400e; }
+.nf-icon.wfh         { background: #dcfce7; color: #166534; }
+.nf-icon.salary      { background: #fae8ff; color: #86198f; }
+.nf-icon.birthday    { background: #ffe4e6; color: #9f1239; }
+.nf-icon.system      { background: #f1f5f9; color: #475569; }
+
+.nf-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.nf-line {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 3px;
+}
+
+.nf-title {
+    margin: 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.nf-item:not(.unread) .nf-title {
+    font-weight: 500;
+    color: #475569;
+}
+
+.nf-time {
+    margin-left: auto;
+    font-size: 0.74rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.nf-message {
+    margin: 0 0 5px;
+    font-size: 0.85rem;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+.nf-cat {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.nf-dot {
+    color: #215D7B;
+    font-size: 0.5rem;
+    margin-top: 12px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+    .nf-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .nf-search,
+    .nf-daterange {
+        min-width: 0;
+    }
+
+    .nf-line {
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .nf-time {
+        margin-left: 0;
+    }
+
+    .nf-header .gts-btn {
+        margin-left: 0;
+        width: 100%;
+    }
+}

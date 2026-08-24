@@ -14,7 +14,8 @@ const {
     CAN_ASSIGN,
     IS_PRIVILEGED,
     getScopedEmployees,
-    getScopedProjects
+    getScopedProjects,
+    getTaskVisibilityFilter
 } = require('../utils/taskScoping');
 
 const {
@@ -28,6 +29,7 @@ const {
 } = require('../utils/recurringSchedule');
 
 const Holiday = require('../models/Holiday');
+const { buildDiscussionHandlers } = require('../utils/taskDiscussion');
 
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
 
@@ -63,13 +65,15 @@ const folderForTask = (taskType, projectName) =>
 
 // Clean up whatever the manager drew on the calendar: drop malformed entries,
 // dedupe, reject the past, sort.
-const normaliseDates = (raw) => {
+const normaliseDates = (raw, { allowPast = false } = {}) => {
     const list = [...new Set(parseIdList(raw))];
     const invalid = list.filter(d => !isValidDateStr(d));
     if (invalid.length) return { error: `Not a valid date: ${invalid[0]}` };
 
+    // Creating a schedule in the past is a mistake; re-saving one that has
+    // already been running legitimately still contains its earlier days.
     const today = todayIST();
-    const past = list.filter(d => d < today);
+    const past = allowPast ? [] : list.filter(d => d < today);
     if (past.length) return { error: `You can't schedule a task in the past (${past.sort()[0]})` };
 
     if (list.length === 0) return { error: 'Pick at least one day for this task to run' };
@@ -439,9 +443,11 @@ router.get('/', auth, async (req, res) => {
         // — the same trap that hid historical tasks from the admin list.
         const andConditions = [{ isArchived: { $ne: true } }];
 
-        // Admin/HR see everything; everyone else sees what they created.
-        if (!IS_PRIVILEGED.includes(req.user.role)) {
-            andConditions.push({ assignedBy: req.user.id });
+        // Same rule as the one-off task list: a Team Lead sees schedules running
+        // for their own team, whoever set them up.
+        const visibility = await getTaskVisibilityFilter(req.user);
+        if (visibility) {
+            andConditions.push(visibility);
         } else if (req.query.assignedBy && req.query.assignedBy !== 'All') {
             andConditions.push({ assignedBy: req.query.assignedBy });
         }
@@ -546,8 +552,16 @@ router.get('/:id', auth, async (req, res) => {
  * referencing the template rather than copying it. Pausing stops generation
  * from tomorrow; already-generated tasks are left alone, because they are real
  * work someone may already be part-way through.
+ *
+ * The full edit (no `action`) can change everything the create form can, with
+ * two rules that keep a running schedule honest:
+ *
+ *   - a day that already produced an occurrence cannot be unscheduled. It
+ *     happened; removing it from the plan would make the compliance log lie.
+ *   - removing an assignee stops their future days but leaves the tasks they
+ *     already received, for the same reason.
  */
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) => {
     try {
         const schedule = await RecurringTask.findById(req.params.id);
         if (!schedule) return res.status(404).json({ message: 'Schedule not found' });
@@ -590,10 +604,134 @@ router.put('/:id', auth, async (req, res) => {
             }
             if (schedule.status === 'Completed') schedule.status = 'Active';
         } else {
-            // Plain brief edit.
+            // ---- full edit ----
             if (typeof req.body.title === 'string' && req.body.title.trim()) schedule.title = req.body.title.trim();
             if (typeof req.body.description === 'string') schedule.description = req.body.description;
             if (['Low', 'Medium', 'High', 'Urgent'].includes(req.body.priority)) schedule.priority = req.body.priority;
+
+            // --- type / project ---
+            if (TASK_TYPES.includes(req.body.taskType)) {
+                const isOffice = req.body.taskType === 'Regular Office Task';
+                if (!isOffice) {
+                    const wanted = req.body.projectId || idOf(schedule.projectId);
+                    const allowed = await getScopedProjects();
+                    if (!allowed.find(p => p._id.toString() === String(wanted))) {
+                        discardStagedFiles(req.files);
+                        return res.status(400).json({ message: 'That project is not available' });
+                    }
+                    schedule.projectId = wanted;
+                } else {
+                    schedule.projectId = null;
+                }
+                schedule.taskType = req.body.taskType;
+            }
+
+            // --- assignees ---
+            if (req.body.assigneeIds !== undefined) {
+                const wanted = parseIdList(req.body.assigneeIds);
+                if (wanted.length === 0) {
+                    discardStagedFiles(req.files);
+                    return res.status(400).json({ message: 'A schedule needs at least one assignee' });
+                }
+
+                const allowedEmployees = await getScopedEmployees(req.user);
+                const allowedIds = new Set(allowedEmployees.map(e => e._id.toString()));
+                const current = new Set(schedule.assignees.map(a => a.toString()));
+                // Someone already on the schedule stays selectable even if they
+                // have since moved out of this manager's team.
+                const invalid = wanted.filter(id => !allowedIds.has(id) && !current.has(id));
+                if (invalid.length > 0) {
+                    discardStagedFiles(req.files);
+                    return res.status(403).json({ message: 'One or more selected employees are outside your team' });
+                }
+
+                schedule.assignees = wanted;
+                // Newcomers start a run of their own; people dropped lose their
+                // future days but keep the tasks already generated for them.
+                schedule.assigneeState = wanted.map(id => {
+                    const existing = schedule.assigneeState.find(st => String(st.user) === String(id));
+                    return existing || { user: id, extraDates: [], generatedCount: 0, status: 'Active' };
+                });
+            }
+
+            // --- the day set ---
+            if (req.body.plannedDates !== undefined) {
+                const parsed = normaliseDates(req.body.plannedDates, { allowPast: true });
+                if (parsed.error) {
+                    discardStagedFiles(req.files);
+                    return res.status(400).json({ message: parsed.error });
+                }
+
+                // A day that already ran cannot be taken off the plan.
+                const occurred = new Set(schedule.occurrences.map(o => o.date));
+                const locked = schedule.plannedDates.filter(d => occurred.has(d));
+                // Adding a day in the past is meaningless — the cron never
+                // backfills — so only today onwards, plus whatever is locked.
+                const today = todayIST();
+                const incoming = parsed.dates.filter(d => d >= today || occurred.has(d));
+
+                const merged = [...new Set([...locked, ...incoming])].sort();
+                if (merged.length === 0) {
+                    discardStagedFiles(req.files);
+                    return res.status(400).json({ message: 'Pick at least one day for this task to run' });
+                }
+                if (merged.length > MAX_PLANNED_DAYS) {
+                    discardStagedFiles(req.files);
+                    return res.status(400).json({ message: `A schedule can cover at most ${MAX_PLANNED_DAYS} days` });
+                }
+
+                schedule.plannedDates = merged;
+                schedule.targetCount = merged.length;
+
+                // A longer run revives anyone who had already finished theirs.
+                for (const state of schedule.assigneeState) {
+                    if (state.status === 'Completed' && state.generatedCount < schedule.targetCount) {
+                        state.status = 'Active';
+                    }
+                }
+                if (schedule.status === 'Completed' &&
+                    schedule.assigneeState.some(st => st.status === 'Active')) {
+                    schedule.status = 'Active';
+                }
+            }
+
+            // --- the brief's media ---
+            if (req.body.keepAttachmentIds !== undefined) {
+                const keep = new Set(parseIdList(req.body.keepAttachmentIds));
+                const dropped = schedule.attachments.filter(m => !keep.has(m._id.toString()));
+                schedule.attachments = schedule.attachments.filter(m => keep.has(m._id.toString()));
+
+                // Anything still queued for compression has nothing to write
+                // back to once its media entry is gone.
+                if (dropped.length > 0) {
+                    await VideoCompressionQueue.deleteMany({
+                        taskId: schedule._id,
+                        mediaId: { $in: dropped.map(m => m._id) }
+                    });
+                }
+            }
+
+            if (req.files && req.files.length > 0) {
+                const project = schedule.taskType === 'Regular Office Task'
+                    ? null
+                    : await require('../models/Project').findById(schedule.projectId).select('name');
+                const subFolder = folderForTask(schedule.taskType, project?.name);
+                const { media, pendingVideos } = await processTaskFiles(req.files, subFolder);
+
+                media.forEach(m => schedule.attachments.push(m));
+
+                if (pendingVideos.length > 0) {
+                    await VideoCompressionQueue.insertMany(pendingVideos.map(v => ({
+                        ownerModel: 'RecurringTask',
+                        taskId: schedule._id,
+                        mediaId: v.mediaId,
+                        field: 'attachments',
+                        localPath: v.localPath,
+                        originalName: v.originalName,
+                        projectName: project?.name || 'Office'
+                    })));
+                }
+            }
         }
 
         await schedule.save();
@@ -605,6 +743,7 @@ router.put('/:id', auth, async (req, res) => {
 
         res.json(populated);
     } catch (err) {
+        discardStagedFiles(req.files);
         console.error('Recurring Update Error:', err);
         res.status(500).json({ message: 'Server Error while updating the schedule' });
     }
@@ -666,5 +805,25 @@ router.delete('/:id', auth, async (req, res) => {
         res.status(500).json({ message: 'Server Error while deleting the schedule' });
     }
 });
+
+// ==========================================
+// 7. DISCUSSION THREAD ON THE SCHEDULE
+// ==========================================
+/**
+ * Separate from the threads on the days it generates: a note about the run as a
+ * whole ("stop tagging the client on these") belongs with the schedule, not
+ * buried in one arbitrary morning's task.
+ */
+const scheduleDiscussion = buildDiscussionHandlers({
+    ownerModel: 'RecurringTask',
+    load: (id) => RecurringTask.findById(id).populate('projectId', 'name'),
+    link: (schedule) => `/tasks/recurring/${schedule._id}`,
+    notFound: 'Schedule not found'
+});
+
+router.get('/:id/comments', auth, scheduleDiscussion.list);
+router.post('/:id/comments', auth, taskUpload.array('attachments', 5), scheduleDiscussion.create);
+router.put('/:id/comments/:commentId', auth, scheduleDiscussion.update);
+router.delete('/:id/comments/:commentId', auth, scheduleDiscussion.remove);
 
 module.exports = router;

@@ -361,7 +361,7 @@ const Tasks = () => {
 
                                         <td data-label="Due Date" className="col-due">
                                             <span className={`task-due-date ${isOverdue(task) ? 'overdue' : ''}`}>
-                                                {new Date(task.dueDate).toLocaleDateString()}
+                                                {new Date(task.dueDate).toLocaleDateString('en-GB')}
                                             </span>
                                         </td>
 

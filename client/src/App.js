@@ -40,6 +40,7 @@ import Tasks from './pages/Admin/Tasks';
 import AddTask from './pages/Admin/AddTask';
 import EditTask from './pages/Admin/EditTask';
 import RecurringTaskDetail from './pages/Admin/RecurringTaskDetail';
+import EditRecurringTask from './pages/Admin/EditRecurringTask';
 import MyTasks from './pages/User/MyTasks';
 import TaskDetail from './pages/TaskDetail';
 
@@ -194,7 +195,13 @@ function App() {
             <Route path="/projects" element={isManagement ? <Projects /> : <Navigate to="/dashboard" />} />
             <Route path="/tasks" element={isManagement ? <Tasks /> : <Navigate to="/dashboard" />} />
             <Route path="/add-task" element={isManagement ? <AddTask /> : <Navigate to="/dashboard" />} />
-            <Route path="/tasks/recurring/:id" element={isManagement ? <RecurringTaskDetail /> : <Navigate to="/dashboard" />} />
+            {/* Open to anyone signed in, not just management: an assignee is
+                notified about the schedule's discussion and the notification
+                links straight here, so gating the route bounced them to the
+                dashboard. The server already limits the data to people on the
+                schedule, and the page hides the management actions. */}
+            <Route path="/tasks/recurring/:id" element={<RecurringTaskDetail />} />
+            <Route path="/tasks/recurring/:id/edit" element={isManagement ? <EditRecurringTask /> : <Navigate to="/dashboard" />} />
             <Route path="/edit-task/:id" element={isManagement ? <EditTask /> : <Navigate to="/dashboard" />} />
             
             {/* Expense & Inventory Management */}

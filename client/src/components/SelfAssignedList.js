@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faSearch, faTimes, faCheck, faBan, faInbox,
+    faSearch, faTimes, faCheck, faBan, faInbox, faTrash, faEdit,
     faFolderOpen, faBuilding, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
@@ -30,6 +30,9 @@ const SelfAssignedList = () => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [approvalStatus, setApprovalStatus] = useState('Pending');
+    // The work status (Pending / In Progress / On Hold / Completed), which is a
+    // different question from whether the request was approved.
+    const [workStatus, setWorkStatus] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [deciding, setDeciding] = useState(null);
@@ -44,13 +47,17 @@ const SelfAssignedList = () => {
         return () => clearTimeout(t);
     }, [searchTerm]);
 
-    useEffect(() => setCurrentPage(1), [debouncedSearch, approvalStatus]);
+    useEffect(() => setCurrentPage(1), [debouncedSearch, approvalStatus, workStatus]);
 
     const fetchTasks = useCallback(async () => {
         setLoading(true);
         try {
             const res = await api.get('/tasks/self-assigned', {
-                params: { page: currentPage, limit: itemsPerPage, search: debouncedSearch, approvalStatus }
+                params: {
+                    page: currentPage, limit: itemsPerPage,
+                    search: debouncedSearch, approvalStatus,
+                    ...(workStatus !== 'All' ? { status: workStatus } : {})
+                }
             });
             setTasks(res.data.data || []);
             setTotalPages(res.data.pagination.totalPages);
@@ -61,7 +68,7 @@ const SelfAssignedList = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, itemsPerPage, debouncedSearch, approvalStatus]);
+    }, [currentPage, itemsPerPage, debouncedSearch, approvalStatus, workStatus]);
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -101,7 +108,49 @@ const SelfAssignedList = () => {
         }
     };
 
-    const activeFilterCount = (approvalStatus !== 'All' ? 1 : 0) + (searchTerm ? 1 : 0);
+    const remove = async (task) => {
+        const who = task.assignees[0]?.name || 'this employee';
+        const result = await Swal.fire({
+            title: 'Delete this task?',
+            html: `<p style="margin:0 0 4px">“${task.title}” will be removed from ${who}’s board.</p>`
+                + `<p style="margin:0;font-size:0.85rem;color:#64748b">Rejecting instead lets them fix it and resubmit — deleting does not.</p>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            confirmButtonText: 'Yes, delete it'
+        });
+        if (!result.isConfirmed) return;
+
+        setDeciding(task._id);
+        try {
+            await api.delete(`/tasks/${task._id}`);
+            Swal.fire({
+                icon: 'success', title: 'Task deleted',
+                toast: true, position: 'top-end', timer: 1800, showConfirmButton: false
+            });
+            fetchTasks();
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not delete the task.', 'error');
+        } finally {
+            setDeciding(null);
+        }
+    };
+
+    // "21 Aug 2026 -> 28 Aug 2026" is wide enough to wrap the column onto three
+    // lines, and the year is the same on both ends nine times out of ten.
+    const timeline = (start, due) => {
+        if (!due) return '—';
+        if (!start) return shortDate(due);
+        const a = new Date(start), b = new Date(due);
+        if (a.getFullYear() === b.getFullYear()) {
+            const left = a.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+            return `${left} → ${shortDate(due)}`;
+        }
+        return `${shortDate(start)} → ${shortDate(due)}`;
+    };
+
+    const activeFilterCount = (approvalStatus !== 'All' ? 1 : 0)
+        + (workStatus !== 'All' ? 1 : 0) + (searchTerm ? 1 : 0);
 
     return (
         <div className="fade-in">
@@ -128,10 +177,22 @@ const SelfAssignedList = () => {
                         <option value="All">All</option>
                     </select>
 
+                    <select
+                        className={`task-filter-select ${workStatus !== 'All' ? 'is-active' : ''}`}
+                        value={workStatus}
+                        onChange={(e) => setWorkStatus(e.target.value)}
+                    >
+                        <option value="All">Any work status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="On Hold">On Hold</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+
                     {activeFilterCount > 0 && (
                         <button
                             className="task-filter-clear"
-                            onClick={() => { setApprovalStatus('All'); setSearchTerm(''); }}
+                            onClick={() => { setApprovalStatus('All'); setWorkStatus('All'); setSearchTerm(''); }}
                         >
                             <FontAwesomeIcon icon={faTimes} /> Clear ({activeFilterCount})
                         </button>
@@ -157,7 +218,7 @@ const SelfAssignedList = () => {
                 </div>
             ) : (
                 <div className="employee-table-container">
-                    <table className="employee-table task-table">
+                    <table className="employee-table task-table sa-table">
                         <thead>
                             <tr>
                                 <th className="col-assignees">Employee</th>
@@ -192,7 +253,11 @@ const SelfAssignedList = () => {
                                         <td data-label="Task" className="col-task">
                                             <span className="task-title-cell" title={task.title}>{task.title}</span>
                                             <span className="sa-claimed">
-                                                <FontAwesomeIcon icon={faUserPen} />
+                                                <Avatar
+                                                    name={task.assignedBy?.name}
+                                                    profilePic={task.assignedBy?.profilePic}
+                                                    className="sa-inline-avatar"
+                                                />
                                                 asked by {task.assignedBy?.name || 'someone'}
                                             </span>
                                             {task.approvalStatus === 'Rejected' && task.approvalNote && (
@@ -209,16 +274,31 @@ const SelfAssignedList = () => {
 
                                         <td data-label="Timeline" className="col-due">
                                             <span className="task-due-date">
-                                                {shortDate(task.startDate)} → {shortDate(task.dueDate)}
+                                                {timeline(task.startDate, task.dueDate)}
                                             </span>
                                         </td>
 
                                         <td data-label="Status" className="col-priority">
-                                            <span className={`ap-badge ${slug(task.approvalStatus)}`}>
-                                                {task.approvalStatus === 'Pending' ? 'Awaiting' : task.approvalStatus}
-                                            </span>
+                                            <div className="sa-status">
+                                                <span
+                                                    className={`ap-badge ${slug(task.approvalStatus)}`}
+                                                    title={task.approvedBy ? `Decided by ${task.approvedBy.name}` : 'Waiting on approval'}
+                                                >
+                                                    {task.approvalStatus === 'Pending' ? 'Awaiting' : task.approvalStatus}
+                                                </span>
+                                                {/* Approval and progress are different questions: a task can be
+                                                    approved and untouched, or half done and still unapproved. */}
+                                                <span className={`task-status-badge ${slug(task.status)}`} title="Work status">
+                                                    {task.status}
+                                                </span>
+                                            </div>
                                             {task.approvedBy && (
-                                                <div className="sa-employee-id" style={{ marginTop: '4px' }}>
+                                                <div className="sa-decider" title={`${task.approvalStatus} by ${task.approvedBy.name}`}>
+                                                    <Avatar
+                                                        name={task.approvedBy.name}
+                                                        profilePic={task.approvedBy.profilePic}
+                                                        className="sa-inline-avatar"
+                                                    />
                                                     by {task.approvedBy.name}
                                                 </div>
                                             )}
@@ -230,6 +310,12 @@ const SelfAssignedList = () => {
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="task-actions-inner">
+                                                <button
+                                                    className="icon-btn" title="Edit task" aria-label="Edit task"
+                                                    disabled={busy} onClick={() => navigate(`/edit-task/${task._id}`)}
+                                                >
+                                                    <FontAwesomeIcon icon={faEdit} />
+                                                </button>
                                                 {task.approvalStatus !== 'Approved' && (
                                                     <button
                                                         className="icon-btn" title="Approve" aria-label="Approve"
@@ -240,12 +326,18 @@ const SelfAssignedList = () => {
                                                 )}
                                                 {task.approvalStatus !== 'Rejected' && (
                                                     <button
-                                                        className="icon-btn danger" title="Reject" aria-label="Reject"
+                                                        className="icon-btn" title="Reject (they can fix and resubmit)" aria-label="Reject"
                                                         disabled={busy} onClick={() => decide(task, 'Rejected')}
                                                     >
                                                         <FontAwesomeIcon icon={faBan} />
                                                     </button>
                                                 )}
+                                                <button
+                                                    className="icon-btn danger" title="Delete task" aria-label="Delete task"
+                                                    disabled={busy} onClick={() => remove(task)}
+                                                >
+                                                    <FontAwesomeIcon icon={faTrash} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>

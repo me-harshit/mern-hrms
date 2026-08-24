@@ -8,7 +8,7 @@ import {
     faHourglassHalf, faCircleXmark, faUserPen, faRotateLeft
 } from '@fortawesome/free-solid-svg-icons';
 import api from '../utils/api';
-import TaskDiscussion from '../components/TaskDiscussion';
+import TaskThreads from '../components/TaskThreads';
 import TaskMediaGrid from '../components/TaskMediaGrid';
 import ScreenRecorder from '../components/ScreenRecorder';
 import Avatar from '../components/Avatar';
@@ -245,9 +245,9 @@ const TaskDetail = () => {
                         {task.recurringTaskId && (
                             <span
                                 className="rt-day-badge"
-                                title={isManagement ? 'View the whole schedule' : 'Part of a daily task'}
-                                style={{ cursor: isManagement ? 'pointer' : 'default' }}
-                                onClick={() => isManagement && navigate(`/tasks/recurring/${task.recurringTaskId._id}`)}
+                                title="Open the whole schedule"
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => navigate(`/tasks/recurring/${task.recurringTaskId._id}`)}
                             >
                                 <FontAwesomeIcon icon={faRepeat} />
                                 Day {task.recurringDayNumber} of {task.recurringTaskId.targetCount}
@@ -266,7 +266,10 @@ const TaskDetail = () => {
             {/* ---------- Two columns: discussion left, details right ---------- */}
             <div className="td-layout">
                 <div className="td-main">
-                    <TaskDiscussion taskId={task._id} currentUserId={currentUserId} />
+                    {/* A generated day carries two conversations: today's, and the
+                        run's. TaskThreads shows both rather than hiding the one
+                        the messages are actually in. */}
+                    <TaskThreads task={task} currentUserId={currentUserId} />
                 </div>
 
                 <aside className="td-side">
@@ -288,10 +291,22 @@ const TaskDetail = () => {
                     )}
 
                     {task.isSelfAssigned && task.approvalStatus === 'Pending' && isAssignee && (
-                        <div className="st-note" style={{ marginBottom: '14px' }}>
+                        <div className="st-note" style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
                             <FontAwesomeIcon icon={faHourglassHalf} />
-                            Waiting on your manager to approve this. You can carry on with it
-                            in the meantime.
+                            <span>
+                                Waiting on your manager to approve this. You can carry on with it
+                                in the meantime.
+                            </span>
+                            {/* Correcting your own request before anyone rules on it
+                                should not require being turned down first. */}
+                            <button
+                                type="button"
+                                className="gts-btn secondary"
+                                style={{ marginLeft: 'auto' }}
+                                onClick={() => setResubmitOpen(true)}
+                            >
+                                <FontAwesomeIcon icon={faEdit} /> Edit
+                            </button>
                         </div>
                     )}
 
@@ -366,7 +381,7 @@ const TaskDetail = () => {
                                 {task.statusUpdatedBy && (
                                     <p className="td-muted-line">
                                         Last moved by <strong>{task.statusUpdatedBy.name}</strong>
-                                        {task.completedAt && ` · completed ${new Date(task.completedAt).toLocaleDateString()}`}
+                                        {task.completedAt && ` · completed ${new Date(task.completedAt).toLocaleDateString('en-GB')}`}
                                     </p>
                                 )}
                             </div>
@@ -377,6 +392,64 @@ const TaskDetail = () => {
                             </div>
                         )}
                     </section>
+
+                    {/* Where this task came from. Self-assigned work has two people
+                        behind it — whoever the employee says asked for it, and
+                        whoever signed it off — and conflating them hides who is
+                        actually accountable. */}
+                    {task.isSelfAssigned && (
+                        <section className="td-panel">
+                            <header className="td-panel-head">
+                                <h2><FontAwesomeIcon icon={faUserPen} /> Self Assigned</h2>
+                            </header>
+                            <div className="td-panel-body">
+                                <ul className="sa-prov">
+                                    <li>
+                                        <Avatar
+                                            name={task.assignees[0]?.name}
+                                            profilePic={task.assignees[0]?.profilePic}
+                                            className="sa-prov-avatar"
+                                        />
+                                        <span className="sa-prov-name">{task.assignees[0]?.name || 'Unknown'}</span>
+                                        <span className="sa-prov-role">logged this</span>
+                                    </li>
+                                    <li>
+                                        <Avatar
+                                            name={task.assignedBy?.name}
+                                            profilePic={task.assignedBy?.profilePic}
+                                            className="sa-prov-avatar"
+                                        />
+                                        <span className="sa-prov-name">{task.assignedBy?.name || 'Unknown'}</span>
+                                        <span className="sa-prov-role">asked for it</span>
+                                    </li>
+                                    <li>
+                                        {task.approvedBy ? (
+                                            <>
+                                                <Avatar
+                                                    name={task.approvedBy.name}
+                                                    profilePic={task.approvedBy.profilePic}
+                                                    className="sa-prov-avatar"
+                                                />
+                                                <span className="sa-prov-name">{task.approvedBy.name}</span>
+                                                <span className={`sa-prov-role ${task.approvalStatus === 'Rejected' ? 'is-rejected' : 'is-approved'}`}>
+                                                    {task.approvalStatus === 'Rejected' ? 'rejected it' : 'approved it'}
+                                                    {task.approvedAt && ` · ${new Date(task.approvedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="sa-prov-avatar is-waiting">
+                                                    <FontAwesomeIcon icon={faHourglassHalf} />
+                                                </span>
+                                                <span className="sa-prov-name muted">Not yet decided</span>
+                                                <span className="sa-prov-role">awaiting approval</span>
+                                            </>
+                                        )}
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+                    )}
 
                     {/* Details */}
                     <section className="td-panel">
@@ -396,12 +469,12 @@ const TaskDetail = () => {
                                 </div>
                                 <div>
                                     <dt><FontAwesomeIcon icon={faCalendarAlt} /> Start</dt>
-                                    <dd>{task.startDate ? new Date(task.startDate).toLocaleDateString() : '—'}</dd>
+                                    <dd>{task.startDate ? new Date(task.startDate).toLocaleDateString('en-GB') : '—'}</dd>
                                 </div>
                                 <div>
                                     <dt><FontAwesomeIcon icon={faCalendarAlt} /> Due</dt>
                                     <dd className={due.tone === 'overdue' ? 'overdue' : ''}>
-                                        {new Date(task.dueDate).toLocaleDateString()}
+                                        {new Date(task.dueDate).toLocaleDateString('en-GB')}
                                     </dd>
                                 </div>
                             </dl>

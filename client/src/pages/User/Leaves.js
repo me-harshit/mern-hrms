@@ -272,9 +272,9 @@ const Leaves = () => {
                                 <tr key={leave._id}>
                                     <td data-label="Leave Type" className="fw-600">{leave.leaveType}</td>
                                     <td data-label="Dates" className="text-dark-gray text-small">
-                                        {new Date(leave.fromDate).toLocaleDateString()}
+                                        {new Date(leave.fromDate).toLocaleDateString('en-GB')}
                                         <span className="text-muted mx-1">to</span>
-                                        {new Date(leave.toDate).toLocaleDateString()}
+                                        {new Date(leave.toDate).toLocaleDateString('en-GB')}
                                     </td>
                                     <td data-label="Days">
                                         {leave.days}

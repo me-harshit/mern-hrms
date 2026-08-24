@@ -10,6 +10,11 @@ const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 const VideoCompressionQueue = require('../models/VideoCompressionQueue');
 const TaskComment = require('../models/TaskComment');
+// Required for its side effect: this file populates recurringTaskId, and
+// Mongoose needs that schema registered. It only worked before because
+// index.js loads the recurring cron, which is a fragile thing to rely on.
+require('../models/RecurringTask');
+const { buildDiscussionHandlers } = require('../utils/taskDiscussion');
 const { emitToTask } = require('../utils/realtime');
 const { deleteFromS3 } = require('../utils/s3Service');
 const fs = require('fs');
@@ -24,7 +29,8 @@ const {
     getScopedEmployees,
     getScopedProjects,
     getApproversFor,
-    canApproveFor
+    canApproveFor,
+    getTaskVisibilityFilter
 } = require('../utils/taskScoping');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
@@ -168,7 +174,7 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
         }
 
         const assigner = await User.findById(req.user.id).select('name');
-        const due = new Date(dueDate).toLocaleDateString();
+        const due = new Date(dueDate).toLocaleDateString('en-GB');
         await Promise.all(assigneeIds.map(id => notify(
             id,
             'New Task Assigned',
@@ -227,6 +233,7 @@ router.get('/my', auth, async (req, res) => {
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
             .populate('assignees', 'name email employeeId profilePic')
+            .populate('approvedBy', 'name profilePic')
             .sort({ dueDate: 1 })
             .skip(skip)
             .limit(limit);
@@ -389,9 +396,14 @@ router.put('/self/:id', auth, async (req, res) => {
         if (!task.isSelfAssigned || !mine) {
             return res.status(403).json({ message: 'This is not your self-assigned task' });
         }
-        if (task.approvalStatus !== 'Rejected') {
-            return res.status(400).json({ message: 'Only a rejected task can be resubmitted' });
+        // Pending too, not only Rejected: someone who mistypes their own request
+        // should be able to correct it rather than wait to be turned down first.
+        // Once approved it is an ordinary task and goes through the normal edit
+        // route, so an employee cannot quietly rewrite work already signed off.
+        if (!['Rejected', 'Pending'].includes(task.approvalStatus)) {
+            return res.status(400).json({ message: 'This task has been approved — ask your manager to change it' });
         }
+        const wasRejected = task.approvalStatus === 'Rejected';
 
         if (typeof req.body.title === 'string' && req.body.title.trim()) task.title = req.body.title.trim();
         if (typeof req.body.description === 'string') task.description = req.body.description;
@@ -409,7 +421,7 @@ router.put('/self/:id', auth, async (req, res) => {
         }
 
         // Back into the queue, with the old verdict cleared so the reason shown
-        // is never a stale one.
+        // is never a stale one. Harmless on one that was already Pending.
         task.approvalStatus = 'Pending';
         task.approvalNote = "";
         task.approvedBy = null;
@@ -420,8 +432,10 @@ router.put('/self/:id', auth, async (req, res) => {
         const approvers = await getApproversFor(req.user.id);
         await Promise.all(approvers.map(a => notify(
             a._id,
-            'Task resubmitted for approval',
-            `${me?.name || 'An employee'} updated "${task.title}" and sent it back for approval.`,
+            wasRejected ? 'Task resubmitted for approval' : 'Task updated',
+            wasRejected
+                ? `${me?.name || 'An employee'} updated "${task.title}" and sent it back for approval.`
+                : `${me?.name || 'An employee'} changed "${task.title}", which is still waiting on your approval.`,
             `/task/${task._id}`
         )));
 
@@ -522,6 +536,10 @@ router.get('/self-assigned', auth, async (req, res) => {
         if (req.query.employeeId && req.query.employeeId !== 'All') {
             andConditions.push({ assignees: req.query.employeeId });
         }
+        // The work status, as distinct from the approval status above.
+        if (req.query.status && req.query.status !== 'All' && TASK_STATUSES.includes(req.query.status)) {
+            andConditions.push({ status: req.query.status });
+        }
         if (req.query.search) {
             andConditions.push({ title: new RegExp(req.query.search, 'i') });
         }
@@ -568,8 +586,11 @@ router.get('/managed', auth, async (req, res) => {
         const andConditions = [{ isArchived: false }];
 
         // Admin/HR see everything; everyone else sees what they created.
-        if (!IS_PRIVILEGED.includes(req.user.role)) {
-            andConditions.push({ assignedBy: req.user.id });
+        // A Team Lead sees their own team's work whoever assigned it; a Manager
+        // sees what they handed out. Admin/HR see everything.
+        const visibility = await getTaskVisibilityFilter(req.user);
+        if (visibility) {
+            andConditions.push(visibility);
         } else if (req.query.assignedBy && req.query.assignedBy !== 'All') {
             andConditions.push({ assignedBy: req.query.assignedBy });
         }
@@ -621,6 +642,7 @@ router.get('/managed', auth, async (req, res) => {
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
             .populate('assignees', 'name email employeeId profilePic')
+            .populate('approvedBy', 'name profilePic')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -878,6 +900,8 @@ router.get('/:id', auth, async (req, res) => {
             .populate('assignees', 'name email employeeId profilePic')
             .populate('statusUpdatedBy', 'name profilePic')
             .populate('completionProof.uploadedBy', 'name profilePic')
+            // Who signed the request off, so the task page can say so plainly.
+            .populate('approvedBy', 'name profilePic')
             // A generated task carries no brief of its own — it points back at
             // the schedule's (TaskPlan.md 13.7). Null for ordinary tasks.
             .populate('recurringTaskId', 'title targetCount attachments occurrences');
@@ -929,7 +953,16 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
         }
 
         const isOwner = task.assignedBy.toString() === req.user.id;
-        if (!isOwner && !IS_PRIVILEGED.includes(req.user.role)) {
+        let allowed = isOwner || IS_PRIVILEGED.includes(req.user.role);
+
+        // Same reasoning as the delete route: on a self-assigned task
+        // `assignedBy` is whoever the employee *named*, not necessarily anyone
+        // with authority over it. Whoever can approve it can also correct it.
+        if (!allowed && task.isSelfAssigned) {
+            allowed = await canApproveFor(task.assignees[0], req.user);
+        }
+
+        if (!allowed) {
             discardStagedFiles(req.files);
             return res.status(403).json({ message: 'Only the assigner can edit this task' });
         }
@@ -1017,7 +1050,7 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
         await Promise.all(addedIds.map(id => notify(
             id,
             'New Task Assigned',
-            `You have been added to "${task.title}" (due ${new Date(task.dueDate).toLocaleDateString()}).`,
+            `You have been added to "${task.title}" (due ${new Date(task.dueDate).toLocaleDateString('en-GB')}).`,
             `/task/${task._id}`
         )));
 
@@ -1028,7 +1061,7 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
             await Promise.all(unchangedAssignees.map(id => notify(
                 id,
                 'Task Deadline Updated',
-                `The due date for "${task.title}" is now ${new Date(task.dueDate).toLocaleDateString()}.`,
+                `The due date for "${task.title}" is now ${new Date(task.dueDate).toLocaleDateString('en-GB')}.`,
                 `/task/${task._id}`
             )));
         }
@@ -1170,7 +1203,17 @@ router.delete('/:id', auth, async (req, res) => {
         if (!task) return res.status(404).json({ message: 'Task not found' });
 
         const isOwner = task.assignedBy.toString() === req.user.id;
-        if (!isOwner && !IS_PRIVILEGED.includes(req.user.role)) {
+        let allowed = isOwner || IS_PRIVILEGED.includes(req.user.role);
+
+        // On a self-assigned task `assignedBy` is whoever the employee *named*,
+        // which is not necessarily anyone with authority over it. Whoever can
+        // approve the request can also throw it away — otherwise a Team Lead can
+        // reject a request from their own team but not remove it.
+        if (!allowed && task.isSelfAssigned) {
+            allowed = await canApproveFor(task.assignees[0], req.user);
+        }
+
+        if (!allowed) {
             return res.status(403).json({ message: 'Only the assigner can remove this task' });
         }
 
@@ -1293,123 +1336,18 @@ router.delete('/:id/media/:mediaId', auth, async (req, res) => {
 // ==========================================
 // 9. DISCUSSION THREAD
 // ==========================================
-
-// Anyone involved in the task can read and post: the assignees, the person who
-// assigned it, and Admin/HR.
-const loadTaskForDiscussion = async (taskId, reqUser) => {
-    const task = await Task.findById(taskId).populate('projectId', 'name');
-    if (!task) return { error: { code: 404, message: 'Task not found' } };
-
-    const isAssignee = task.assignees.some(a => a.toString() === reqUser.id);
-    const isOwner = task.assignedBy.toString() === reqUser.id;
-
-    if (!isAssignee && !isOwner && !IS_PRIVILEGED.includes(reqUser.role)) {
-        return { error: { code: 403, message: 'Unauthorized to view this discussion' } };
-    }
-    return { task };
-};
-
-// GET /api/tasks/:id/comments
-router.get('/:id/comments', auth, async (req, res) => {
-    try {
-        const { task, error } = await loadTaskForDiscussion(req.params.id, req.user);
-        if (error) return res.status(error.code).json({ message: error.message });
-
-        const comments = await TaskComment.find({ taskId: task._id })
-            .populate('author', 'name role employeeId profilePic')
-            .sort({ createdAt: 1 });
-
-        res.json(comments);
-    } catch (err) {
-        console.error('Task Comments Fetch Error:', err.message);
-        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Task not found' });
-        res.status(500).send('Server Error');
-    }
+// The handlers are shared with recurring schedules, which have their own
+// thread — see utils/taskDiscussion.js.
+const taskDiscussion = buildDiscussionHandlers({
+    ownerModel: 'Task',
+    load: (id) => Task.findById(id).populate('projectId', 'name'),
+    link: (task) => `/task/${task._id}`,
+    notFound: 'Task not found'
 });
 
-// POST /api/tasks/:id/comments
-router.post('/:id/comments', auth, taskUpload.array('attachments', 5), async (req, res) => {
-    try {
-        const { task, error } = await loadTaskForDiscussion(req.params.id, req.user);
-        if (error) {
-            discardStagedFiles(req.files);
-            return res.status(error.code).json({ message: error.message });
-        }
-
-        const message = (req.body.message || '').trim();
-        if (!message && (!req.files || req.files.length === 0)) {
-            discardStagedFiles(req.files);
-            return res.status(400).json({ message: 'Write something or attach an image' });
-        }
-
-        // Videos belong in task attachments, where the overnight pipeline can
-        // handle them — a discussion image is expected to appear instantly.
-        if ((req.files || []).some(f => isVideo(f))) {
-            discardStagedFiles(req.files);
-            return res.status(400).json({ message: 'Only images can be attached to a message. Add videos to the task itself.' });
-        }
-
-        const { media } = await processTaskFiles(
-            req.files,
-            task.taskType === 'Regular Office Task'
-                ? s3Folder('Office', '/Discussion')
-                : s3Folder(task.projectId?.name, '/Discussion')
-        );
-
-        const comment = await TaskComment.create({
-            taskId: task._id,
-            author: req.user.id,
-            message,
-            attachments: media.map(m => ({ url: m.url, fileName: m.fileName }))
-        });
-
-        // Everyone involved except whoever just spoke.
-        const author = await User.findById(req.user.id).select('name');
-        const recipients = [
-            ...task.assignees.map(a => a.toString()),
-            task.assignedBy.toString()
-        ].filter((id, i, arr) => id !== req.user.id && arr.indexOf(id) === i);
-
-        const preview = message.length > 80 ? message.slice(0, 80) + '…' : (message || 'shared an image');
-        await Promise.all(recipients.map(id => notify(
-            id,
-            `New message on "${task.title}"`,
-            `${author?.name || 'Someone'}: ${preview}`,
-            `/task/${task._id}`
-        )));
-
-        const populated = await TaskComment.findById(comment._id).populate('author', 'name role employeeId profilePic');
-
-        // Anyone with this task open sees the message appear immediately.
-        emitToTask(task._id, 'task:comment', populated.toObject());
-
-        res.status(201).json(populated);
-    } catch (err) {
-        discardStagedFiles(req.files);
-        console.error('Task Comment Error:', err);
-        res.status(500).json({ message: 'Server Error while posting message' });
-    }
-});
-
-// DELETE /api/tasks/:id/comments/:commentId
-router.delete('/:id/comments/:commentId', auth, async (req, res) => {
-    try {
-        const comment = await TaskComment.findOne({ _id: req.params.commentId, taskId: req.params.id });
-        if (!comment) return res.status(404).json({ message: 'Message not found' });
-
-        // Your own words, or Admin/HR moderating.
-        if (comment.author.toString() !== req.user.id && !IS_PRIVILEGED.includes(req.user.role)) {
-            return res.status(403).json({ message: 'You can only delete your own messages' });
-        }
-
-        await comment.deleteOne();
-        emitToTask(req.params.id, 'task:comment-deleted', { _id: comment._id });
-        res.json({ message: 'Message deleted' });
-    } catch (err) {
-        console.error('Task Comment Delete Error:', err.message);
-        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Message not found' });
-        res.status(500).send('Server Error');
-    }
-});
+router.get('/:id/comments', auth, taskDiscussion.list);
+router.post('/:id/comments', auth, taskUpload.array('attachments', 5), taskDiscussion.create);
+router.put('/:id/comments/:commentId', auth, taskDiscussion.update);
+router.delete('/:id/comments/:commentId', auth, taskDiscussion.remove);
 
 module.exports = router;

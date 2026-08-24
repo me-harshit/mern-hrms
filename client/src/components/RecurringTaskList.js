@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faPlus, faSearch, faTimes, faPause, faPlay, faBan, faTrash,
+    faPlus, faSearch, faTimes, faPause, faPlay, faBan, faTrash, faEdit,
     faFolderOpen, faBuilding, faCalendarCheck
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
@@ -176,7 +176,7 @@ const RecurringTaskList = () => {
                 </div>
             ) : (
                 <div className="employee-table-container">
-                    <table className="employee-table task-table">
+                    <table className="employee-table task-table rt-table">
                         <thead>
                             <tr>
                                 <th className="col-task">Schedule</th>
@@ -250,6 +250,10 @@ const RecurringTaskList = () => {
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="task-actions-inner">
+                                                <button className="icon-btn" title="Edit schedule" aria-label="Edit schedule"
+                                                    onClick={() => navigate(`/tasks/recurring/${s._id}/edit`)}>
+                                                    <FontAwesomeIcon icon={faEdit} />
+                                                </button>
                                                 {s.status === 'Active' && (
                                                     <button className="icon-btn" title="Pause schedule" aria-label="Pause schedule"
                                                         onClick={() => act(s, 'pause')}>

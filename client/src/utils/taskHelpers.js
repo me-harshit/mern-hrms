@@ -27,7 +27,7 @@ export const timeAgo = (date) => {
     if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
     if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
     if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
-    return new Date(date).toLocaleDateString();
+    return new Date(date).toLocaleDateString('en-GB');
 };
 
 // "12 Aug 2026" — unambiguous at a glance, unlike 08/12/2026, which reads as a
@@ -47,12 +47,12 @@ export const dueLabel = (dueDate, isDone) => {
     today.setHours(0, 0, 0, 0);
     const days = Math.round((due - today) / 86400000);
 
-    if (isDone) return { text: due.toLocaleDateString(), tone: 'done' };
+    if (isDone) return { text: due.toLocaleDateString('en-GB'), tone: 'done' };
     if (days < 0) return { text: `${Math.abs(days)}d overdue`, tone: 'overdue' };
     if (days === 0) return { text: 'Due today', tone: 'today' };
     if (days === 1) return { text: 'Due tomorrow', tone: 'soon' };
     if (days <= 3) return { text: `${days}d left`, tone: 'soon' };
-    return { text: due.toLocaleDateString(), tone: 'normal' };
+    return { text: due.toLocaleDateString('en-GB'), tone: 'normal' };
 };
 
 /**

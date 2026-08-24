@@ -252,7 +252,7 @@ const Reimbursements = () => {
                                                             <td style={{ padding: '10px', textAlign: 'center' }}>
                                                                 <input type="checkbox" style={{ cursor: 'pointer' }} checked={selectedExpenseIds.includes(exp._id)} onChange={() => toggleExpense(exp._id)} />
                                                             </td>
-                                                            <td style={{ padding: '10px' }}>{new Date(exp.expenseDate).toLocaleDateString()}</td>
+                                                            <td style={{ padding: '10px' }}>{new Date(exp.expenseDate).toLocaleDateString('en-GB')}</td>
                                                             <td style={{ padding: '10px', fontWeight: '600' }}>{exp.category}</td>
                                                             <td style={{ padding: '10px', color: '#64748b' }}>{exp.projectName || '-'}</td>
                                                             <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold' }}>₹{exp.amount.toLocaleString('en-IN')}</td>
@@ -354,7 +354,7 @@ const Reimbursements = () => {
                                 history.map(txn => (
                                     <tr key={txn._id}>
                                         <td data-label="Date Paid">
-                                            <div className="fw-600">{new Date(txn.createdAt).toLocaleDateString()}</div>
+                                            <div className="fw-600">{new Date(txn.createdAt).toLocaleDateString('en-GB')}</div>
                                             <div className="text-small text-muted">{new Date(txn.createdAt).toLocaleTimeString()}</div>
                                         </td>
                                         <td data-label="Paid To">
@@ -404,7 +404,7 @@ const Reimbursements = () => {
                         <div className="sidebar-header">
                             <div>
                                 <h2 className="sidebar-title">Reimbursement Details</h2>
-                                <div style={{ fontSize: '12px', color: '#64748b' }}>{new Date(selectedHistoryItem.createdAt).toLocaleString()}</div>
+                                <div style={{ fontSize: '12px', color: '#64748b' }}>{new Date(selectedHistoryItem.createdAt).toLocaleString('en-GB')}</div>
                             </div>
                             <button className="sidebar-close-btn" onClick={() => setSelectedHistoryItem(null)}>
                                 <FontAwesomeIcon icon={faTimes} />
@@ -439,7 +439,7 @@ const Reimbursements = () => {
                                             </div>
                                             <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
                                                 <span>{exp.projectName || 'Regular Office'}</span>
-                                                <span>{new Date(exp.expenseDate).toLocaleDateString()}</span>
+                                                <span>{new Date(exp.expenseDate).toLocaleDateString('en-GB')}</span>
                                             </div>
                                             {exp.descriptionTags && (
                                                 <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', fontStyle: 'italic' }}>

@@ -5,9 +5,10 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faRepeat, faPause, faPlay, faBan, faFolderOpen,
-    faBuilding, faPaperclip, faUserTie, faTriangleExclamation, faTrash
+    faBuilding, faPaperclip, faUserTie, faTriangleExclamation, faTrash, faEdit
 } from '@fortawesome/free-solid-svg-icons';
 import TaskMediaGrid from '../../components/TaskMediaGrid';
+import TaskDiscussion from '../../components/TaskDiscussion';
 import Avatar from '../../components/Avatar';
 import { slug, taskContextLabel, confirmDeleteSchedule } from '../../utils/taskHelpers';
 import { prettyDate, todayYmd, parseYmd } from '../../utils/scheduleDates';
@@ -45,6 +46,9 @@ const dayState = (date, occurrence) => {
 const RecurringTaskDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+    const currentUserId = currentUser?.id || currentUser?._id;
+    const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS', 'TEAM LEAD'].includes(currentUser?.role);
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -124,7 +128,8 @@ const RecurringTaskDetail = () => {
     const { schedule, byAssignee } = data;
 
     // Roll the whole log up once for the stat tiles.
-    const all = schedule.occurrences || [];
+    const all = (schedule.occurrences || []).filter(o =>
+        isManagement || String(o.assignee) === String(currentUserId));
     const stats = {
         done: all.filter(o => o.outcome === 'completed').length,
         missed: all.filter(o => o.outcome === 'missed').length,
@@ -134,17 +139,32 @@ const RecurringTaskDetail = () => {
 
     return (
         <div className="attendance-container fade-in">
-            <div className="task-page-header">
-                <button className="gts-btn secondary" onClick={() => navigate('/tasks?view=recurring')}>
-                    <FontAwesomeIcon icon={faArrowLeft} /> Back
-                </button>
-                <h1 className="page-title header-no-margin">
-                    <FontAwesomeIcon icon={faRepeat} style={{ marginRight: '10px', color: '#215D7B' }} />
-                    {schedule.title}
-                </h1>
-                <span className={`rt-status-badge ${slug(schedule.status)}`}>{schedule.status}</span>
+            <button className="gts-btn secondary rt-back" onClick={() => navigate('/tasks?view=recurring')}>
+                <FontAwesomeIcon icon={faArrowLeft} /> Back
+            </button>
 
-                <div className="task-actions-inner" style={{ marginLeft: 'auto' }}>
+            <header className="rt-head">
+                <div className="rt-head-main">
+                    <h1 className="rt-head-title" title={schedule.title}>
+                        <FontAwesomeIcon icon={faRepeat} />
+                        <span>{schedule.title}</span>
+                    </h1>
+                    <div className="rt-head-meta">
+                        <span className={`rt-status-badge ${slug(schedule.status)}`}>{schedule.status}</span>
+                        <span className="rt-head-dot" />
+                        <span>{taskContextLabel(schedule)}</span>
+                        <span className="rt-head-dot" />
+                        <span>by {schedule.assignedBy?.name || 'Unknown'}</span>
+                    </div>
+                </div>
+
+                {/* Steering the schedule is a management job; an assignee is
+                    here to read the brief and join the discussion. */}
+                {isManagement && (
+                <div className="rt-head-actions">
+                    <button className="gts-btn secondary" onClick={() => navigate(`/tasks/recurring/${id}/edit`)}>
+                        <FontAwesomeIcon icon={faEdit} /> Edit
+                    </button>
                     {schedule.status === 'Active' && (
                         <button className="gts-btn secondary" onClick={() => act('pause')}>
                             <FontAwesomeIcon icon={faPause} /> Pause
@@ -160,11 +180,31 @@ const RecurringTaskDetail = () => {
                             <FontAwesomeIcon icon={faBan} /> End
                         </button>
                     )}
-                    <button className="gts-btn secondary" onClick={remove}>
-                        <FontAwesomeIcon icon={faTrash} /> Delete
+                    {/* Destructive, so it is an icon rather than a fifth full
+                        button competing for the same row. */}
+                    <button className="icon-btn danger rt-head-delete" title="Delete schedule"
+                        aria-label="Delete schedule" onClick={remove}>
+                        <FontAwesomeIcon icon={faTrash} />
                     </button>
                 </div>
-            </div>
+                )}
+            </header>
+
+            <div className="td-layout">
+                <div className="td-main">
+                    <TaskDiscussion
+                        taskId={id}
+                        currentUserId={currentUserId}
+                        basePath="/tasks/recurring"
+                        title="Discussion"
+                    />
+                    <p className="rt-thread-note">
+                        One thread for the whole run — the same conversation everyone sees on
+                        each day&apos;s task, however many days it covers.
+                    </p>
+                </div>
+
+                <aside className="td-side">
 
             {/* --- What this schedule is --- */}
             <div className="control-card" style={{ marginBottom: '18px' }}>
@@ -236,7 +276,9 @@ const RecurringTaskDetail = () => {
             </div>
 
             {/* --- One calendar per person --- */}
-            {byAssignee.map(person => {
+            {byAssignee
+                .filter(person => isManagement || String(person.user._id) === String(currentUserId))
+                .map(person => {
                 const occByDate = {};
                 person.occurrences.forEach(o => { occByDate[o.date] = o; });
 
@@ -295,6 +337,9 @@ const RecurringTaskDetail = () => {
                     </div>
                 );
             })}
+
+                </aside>
+            </div>
 
             <p className="sp-note">
                 Scheduled days are re-checked each morning at 6am. A day is only skipped when it

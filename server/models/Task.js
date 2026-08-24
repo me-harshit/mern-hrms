@@ -10,7 +10,13 @@ const TASK_TYPES = ['Project Task', 'Regular Office Task'];
 const mediaSchema = new mongoose.Schema({
     url: { type: String, required: true },
     fileName: { type: String, default: "" },
-    type: { type: String, enum: ['image', 'video'], required: true },
+    type: { type: String, enum: ['image', 'video', 'audio'], required: true },
+
+    // Audio notes only. The peaks are computed in the browser at record time
+    // and stored, so a player can draw the waveform without fetching and
+    // decoding the file again for every message in a thread.
+    durationMs: { type: Number, default: 0 },
+    waveform: { type: [Number], default: undefined },
     status: {
         type: String,
         enum: ['ready', 'processing_compression', 'failed'],

@@ -457,3 +457,99 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Approval state above work state, so the Status column answers both
+   "was this signed off" and "how far along is it". */
+.sa-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+/* ---------- who asked, who approved ---------- */
+.sa-prov {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sa-prov li {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.sa-prov-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #215D7B;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.64rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.sa-prov-avatar.is-waiting {
+    background: #f1f5f9;
+    color: #94a3b8;
+}
+
+.sa-prov-name {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sa-prov-name.muted {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.sa-prov-role {
+    margin-left: auto;
+    font-size: 0.76rem;
+    color: #64748b;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sa-prov-role.is-approved { color: #166534; font-weight: 600; }
+.sa-prov-role.is-rejected { color: #991b1b; font-weight: 600; }
+
+/* A face beside a name in the dense table rows. */
+.sa-inline-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #215D7B;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.5rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.sa-decider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+    font-size: 0.72rem;
+    color: #64748b;
+}

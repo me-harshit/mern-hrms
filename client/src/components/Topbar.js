@@ -44,9 +44,12 @@ const Topbar = ({ onToggleSidebar }) => {
 
     const fetchNotifications = async () => {
         try {
-            const res = await api.get('/notifications');
-            setNotifications(res.data);
-            setUnreadCount(res.data.filter(n => !n.isRead).length);
+            // The list is paginated now. The dropdown only ever shows the most
+            // recent few, and unreadCount comes from the server — counting it
+            // client-side undercounted, since it only saw the first page.
+            const res = await api.get('/notifications', { params: { limit: 10 } });
+            setNotifications(res.data.data || []);
+            setUnreadCount(res.data.unreadCount || 0);
         } catch (error) {
             console.error("Failed to fetch notifications");
         }
@@ -150,7 +153,7 @@ const Topbar = ({ onToggleSidebar }) => {
                                         >
                                             <p className="notif-title">{notif.title}</p>
                                             <p className="notif-message">{notif.message}</p>
-                                            <span className="notif-time">{new Date(notif.createdAt).toLocaleDateString()}</span>
+                                            <span className="notif-time">{new Date(notif.createdAt).toLocaleDateString('en-GB')}</span>
                                         </div>
                                     ))
                                 ) : (
