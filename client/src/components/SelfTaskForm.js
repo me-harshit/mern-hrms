@@ -5,6 +5,7 @@ import { faXmark, faSpinner, faPaperPlane, faCircleInfo } from '@fortawesome/fre
 import api from '../utils/api';
 import DatePickerField from './DatePickerField';
 import PersonPicker from './PersonPicker';
+import TaskTimeWindow from './TaskTimeWindow';
 import { datesBetween, prettyDate, todayYmd } from '../utils/scheduleDates';
 import '../styles/recurring.css';
 import '../styles/selftask.css';
@@ -25,7 +26,8 @@ const SelfTaskForm = ({ open, onClose, onSaved, task = null }) => {
     const [projects, setProjects] = useState([]);
     const [form, setForm] = useState({
         title: '', description: '', taskType: 'Regular Office Task',
-        projectId: '', priority: 'Medium', assignedById: ''
+        projectId: '', priority: 'Medium', assignedById: '',
+        startTime: '', dueTime: '', timeAllottedMinutes: ''
     });
     const [dates, setDates] = useState([]);
 
@@ -55,7 +57,10 @@ const SelfTaskForm = ({ open, onClose, onSaved, task = null }) => {
                 taskType: task.taskType || 'Regular Office Task',
                 projectId: task.projectId?._id || task.projectId || '',
                 priority: task.priority || 'Medium',
-                assignedById: task.assignedBy?._id || task.assignedBy || ''
+                assignedById: task.assignedBy?._id || task.assignedBy || '',
+                startTime: task.startTime || '',
+                dueTime: task.dueTime || '',
+                timeAllottedMinutes: task.timeAllottedMinutes || ''
             });
             const start = task.startDate ? task.startDate.slice(0, 10) : null;
             const due = task.dueDate ? task.dueDate.slice(0, 10) : null;
@@ -63,7 +68,8 @@ const SelfTaskForm = ({ open, onClose, onSaved, task = null }) => {
         } else {
             setForm({
                 title: '', description: '', taskType: 'Regular Office Task',
-                projectId: '', priority: 'Medium', assignedById: ''
+                projectId: '', priority: 'Medium', assignedById: '',
+                startTime: '', dueTime: '', timeAllottedMinutes: ''
             });
             setDates([]);
         }
@@ -100,6 +106,9 @@ const SelfTaskForm = ({ open, onClose, onSaved, task = null }) => {
             return Swal.fire('Pick a project', 'Choose a project, or switch this to a Regular Office task.', 'warning');
         }
         if (dates.length === 0) return Swal.fire('Pick the dates', 'Choose when this starts and when it is due.', 'warning');
+        if (form.startTime && form.dueTime && form.dueTime <= form.startTime) {
+            return Swal.fire('Check times', 'The due/end time must be after the start time.', 'warning');
+        }
 
         const payload = {
             ...form,
@@ -242,6 +251,15 @@ const SelfTaskForm = ({ open, onClose, onSaved, task = null }) => {
                                     selected={dates}
                                     onChange={setDates}
                                     minDate={todayYmd()}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <TaskTimeWindow
+                                    startTime={form.startTime}
+                                    dueTime={form.dueTime}
+                                    timeAllottedMinutes={form.timeAllottedMinutes}
+                                    onChange={(patch) => setForm(f => ({ ...f, ...patch }))}
                                 />
                             </div>
                         </div>

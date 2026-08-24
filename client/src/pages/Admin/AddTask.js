@@ -11,6 +11,7 @@ import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
+import TaskTimeWindow from '../../components/TaskTimeWindow';
 import ScheduleProjection from '../../components/ScheduleProjection';
 import { datesBetween, prettyDate } from '../../utils/scheduleDates';
 import '../../styles/App.css';
@@ -36,7 +37,10 @@ const AddTask = () => {
         projectId: '',
         priority: 'Medium',
         startDate: new Date().toISOString().split('T')[0],
-        dueDate: ''
+        dueDate: '',
+        startTime: '',
+        dueTime: '',
+        timeAllottedMinutes: ''
     });
 
     const [selectedAssignees, setSelectedAssignees] = useState([]);
@@ -212,6 +216,9 @@ const AddTask = () => {
         }
         if (!isRecurring && formData.startDate && formData.dueDate && new Date(formData.dueDate) < new Date(formData.startDate)) {
             return Swal.fire('Check Dates', 'The due date cannot be before the start date.', 'warning');
+        }
+        if (!isRecurring && formData.startTime && formData.dueTime && formData.dueTime <= formData.startTime) {
+            return Swal.fire('Check Times', 'The due/end time must be after the start time.', 'warning');
         }
 
         setLoading(true);
@@ -424,6 +431,17 @@ const AddTask = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {!isRecurring && (
+                                <div className="form-group task-field">
+                                    <TaskTimeWindow
+                                        startTime={formData.startTime}
+                                        dueTime={formData.dueTime}
+                                        timeAllottedMinutes={formData.timeAllottedMinutes}
+                                        onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                                    />
+                                </div>
+                            )}
 
                             {/* The full skip breakdown sits in the form, not in the
                                 popover — it can run to several lines, and keeping it

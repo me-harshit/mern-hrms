@@ -1,0 +1,65 @@
+/* ==========================================================================
+   TASK COUNTDOWN
+   The live-reducing bar shown on a task that carries an explicit time
+   window. Self-contained — see the note in TaskTimeWindow's own stylesheet
+   on why shared task components import their own CSS rather than leaning on
+   whichever page happens to load tasks.css.
+   ========================================================================== */
+
+.tcd {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.tcd-bar {
+    flex: 1;
+    min-width: 40px;
+    height: 5px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+}
+
+.tcd-fill {
+    height: 100%;
+    border-radius: 999px;
+    /* Draining left-to-right in real time, not a step every render. */
+    transition: width 1s linear, background-color 0.3s ease;
+}
+
+.tcd-text {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.tcd-ok .tcd-fill { background: #22c55e; }
+.tcd-ok .tcd-text { color: #16a34a; }
+
+.tcd-warn .tcd-fill { background: #f59e0b; }
+.tcd-warn .tcd-text { color: #b45309; }
+
+.tcd-critical .tcd-fill { background: #f97316; }
+.tcd-critical .tcd-text { color: #c2410c; }
+
+.tcd-over .tcd-bar { background: #fecaca; }
+.tcd-over .tcd-fill { background: #dc2626; }
+.tcd-over .tcd-text { color: #dc2626; }
+
+/* Compact: a card in a dense list/board, where the bar sits under one line
+   of text rather than in its own metadata row. */
+.tcd.is-compact {
+    margin-top: 4px;
+}
+
+.tcd.is-compact .tcd-bar {
+    height: 4px;
+}
+
+.tcd.is-compact .tcd-text {
+    font-size: 0.68rem;
+}

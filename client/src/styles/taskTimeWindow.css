@@ -1,0 +1,102 @@
+/* ==========================================================================
+   TASK TIME WINDOW
+   The optional Time Allotted / Start / Due-time block on a task form.
+   Self-contained on purpose: this component is used from AddTask and
+   EditTask (which load tasks.css) and from SelfTaskForm (which does not) —
+   sharing tasks.css's grid classes left it unstyled in the second case.
+   ========================================================================== */
+
+.ttw-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    color: #475569;
+    border-radius: 9px;
+    padding: 9px 13px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.ttw-toggle:hover {
+    border-color: #215D7B;
+    color: #215D7B;
+    background: #f0f9ff;
+}
+
+.ttw-toggle.is-open {
+    border-style: solid;
+    background: #fff;
+    margin-bottom: 12px;
+}
+
+.ttw-toggle-hint {
+    font-weight: 400;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    margin-left: auto;
+    /* Doesn't fit next to the label on a narrow host column — drop it rather
+       than let it force the toggle onto two lines. */
+    display: none;
+}
+
+@media (min-width: 460px) {
+    .ttw-toggle-hint { display: inline; }
+}
+
+.ttw-collapse-icon {
+    margin-left: auto;
+    font-size: 0.7rem;
+}
+
+.ttw-panel {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+    background: #fbfcfd;
+    margin-bottom: 4px;
+}
+
+/* Three short inputs — a number and two time pickers — sized to their own
+   content rather than split into equal thirds, so "Start time" and "Due /
+   end time" don't get cramped narrower than the <input type="time"> control
+   itself needs. Wraps to one-per-line only once the host column genuinely
+   can't fit them, e.g. a phone-width sidebar. */
+.ttw-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(112px, 1fr));
+    gap: 10px;
+}
+
+@media (max-width: 420px) {
+    .ttw-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ttw-field {
+    min-width: 0;
+}
+
+.ttw-field .input-label {
+    white-space: nowrap;
+}
+
+.ttw-field input.custom-input {
+    width: 100%;
+    padding-left: 10px;
+    padding-right: 8px;
+}
+
+.ttw-hint {
+    display: block;
+    margin-top: 9px;
+    font-size: 0.78rem;
+    color: #94a3b8;
+}

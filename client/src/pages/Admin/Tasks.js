@@ -13,6 +13,7 @@ import RecurringTaskList from '../../components/RecurringTaskList';
 import SelfAssignedList from '../../components/SelfAssignedList';
 import { slug, taskContextLabel } from '../../utils/taskHelpers';
 import Avatar from '../../components/Avatar';
+import TaskCountdown, { hasTimeWindow } from '../../components/TaskCountdown';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
 import '../../styles/selftask.css';
@@ -152,7 +153,7 @@ const Tasks = () => {
     };
 
     const isOverdue = (task) =>
-        new Date(task.dueDate) < new Date() && task.status !== 'Completed';
+        new Date(task.overdueAt || task.dueDate) < new Date() && task.status !== 'Completed';
 
     return (
         <div className="attendance-container fade-in">
@@ -363,6 +364,7 @@ const Tasks = () => {
                                             <span className={`task-due-date ${isOverdue(task) ? 'overdue' : ''}`}>
                                                 {new Date(task.dueDate).toLocaleDateString('en-GB')}
                                             </span>
+                                            {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
                                         </td>
 
                                         <td data-label="Progress" className="col-progress">

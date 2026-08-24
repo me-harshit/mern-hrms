@@ -11,6 +11,7 @@ import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
+import TaskTimeWindow from '../../components/TaskTimeWindow';
 import ScheduleProjection from '../../components/ScheduleProjection';
 import { resolveMediaUrl } from '../../utils/taskHelpers';
 import { datesBetween, prettyDate, todayYmd } from '../../utils/scheduleDates';
@@ -43,7 +44,8 @@ const EditTask = () => {
 
     const [formData, setFormData] = useState({
         title: '', description: '', taskType: 'Project Task',
-        projectId: '', priority: 'Medium', startDate: '', dueDate: ''
+        projectId: '', priority: 'Medium', startDate: '', dueDate: '',
+        startTime: '', dueTime: '', timeAllottedMinutes: ''
     });
 
     const [selectedAssignees, setSelectedAssignees] = useState([]);
@@ -79,7 +81,10 @@ const EditTask = () => {
                     projectId: task.projectId?._id || '',
                     priority: task.priority || 'Medium',
                     startDate: task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
-                    dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : ''
+                    dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+                    startTime: task.startTime || '',
+                    dueTime: task.dueTime || '',
+                    timeAllottedMinutes: task.timeAllottedMinutes || ''
                 });
                 setSelectedAssignees(task.assignees.map(a => a._id));
                 setExistingAssignees(task.assignees);
@@ -271,6 +276,9 @@ const EditTask = () => {
         if (!formData.dueDate) {
             return Swal.fire('Pick a Due Date', 'Choose when this task is due.', 'warning');
         }
+        if (formData.startTime && formData.dueTime && formData.dueTime <= formData.startTime) {
+            return Swal.fire('Check Times', 'The due/end time must be after the start time.', 'warning');
+        }
 
         setLoading(true);
         setUploadProgress(0);
@@ -454,6 +462,17 @@ const EditTask = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {!convert && !isRecurringTask && (
+                                <div className="form-group task-field">
+                                    <TaskTimeWindow
+                                        startTime={formData.startTime}
+                                        dueTime={formData.dueTime}
+                                        timeAllottedMinutes={formData.timeAllottedMinutes}
+                                        onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                                    />
+                                </div>
+                            )}
 
                             {convert && plannedDates.length > 0 && (
                                 <ScheduleProjection

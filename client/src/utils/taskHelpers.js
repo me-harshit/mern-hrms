@@ -40,15 +40,27 @@ export const shortDate = (date) => {
 };
 
 // "3 days left" reads better than a bare date when triaging your own work.
-export const dueLabel = (dueDate, isDone) => {
+//
+// `overdueAt` (optional, third arg) is the actual instant a task flips
+// overdue — a bare dueDate can't answer that on its own, since it depends on
+// an explicit due time or, absent one, the assignee's shift end (see
+// models/Task.js). Falls back to a calendar-day comparison when it's not
+// supplied, e.g. for callers still on an older cached response.
+export const dueLabel = (dueDate, isDone, overdueAt) => {
     const due = new Date(dueDate);
     const today = new Date();
     due.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
     const days = Math.round((due - today) / 86400000);
 
+    const isOverdue = overdueAt ? new Date(overdueAt) < new Date() : days < 0;
+
     if (isDone) return { text: due.toLocaleDateString('en-GB'), tone: 'done' };
-    if (days < 0) return { text: `${Math.abs(days)}d overdue`, tone: 'overdue' };
+    if (isOverdue) {
+        return days < 0
+            ? { text: `${Math.abs(days)}d overdue`, tone: 'overdue' }
+            : { text: 'Overdue', tone: 'overdue' };
+    }
     if (days === 0) return { text: 'Due today', tone: 'today' };
     if (days === 1) return { text: 'Due tomorrow', tone: 'soon' };
     if (days <= 3) return { text: `${days}d left`, tone: 'soon' };

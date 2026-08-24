@@ -10,6 +10,7 @@ import {
     faPlus, faHourglassHalf, faCircleXmark, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
 import Avatar from '../../components/Avatar';
+import TaskCountdown, { hasTimeWindow } from '../../components/TaskCountdown';
 import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
@@ -24,7 +25,7 @@ const TaskCard = ({
     task, compact, currentUser, currentUserId,
     isDragging, isMoving, onDragStart, onDragEnd, onOpen
 }) => {
-    const due = dueLabel(task.dueDate, task.status === 'Completed');
+    const due = dueLabel(task.dueDate, task.status === 'Completed', task.overdueAt);
     const others = task.assignees.filter(a => a._id !== currentUserId);
 
     return (
@@ -86,6 +87,8 @@ const TaskCard = ({
                 )}
                 <span className={`tk-due ${due.tone}`}>{due.text}</span>
             </div>
+
+            {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
 
             <div className="tk-card-foot">
                 <div className="tk-avatars">
@@ -189,7 +192,7 @@ const MyTasks = () => {
         return {
             total: visibleTasks.length,
             active: visibleTasks.filter(t => t.status === 'In Progress').length,
-            overdue: visibleTasks.filter(t => t.status !== 'Completed' && new Date(t.dueDate) < now).length,
+            overdue: visibleTasks.filter(t => t.status !== 'Completed' && new Date(t.overdueAt || t.dueDate) < now).length,
             done: visibleTasks.filter(t => t.status === 'Completed').length
         };
     }, [visibleTasks]);

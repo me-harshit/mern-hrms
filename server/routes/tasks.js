@@ -62,6 +62,20 @@ const parseIdList = (raw) => {
     return [];
 };
 
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+// A multipart body carries these as plain strings, empty when the assigner
+// left the time window closed — normalise all three together so a route
+// can't end up with a timeAllottedMinutes but no startTime, or a malformed
+// clock string reaching the schema.
+const parseTimeWindow = (body) => ({
+    startTime: TIME_RE.test(body.startTime) ? body.startTime : null,
+    dueTime: TIME_RE.test(body.dueTime) ? body.dueTime : null,
+    timeAllottedMinutes: body.timeAllottedMinutes && Number(body.timeAllottedMinutes) > 0
+        ? Number(body.timeAllottedMinutes)
+        : null
+});
+
 const notify = async (recipientId, title, message, link) => {
     try {
         await Notification.create({ recipient: recipientId, title, message, type: 'TASK', link });
@@ -105,6 +119,7 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
         }
 
         const { title, description, projectId, priority, startDate, dueDate } = req.body;
+        const timeWindow = parseTimeWindow(req.body);
         const assigneeIds = parseIdList(req.body.assigneeIds);
         const taskType = TASK_TYPES.includes(req.body.taskType) ? req.body.taskType : 'Project Task';
         const isOfficeTask = taskType === 'Regular Office Task';
@@ -154,6 +169,7 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
             priority: priority || 'Medium',
             startDate: startDate || null,
             dueDate,
+            ...timeWindow,
             attachments: media,
             assignees: assigneeIds
         });
@@ -248,7 +264,7 @@ router.get('/my', auth, async (req, res) => {
             isArchived: false,
             assignees: req.user.id,
             status: { $ne: 'Completed' },
-            dueDate: { $lt: new Date() }
+            overdueAt: { $lt: new Date() }
         });
 
         res.json({
@@ -291,6 +307,7 @@ router.get('/my/open-count', auth, async (req, res) => {
 router.post('/self', auth, taskUpload.array('attachments', 10), async (req, res) => {
     try {
         const { title, description, projectId, priority, startDate, dueDate, assignedById } = req.body;
+        const timeWindow = parseTimeWindow(req.body);
         const taskType = TASK_TYPES.includes(req.body.taskType) ? req.body.taskType : 'Project Task';
         const isOfficeTask = taskType === 'Regular Office Task';
 
@@ -338,6 +355,7 @@ router.post('/self', auth, taskUpload.array('attachments', 10), async (req, res)
             priority: priority || 'Medium',
             startDate: startDate || null,
             dueDate,
+            ...timeWindow,
             attachments: media,
             // The whole point: they are the only assignee.
             assignees: [req.user.id],
@@ -410,6 +428,9 @@ router.put('/self/:id', auth, async (req, res) => {
         if (['Low', 'Medium', 'High', 'Urgent'].includes(req.body.priority)) task.priority = req.body.priority;
         if (req.body.dueDate) task.dueDate = req.body.dueDate;
         if (req.body.startDate !== undefined) task.startDate = req.body.startDate || null;
+        if (req.body.startTime !== undefined || req.body.dueTime !== undefined || req.body.timeAllottedMinutes !== undefined) {
+            Object.assign(task, parseTimeWindow(req.body));
+        }
 
         if (TASK_TYPES.includes(req.body.taskType)) {
             task.taskType = req.body.taskType;
@@ -627,7 +648,7 @@ router.get('/managed', auth, async (req, res) => {
         // field, so untouched historical tasks keep showing.
         andConditions.push({ approvalStatus: { $nin: ['Pending', 'Rejected'] } });
         if (req.query.overdue === 'true') {
-            andConditions.push({ dueDate: { $lt: new Date() } });
+            andConditions.push({ overdueAt: { $lt: new Date() } });
             andConditions.push({ status: { $ne: 'Completed' } });
         }
         if (req.query.search) {
@@ -703,7 +724,7 @@ router.get('/user/:userId', auth, async (req, res) => {
             Task.countDocuments({ ...baseScope, status: 'In Progress' }),
             Task.countDocuments({ ...baseScope, status: 'On Hold' }),
             Task.countDocuments({ ...baseScope, status: 'Completed' }),
-            Task.countDocuments({ ...baseScope, status: { $ne: 'Completed' }, dueDate: { $lt: new Date() } })
+            Task.countDocuments({ ...baseScope, status: { $ne: 'Completed' }, overdueAt: { $lt: new Date() } })
         ]);
 
         res.json({
@@ -783,7 +804,7 @@ router.get('/by-employee', auth, async (req, res) => {
                     overdue: {
                         $sum: {
                             $cond: [
-                                { $and: [{ $ne: ['$status', 'Completed'] }, { $lt: ['$dueDate', now] }] },
+                                { $and: [{ $ne: ['$status', 'Completed'] }, { $lt: ['$overdueAt', now] }] },
                                 1, 0
                             ]
                         }
@@ -836,7 +857,7 @@ router.get('/by-employee', auth, async (req, res) => {
             isArchived: false,
             assignees: { $in: pageIds }
         })
-            .select('title status priority startDate dueDate createdAt taskType projectId assignedBy assignees attachments')
+            .select('title status priority startDate dueDate startTime dueTime overdueAt createdAt taskType projectId assignedBy assignees attachments')
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
             .lean();
@@ -853,6 +874,9 @@ router.get('/by-employee', auth, async (req, res) => {
                 assignedAt: task.createdAt,
                 startDate: task.startDate,
                 dueDate: task.dueDate,
+                startTime: task.startTime,
+                dueTime: task.dueTime,
+                overdueAt: task.overdueAt,
                 taskType: task.taskType,
                 projectId: task.projectId,
                 assignedBy: task.assignedBy,
@@ -976,6 +1000,9 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
 
         const dueDateChanged = dueDate && new Date(dueDate).getTime() !== new Date(task.dueDate).getTime();
         if (dueDate) task.dueDate = dueDate;
+        if (req.body.startTime !== undefined || req.body.dueTime !== undefined || req.body.timeAllottedMinutes !== undefined) {
+            Object.assign(task, parseTimeWindow(req.body));
+        }
 
         // Switching type clears or requires the project accordingly.
         if (req.body.taskType && TASK_TYPES.includes(req.body.taskType)) {

@@ -12,6 +12,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import Avatar from '../../components/Avatar';
+import TaskCountdown, { hasTimeWindow } from '../../components/TaskCountdown';
 import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
@@ -849,7 +850,7 @@ const EmployeeProfile = () => {
                                 </thead>
                                 <tbody>
                                     {tasks.map(t => {
-                                        const due = dueLabel(t.dueDate, t.status === 'Completed');
+                                        const due = dueLabel(t.dueDate, t.status === 'Completed', t.overdueAt);
                                         return (
                                             <tr
                                                 key={t._id}
@@ -880,6 +881,7 @@ const EmployeeProfile = () => {
                                                 </td>
                                                 <td data-label="Due">
                                                     <span className={`tk-due ${due.tone}`}>{due.text}</span>
+                                                    {hasTimeWindow(t) && <TaskCountdown task={t} compact />}
                                                 </td>
                                                 <td data-label="Status">
                                                     <span className={`task-status-badge ${slug(t.status)}`}>{t.status}</span>
