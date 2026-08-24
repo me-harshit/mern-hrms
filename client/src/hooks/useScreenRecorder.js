@@ -24,11 +24,16 @@ export function useScreenRecorder({ onRecordingComplete, maxDurationMs = MAX_DUR
     const pauseTimeRef = useRef(null);
 
     const getSupportedMimeType = () => {
+        // VP8 first, deliberately. This file is an intermediate — the nightly
+        // job re-encodes it to H.264 — so encode *speed* matters far more than
+        // compression ratio, and VP8 software-encodes several times faster than
+        // VP9. That is the difference between a Mac keeping real time and
+        // lagging minutes behind the recording.
         const types = [
-            'video/webm;codecs=vp9,opus',
             'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp9,opus',
             'video/webm',
-            'video/mp4' // for Safari
+            'video/mp4' // Safari, which cannot record WebM at all
         ];
         for (const type of types) {
             if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) {
@@ -109,7 +114,19 @@ export function useScreenRecorder({ onRecordingComplete, maxDurationMs = MAX_DUR
             let displayStream;
             try {
                 displayStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { displaySurface: 'monitor' },
+                    // Uncapped, this captures the display's *native* resolution.
+                    // On a Retina MacBook that is 3456x2234 — nearly 4x the
+                    // pixels of a 1080p Windows laptop — and no Mac has a
+                    // hardware VP9 encoder, so the software encoder falls
+                    // behind and stopping the recording stalls for a long time
+                    // while it drains. 1080p is plenty for a screen share, and
+                    // the midnight job re-encodes to H.264 anyway.
+                    video: {
+                        displaySurface: 'monitor',
+                        width: { max: 1920 },
+                        height: { max: 1080 },
+                        frameRate: { ideal: 15, max: 24 }
+                    },
                     audio: true // try to get system audio if available
                 });
             } catch (err) {

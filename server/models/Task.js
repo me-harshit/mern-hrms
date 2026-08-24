@@ -1,16 +1,18 @@
 const mongoose = require('mongoose');
+const { computeOverdueAt } = require('../utils/taskOverdue');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
 
-// A single image/video attached to a task.
-// Images go straight to S3. Videos are staged on the VPS first (`url` points at
-// /uploads/tasks/...) and only swap to an S3 url after the nightly compression
-// job runs — that's why `status` exists.
+// A single file attached to a task — an image, video, audio note, or a
+// generic document (currently just HTML briefs).
+// Images and documents go straight to S3. Videos are staged on the VPS first
+// (`url` points at /uploads/tasks/...) and only swap to an S3 url after the
+// nightly compression job runs — that's why `status` exists.
 const mediaSchema = new mongoose.Schema({
     url: { type: String, required: true },
     fileName: { type: String, default: "" },
-    type: { type: String, enum: ['image', 'video', 'audio'], required: true },
+    type: { type: String, enum: ['image', 'video', 'audio', 'document'], required: true },
 
     // Audio notes only. The peaks are computed in the browser at record time
     // and stored, so a player can draw the waveform without fetching and
@@ -64,6 +66,28 @@ const taskSchema = new mongoose.Schema({
 
     startDate: { type: Date },
     dueDate: { type: Date, required: true },
+
+    /**
+     * Optional time-of-day window on the due date (TaskPlan.md §16). Stored as
+     * 'HH:MM' rather than combined into a Date, so editing dueDate later never
+     * requires re-deriving a clock time out of an existing timestamp.
+     *
+     * Not offered on recurring-generated tasks — those already get a lenient
+     * end-of-day dueDate from the schedule, and overdueAt leaves them alone
+     * below.
+     */
+    startTime: { type: String, default: null },
+    dueTime: { type: String, default: null },
+    timeAllottedMinutes: { type: Number, default: null },
+
+    /**
+     * The single precomputed instant this task flips overdue. Every overdue
+     * query in the app reads this, never dueDate directly — dueDate alone
+     * can't answer "overdue" because that also depends on dueTime or, absent
+     * one, the assignee's shift end (a Settings + User lookup no simple query
+     * can express). Kept in step by the pre-save hook below.
+     */
+    overdueAt: { type: Date, required: true },
 
     attachments: [mediaSchema],
     completionProof: [mediaSchema],
@@ -128,6 +152,46 @@ taskSchema.index({ isSelfAssigned: 1, approvalStatus: 1, isArchived: 1 });
 
 // Feeding the schedule's compliance view.
 taskSchema.index({ recurringTaskId: 1, occurrenceDate: 1 });
+
+// Every overdue query in the app filters on this.
+taskSchema.index({ overdueAt: 1, status: 1 });
+
+/**
+ * Keeps overdueAt in step with whatever actually determines it.
+ *
+ * The `!this.overdueAt` arm matters beyond first save: overdueAt is required,
+ * so a document that somehow reached the database without one (a bulk write
+ * that bypassed this hook, a pre-migration record loaded from a backup) would
+ * otherwise fail validation the moment anything next calls .save() on it,
+ * on a field the caller never touched. This makes that self-healing instead.
+ *
+ * Recurring-generated tasks are left alone deliberately (TaskPlan.md §16):
+ * they already get a lenient end-of-local-day dueDate from the schedule
+ * (recurringSchedule.js's dayBounds), and folding them into the shift-end
+ * fallback here would make them overdue *earlier* than they are today, which
+ * nobody asked for.
+ *
+ * pre('validate'), not pre('save'): overdueAt is `required`, and Mongoose
+ * runs schema validation before user pre('save') hooks fire — a save with
+ * overdueAt still unset at that point fails validation before this ever gets
+ * a chance to set it.
+ */
+taskSchema.pre('validate', async function () {
+    if (this.recurringTaskId) {
+        if (!this.overdueAt || this.isModified('dueDate')) this.overdueAt = this.dueDate;
+        return;
+    }
+
+    const needsRecompute = this.isNew || !this.overdueAt ||
+        this.isModified('dueDate') || this.isModified('dueTime') || this.isModified('assignees');
+    if (!needsRecompute) return;
+
+    this.overdueAt = await computeOverdueAt({
+        dueDate: this.dueDate,
+        dueTime: this.dueTime,
+        assignees: this.assignees
+    });
+});
 
 module.exports = mongoose.model('Task', taskSchema);
 module.exports.TASK_STATUSES = TASK_STATUSES;

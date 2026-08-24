@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTimes, faChevronLeft, faChevronRight, faDownload } from '@fortawesome/free-solid-svg-icons';
+import { faTimes, faChevronLeft, faChevronRight, faDownload, faFileCode } from '@fortawesome/free-solid-svg-icons';
 import { resolveMediaUrl } from '../utils/taskHelpers';
 
 /**
@@ -64,6 +64,14 @@ const MediaLightbox = ({ items, index, onClose, onIndexChange }) => {
             <figure className="lb-stage" onClick={(e) => e.stopPropagation()}>
                 {item.type === 'video' ? (
                     <video src={src} controls autoPlay className="lb-media" />
+                ) : item.type === 'document' ? (
+                    // Not embedded — see the note in TaskMediaGrid on why an
+                    // uploaded HTML document opens externally rather than in
+                    // an iframe on our own page.
+                    <a href={src} target="_blank" rel="noopener noreferrer" className="lb-doc">
+                        <FontAwesomeIcon icon={faFileCode} />
+                        <span>Open {item.fileName || 'document'}</span>
+                    </a>
                 ) : (
                     <img src={src} alt={item.fileName || 'attachment'} className="lb-media" />
                 )}

@@ -9,6 +9,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
 import Avatar from './Avatar';
+import TaskCountdown, { hasTimeWindow } from './TaskCountdown';
 import { slug, taskContextLabel, shortDate } from '../utils/taskHelpers';
 import '../styles/tasks.css';
 import '../styles/selftask.css';
@@ -276,6 +277,7 @@ const SelfAssignedList = () => {
                                             <span className="task-due-date">
                                                 {timeline(task.startDate, task.dueDate)}
                                             </span>
+                                            {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
                                         </td>
 
                                         <td data-label="Status" className="col-priority">

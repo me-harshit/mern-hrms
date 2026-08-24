@@ -11,6 +11,7 @@ import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
+import TaskTimeWindow from '../../components/TaskTimeWindow';
 import ScheduleProjection from '../../components/ScheduleProjection';
 import { datesBetween, prettyDate } from '../../utils/scheduleDates';
 import '../../styles/App.css';
@@ -36,7 +37,10 @@ const AddTask = () => {
         projectId: '',
         priority: 'Medium',
         startDate: new Date().toISOString().split('T')[0],
-        dueDate: ''
+        dueDate: '',
+        startTime: '',
+        dueTime: '',
+        timeAllottedMinutes: ''
     });
 
     const [selectedAssignees, setSelectedAssignees] = useState([]);
@@ -158,6 +162,7 @@ const AddTask = () => {
         for (let file of selectedFiles) {
             const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif|webp)$/i);
             const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|mov|avi|mkv)$/i);
+            const isDocument = file.type === 'text/html' || file.name.match(/\.(html|htm)$/i);
 
             if (isImage) {
                 // Images are shrunk here in the browser — they go straight to S3
@@ -178,8 +183,11 @@ const AddTask = () => {
                 } else {
                     processed.push(file);
                 }
+            } else if (isDocument) {
+                // Uploaded as-is — no browser-side processing needed for a document.
+                processed.push(file);
             } else {
-                Swal.fire('Unsupported File', `"${file.name}" is not an image or video.`, 'warning');
+                Swal.fire('Unsupported File', `"${file.name}" is not an image, video, or HTML document.`, 'warning');
             }
         }
 
@@ -212,6 +220,9 @@ const AddTask = () => {
         }
         if (!isRecurring && formData.startDate && formData.dueDate && new Date(formData.dueDate) < new Date(formData.startDate)) {
             return Swal.fire('Check Dates', 'The due date cannot be before the start date.', 'warning');
+        }
+        if (!isRecurring && formData.startTime && formData.dueTime && formData.dueTime <= formData.startTime) {
+            return Swal.fire('Check Times', 'The due/end time must be after the start time.', 'warning');
         }
 
         setLoading(true);
@@ -425,6 +436,17 @@ const AddTask = () => {
                                 </div>
                             </div>
 
+                            {!isRecurring && (
+                                <div className="form-group task-field">
+                                    <TaskTimeWindow
+                                        startTime={formData.startTime}
+                                        dueTime={formData.dueTime}
+                                        timeAllottedMinutes={formData.timeAllottedMinutes}
+                                        onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                                    />
+                                </div>
+                            )}
+
                             {/* The full skip breakdown sits in the form, not in the
                                 popover — it can run to several lines, and keeping it
                                 here is what lets the popover stay small. */}
@@ -461,7 +483,7 @@ const AddTask = () => {
 
                         <section className="task-form-card">
                             <div className="expense-section-title">
-                                <FontAwesomeIcon icon={faPaperclip} /> Reference Images &amp; Videos
+                                <FontAwesomeIcon icon={faPaperclip} /> Reference Images, Videos &amp; Documents
                             </div>
 
                             <ScreenRecorder onAttach={handleScreenRecordingAttach} />
@@ -469,7 +491,7 @@ const AddTask = () => {
                             <div className="task-file-drop">
                                 <input
                                     className="custom-file-input" type="file" multiple
-                                    accept="image/*,video/*" onChange={handleFileChange}
+                                    accept="image/*,video/*,.html,.htm,text/html" onChange={handleFileChange}
                                 />
                             </div>
 

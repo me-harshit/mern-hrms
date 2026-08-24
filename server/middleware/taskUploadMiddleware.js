@@ -29,8 +29,10 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-    const allowedExts = /jpeg|jpg|png|webp|mp4|webm|mov|avi|mkv|mp3|m4a|wav|ogg|oga|aac/;
-    const allowedMimes = /jpeg|jpg|png|webp|mp4|webm|quicktime|x-msvideo|x-matroska|mpeg|mp4a|wav|ogg|aac|opus/;
+    // html/htm covers "supporting document" briefs — a report or a mockup
+    // someone exported as a static page rather than a screenshot.
+    const allowedExts = /jpeg|jpg|png|webp|mp4|webm|mov|avi|mkv|mp3|m4a|wav|ogg|oga|aac|html|htm/;
+    const allowedMimes = /jpeg|jpg|png|webp|mp4|webm|quicktime|x-msvideo|x-matroska|mpeg|mp4a|wav|ogg|aac|opus|html/;
 
     const extname = allowedExts.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedMimes.test(file.mimetype.toLowerCase());
@@ -38,7 +40,7 @@ const fileFilter = (req, file, cb) => {
     if (extname && mimetype) {
         cb(null, true);
     } else {
-        cb(new Error('Only images (JPG/PNG/WEBP) and videos (MP4/WEBM/MOV/AVI/MKV) are allowed!'), false);
+        cb(new Error('Only images (JPG/PNG/WEBP), videos (MP4/WEBM/MOV/AVI/MKV) and HTML documents are allowed!'), false);
     }
 };
 
@@ -50,3 +52,5 @@ const taskUpload = multer({
 
 module.exports = taskUpload;
 module.exports.STAGING_DIR = STAGING_DIR;
+// Exposed for direct testing — multer's own instance doesn't surface it.
+module.exports.fileFilter = fileFilter;

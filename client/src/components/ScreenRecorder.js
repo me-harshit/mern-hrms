@@ -68,8 +68,14 @@ const ScreenRecorder = ({ onAttach, autoStart = false, onClose }) => {
             // Generate a recognizable filename
             const now = new Date();
             const pad = (n) => n.toString().padStart(2, '0');
-            const filename = `screen-recording-${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.webm`;
-            const file = new File([recordedBlob], filename, { type: 'video/webm' });
+            // Safari cannot record WebM and produces an MP4, so hardcoding
+            // .webm here shipped an MP4 under a WebM name and mime type —
+            // which neither the browser nor QuickTime will open. Take both
+            // from the blob the recorder actually produced.
+            const mime = (recordedBlob.type || 'video/webm').split(';')[0];
+            const ext = mime === 'video/mp4' ? 'mp4' : 'webm';
+            const filename = `screen-recording-${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.${ext}`;
+            const file = new File([recordedBlob], filename, { type: mime });
             onAttach(file);
             discardRecording(); // reset the recorder for next use
             onClose?.();

@@ -12,6 +12,7 @@ import TaskThreads from '../components/TaskThreads';
 import TaskMediaGrid from '../components/TaskMediaGrid';
 import ScreenRecorder from '../components/ScreenRecorder';
 import Avatar from '../components/Avatar';
+import TaskCountdown, { hasTimeWindow } from '../components/TaskCountdown';
 import { STATUS_OPTIONS, slug, dueLabel, taskContextLabel } from '../utils/taskHelpers';
 import '../styles/App.css';
 import '../styles/tasks.css';
@@ -203,7 +204,7 @@ const TaskDetail = () => {
     const isOwner = task.assignedBy?._id === currentUserId;
     const canChangeStatus = isAssignee || isOwner || ['ADMIN', 'HR'].includes(currentUser?.role);
     const canEdit = isOwner || ['ADMIN', 'HR'].includes(currentUser?.role);
-    const due = dueLabel(task.dueDate, task.status === 'Completed');
+    const due = dueLabel(task.dueDate, task.status === 'Completed', task.overdueAt);
     const dirty = status !== task.status || note !== (task.statusNote || '') || proofFiles.length > 0;
 
     return (
@@ -347,7 +348,7 @@ const TaskDetail = () => {
                                 <ScreenRecorder onAttach={handleProofRecordingAttach} />
                                 <input
                                     className="custom-file-input" type="file" multiple
-                                    accept="image/*,video/*" onChange={handleProofChange} disabled={saving}
+                                    accept="image/*,video/*,.html,.htm,text/html" onChange={handleProofChange} disabled={saving}
                                     style={{ marginTop: '10px' }}
                                 />
                                 <p className="td-field-hint">
@@ -469,15 +470,27 @@ const TaskDetail = () => {
                                 </div>
                                 <div>
                                     <dt><FontAwesomeIcon icon={faCalendarAlt} /> Start</dt>
-                                    <dd>{task.startDate ? new Date(task.startDate).toLocaleDateString('en-GB') : '—'}</dd>
+                                    <dd>
+                                        {task.startDate ? new Date(task.startDate).toLocaleDateString('en-GB') : '—'}
+                                        {task.startTime && <span className="td-time-suffix"> · {task.startTime}</span>}
+                                    </dd>
                                 </div>
                                 <div>
                                     <dt><FontAwesomeIcon icon={faCalendarAlt} /> Due</dt>
                                     <dd className={due.tone === 'overdue' ? 'overdue' : ''}>
                                         {new Date(task.dueDate).toLocaleDateString('en-GB')}
+                                        {task.dueTime
+                                            ? <span className="td-time-suffix"> · {task.dueTime}</span>
+                                            : (!task.recurringTaskId && <span className="td-time-suffix"> · end of shift</span>)}
                                     </dd>
                                 </div>
                             </dl>
+
+                            {hasTimeWindow(task) && (
+                                <div className="td-countdown">
+                                    <TaskCountdown task={task} />
+                                </div>
+                            )}
 
                             {task.description && (
                                 <>
@@ -554,7 +567,7 @@ const TaskDetail = () => {
                                             <FontAwesomeIcon icon={addingMedia ? faSpinner : faPlus} spin={addingMedia} />
                                             {addingMedia ? 'Uploading...' : 'Add reference media'}
                                             <input
-                                                type="file" multiple accept="image/*,video/*" hidden
+                                                type="file" multiple accept="image/*,video/*,.html,.htm,text/html" hidden
                                                 onChange={addReferenceMedia} disabled={addingMedia}
                                             />
                                         </label>

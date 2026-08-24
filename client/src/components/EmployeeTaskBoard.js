@@ -11,6 +11,7 @@ import {
 import Pagination from './Pagination';
 import { slug, taskContextLabel, dueLabel, shortDate } from '../utils/taskHelpers';
 import Avatar from './Avatar';
+import TaskCountdown, { hasTimeWindow } from './TaskCountdown';
 
 // Opens on the people who are carrying work — that's the question this view
 // gets asked most. The "No tasks at all" tile is one click away.
@@ -326,7 +327,7 @@ const EmployeeTaskBoard = () => {
                                         </div>
 
                                         {emp.tasks.map(task => {
-                                            const due = dueLabel(task.dueDate, task.status === 'Completed');
+                                            const due = dueLabel(task.dueDate, task.status === 'Completed', task.overdueAt);
                                             return (
                                                 <div
                                                     key={task._id}
@@ -373,6 +374,7 @@ const EmployeeTaskBoard = () => {
                                                         {['overdue', 'today', 'soon'].includes(due.tone) && (
                                                             <span className={`emp-task-due-note ${due.tone}`}>{due.text}</span>
                                                         )}
+                                                        {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
                                                     </span>
 
                                                     <span className="emp-task-cell" data-label="Priority">
