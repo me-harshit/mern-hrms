@@ -20,7 +20,8 @@ import {
     faWallet,
     faFileContract,
     faFileInvoiceDollar,
-    faClipboardList
+    faClipboardList,
+    faChartLine
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -188,6 +189,15 @@ const Sidebar = ({ isOpen, onClose }) => {
                             <FontAwesomeIcon icon={faClipboardList} className="nav-icon" />
                             <span>{['MANAGER', 'TEAM LEAD'].includes(userRole) ? 'Assign Tasks' : 'All Tasks'}</span>
                         </Link>
+
+                        {/* Same roles that can assign tasks (ACCOUNTS is
+                            management but was never one of them). */}
+                        {['MANAGER', 'TEAM LEAD', 'ADMIN', 'HR'].includes(userRole) && (
+                            <Link to="/task-report" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/task-report' ? 'active' : ''}`}>
+                                <FontAwesomeIcon icon={faChartLine} className="nav-icon" />
+                                <span>Task Report</span>
+                            </Link>
+                        )}
 
                         <Link to="/admin-expenses" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-expenses' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faBoxOpen} className="nav-icon" />

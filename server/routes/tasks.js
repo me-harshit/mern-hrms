@@ -32,6 +32,7 @@ const {
     canApproveFor,
     getTaskVisibilityFilter
 } = require('../utils/taskScoping');
+const { todayIST, addDays } = require('../utils/recurringSchedule');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
@@ -761,7 +762,7 @@ router.get('/by-employee', auth, async (req, res) => {
         const emptyResult = {
             data: [],
             pagination: { totalRecords: 0, totalPages: 1, currentPage: page, limit },
-            summary: { totalEmployees: 0, withTasks: 0, withoutTasks: 0, idle: 0, overloaded: 0 }
+            summary: { totalEmployees: 0, withTasks: 0, withoutTasks: 0, idle: 0, overloaded: 0, noTaskToday: 0 }
         };
 
         const scopeFilter = await getScopedEmployeeFilter(req.user);
@@ -787,10 +788,29 @@ router.get('/by-employee', auth, async (req, res) => {
         const empIds = employees.map(e => e._id);
         const now = new Date();
 
+        // Today, IST, as the same [start, nextDayStart) UTC bracket dueDate
+        // values are actually stored in — see the note on computeOverdueAt for
+        // why a bare due-date string always lands at UTC midnight regardless
+        // of server timezone, which makes this bracket exact rather than
+        // approximate.
+        const todayStr = todayIST();
+        const todayStart = new Date(`${todayStr}T00:00:00.000Z`);
+        const tomorrowStart = new Date(`${addDays(todayStr, 1)}T00:00:00.000Z`);
+
         // One pass over the team's live tasks. A task shared by three people
         // counts once against each of them — that is the workload they feel.
+        // A self-assigned task nobody has approved yet isn't real work yet
+        // either, so it's excluded the same way the Regular Tasks list already
+        // excludes it — see the $nin comment there for why $nin rather than an
+        // equality match.
         const counts = await Task.aggregate([
-            { $match: { isArchived: false, assignees: { $in: empIds } } },
+            {
+                $match: {
+                    isArchived: false,
+                    assignees: { $in: empIds },
+                    approvalStatus: { $nin: ['Pending', 'Rejected'] }
+                }
+            },
             { $unwind: '$assignees' },
             { $match: { assignees: { $in: empIds } } },
             {
@@ -808,19 +828,27 @@ router.get('/by-employee', auth, async (req, res) => {
                                 1, 0
                             ]
                         }
+                    },
+                    dueToday: {
+                        $sum: {
+                            $cond: [
+                                { $and: [{ $gte: ['$dueDate', todayStart] }, { $lt: ['$dueDate', tomorrowStart] }] },
+                                1, 0
+                            ]
+                        }
                     }
                 }
             }
         ]);
 
         const countsById = new Map(counts.map(c => [c._id.toString(), c]));
-        const NO_TASKS = { total: 0, pending: 0, inProgress: 0, onHold: 0, completed: 0, overdue: 0 };
+        const NO_TASKS = { total: 0, pending: 0, inProgress: 0, onHold: 0, completed: 0, overdue: 0, dueToday: 0 };
 
         let rows = employees.map(emp => {
             const c = countsById.get(emp._id.toString());
             const counts = c ? {
                 total: c.total, pending: c.pending, inProgress: c.inProgress,
-                onHold: c.onHold, completed: c.completed, overdue: c.overdue
+                onHold: c.onHold, completed: c.completed, overdue: c.overdue, dueToday: c.dueToday
             } : { ...NO_TASKS };
 
             return { ...emp, counts, openCount: counts.total - counts.completed };
@@ -833,12 +861,14 @@ router.get('/by-employee', auth, async (req, res) => {
             withTasks: rows.filter(r => r.counts.total > 0).length,
             withoutTasks: rows.filter(r => r.counts.total === 0).length,
             idle: rows.filter(r => r.openCount === 0).length,
-            overloaded: rows.filter(r => r.counts.overdue > 0).length
+            overloaded: rows.filter(r => r.counts.overdue > 0).length,
+            noTaskToday: rows.filter(r => r.counts.dueToday === 0).length
         };
 
         switch (req.query.workload) {
             case 'with': rows = rows.filter(r => r.counts.total > 0); break;
             case 'without': rows = rows.filter(r => r.counts.total === 0); break;
+            case 'today-empty': rows = rows.filter(r => r.counts.dueToday === 0); break;
             case 'idle': rows = rows.filter(r => r.openCount === 0); break;
             case 'overdue': rows = rows.filter(r => r.counts.overdue > 0); break;
             default: break;
@@ -855,7 +885,8 @@ router.get('/by-employee', auth, async (req, res) => {
         // however big the company gets.
         const tasks = pageIds.length === 0 ? [] : await Task.find({
             isArchived: false,
-            assignees: { $in: pageIds }
+            assignees: { $in: pageIds },
+            approvalStatus: { $nin: ['Pending', 'Rejected'] }
         })
             .select('title status priority startDate dueDate startTime dueTime overdueAt createdAt taskType projectId assignedBy assignees attachments')
             .populate('projectId', 'name')
@@ -909,6 +940,95 @@ router.get('/by-employee', auth, async (req, res) => {
         });
     } catch (err) {
         console.error('Tasks By Employee Error:', err);
+        res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 4d. CALENDAR — company/team-wide due-date view (Task Report)
+//
+// Same scoping as /by-employee (getScopedEmployeeFilter: everyone for
+// Admin/HR/Manager, own team for a Team Lead) rather than
+// getTaskVisibilityFilter — this answers "who has what due when" across the
+// scope, not "what did I personally hand out", the same distinction that
+// route already draws.
+// ==========================================
+router.get('/calendar', auth, async (req, res) => {
+    try {
+        if (!CAN_ASSIGN.includes(req.user.role)) return res.status(403).json({ message: 'Access Denied' });
+
+        // 'YYYY-MM'. A missing/malformed param falls back to the current IST
+        // month rather than 400ing — the client always sends one anyway.
+        const monthParam = /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : todayIST().slice(0, 7);
+        const [y, m] = monthParam.split('-').map(Number);
+        // Plain UTC month boundaries, deliberately not IST-shifted — dueDate
+        // is itself always UTC-midnight-of-its-calendar-day (see the note on
+        // computeOverdueAt), so this brackets the same calendar days dueDate
+        // already anchors to, on any server timezone.
+        const monthStart = new Date(Date.UTC(y, m - 1, 1));
+        const nextMonthStart = new Date(Date.UTC(y, m, 1));
+
+        const todayStr = todayIST();
+        const emptyResult = {
+            month: monthParam,
+            tasks: [],
+            todayIdle: { date: todayStr, count: 0, employees: [] }
+        };
+
+        const scopeFilter = await getScopedEmployeeFilter(req.user);
+        if (!scopeFilter) return res.json(emptyResult);
+
+        const employees = await User.find(scopeFilter).select('name profilePic').lean();
+        if (employees.length === 0) return res.json(emptyResult);
+        const empIds = employees.map(e => e._id);
+
+        // A pending self-assigned task isn't real work yet — excluded the same
+        // way the Regular Tasks list and /by-employee already exclude it.
+        const notPendingOrRejected = { approvalStatus: { $nin: ['Pending', 'Rejected'] } };
+
+        const tasks = await Task.find({
+            isArchived: false,
+            assignees: { $in: empIds },
+            ...notPendingOrRejected,
+            dueDate: { $gte: monthStart, $lt: nextMonthStart }
+        })
+            .select('title status priority dueDate overdueAt taskType isSelfAssigned recurringTaskId assignees')
+            .populate('assignees', 'name profilePic')
+            .sort({ dueDate: 1 })
+            .lean();
+
+        // "Nothing due today" doesn't depend on which month is on screen, so
+        // it's computed independently of the range above.
+        const todayStart = new Date(`${todayStr}T00:00:00.000Z`);
+        const tomorrowStart = new Date(`${addDays(todayStr, 1)}T00:00:00.000Z`);
+        const dueTodayTasks = await Task.find({
+            isArchived: false,
+            assignees: { $in: empIds },
+            ...notPendingOrRejected,
+            dueDate: { $gte: todayStart, $lt: tomorrowStart }
+        }).select('assignees').lean();
+        const busyTodayIds = new Set(dueTodayTasks.flatMap(t => t.assignees.map(String)));
+        const idleEmployees = employees.filter(e => !busyTodayIds.has(e._id.toString()));
+
+        res.json({
+            month: monthParam,
+            tasks: tasks.map(t => ({
+                _id: t._id,
+                title: t.title,
+                status: t.status,
+                priority: t.priority,
+                dueDate: t.dueDate,
+                overdueAt: t.overdueAt,
+                taskType: t.taskType,
+                // What the mockup called "type" — derived, not stored; see
+                // TaskCountdown-adjacent code for the same pattern elsewhere.
+                assignmentType: t.recurringTaskId ? 'Recurring' : t.isSelfAssigned ? 'Self-Assigned' : 'Regular',
+                assignees: t.assignees
+            })),
+            todayIdle: { date: todayStr, count: idleEmployees.length, employees: idleEmployees }
+        });
+    } catch (err) {
+        console.error('Task Calendar Error:', err);
         res.status(500).send('Server Error');
     }
 });

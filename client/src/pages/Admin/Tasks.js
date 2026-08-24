@@ -5,10 +5,9 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faClipboardList, faPlus, faSearch, faEdit, faTrash,
-    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faUsers, faRepeat, faUserPen
+    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faRepeat, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
-import EmployeeTaskBoard from '../../components/EmployeeTaskBoard';
 import RecurringTaskList from '../../components/RecurringTaskList';
 import SelfAssignedList from '../../components/SelfAssignedList';
 import { slug, taskContextLabel } from '../../utils/taskHelpers';
@@ -34,10 +33,11 @@ const Tasks = () => {
     const isPrivileged = ['ADMIN', 'HR'].includes(currentUser?.role);
     const [searchParams] = useSearchParams();
 
-    // 'tasks' lists work with its people attached; 'employees' flips it so the
-    // people without work are visible too; 'recurring' shows the daily schedules
-    // rather than the individual tasks they generate.
-    const VIEWS = ['tasks', 'recurring', 'self', 'employees'];
+    // 'tasks' lists work with its people attached; 'recurring' shows the daily
+    // schedules rather than the individual tasks they generate. The
+    // people-first view ("who has nothing assigned") moved to its own page,
+    // Task Report, alongside the calendar.
+    const VIEWS = ['tasks', 'recurring', 'self'];
     const [view, setView] = useState(() => {
         const v = searchParams.get('view');
         return VIEWS.includes(v) ? v : 'tasks';
@@ -189,16 +189,6 @@ const Tasks = () => {
                             {pendingSelf > 0 && <span className="sa-tab-count">{pendingSelf}</span>}
                         </button>
                     </div>
-
-                    <span className="task-view-sep" />
-
-                    <button
-                        type="button"
-                        className={`gts-btn ${view === 'employees' ? 'primary' : 'secondary'}`}
-                        onClick={() => setView('employees')}
-                    >
-                        <FontAwesomeIcon icon={faUsers} /> Check Employees
-                    </button>
                 </div>
 
                 <button className="gts-btn primary" style={{ marginLeft: 'auto' }} onClick={() => navigate('/add-task')}>
@@ -206,7 +196,7 @@ const Tasks = () => {
                 </button>
             </div>
 
-            {view === 'employees' ? <EmployeeTaskBoard /> : view === 'recurring' ? <RecurringTaskList /> : view === 'self' ? <SelfAssignedList /> : (
+            {view === 'recurring' ? <RecurringTaskList /> : view === 'self' ? <SelfAssignedList /> : (
             <>
 
             {/* --- Search + filters in a single bar --- */}

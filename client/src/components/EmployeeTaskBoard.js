@@ -6,7 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faSearch, faTimes, faChevronDown, faUsers, faUserCheck, faUserClock,
     faTriangleExclamation, faPlus, faFolderOpen, faBuilding, faPaperclip,
-    faUserGroup
+    faUserGroup, faCalendarMinus
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
 import { slug, taskContextLabel, dueLabel, shortDate } from '../utils/taskHelpers';
@@ -22,7 +22,8 @@ const WORKLOAD_OPTIONS = [
     { value: 'with', label: 'Has tasks' },
     { value: 'without', label: 'No tasks at all' },
     { value: 'idle', label: 'Nothing open' },
-    { value: 'overdue', label: 'Has overdue' }
+    { value: 'overdue', label: 'Has overdue' },
+    { value: 'today-empty', label: 'No task due today' }
 ];
 
 /**
@@ -168,6 +169,18 @@ const EmployeeTaskBoard = () => {
                         <span className="emp-stat-text">
                             <strong>{summary.overloaded}</strong>
                             <small>Has overdue</small>
+                        </span>
+                    </button>
+
+                    <button
+                        type="button"
+                        className={`emp-stat ${workload === 'today-empty' ? 'active' : ''}`}
+                        onClick={() => setWorkload('today-empty')}
+                    >
+                        <span className="emp-stat-icon today"><FontAwesomeIcon icon={faCalendarMinus} /></span>
+                        <span className="emp-stat-text">
+                            <strong>{summary.noTaskToday}</strong>
+                            <small>No task due today</small>
                         </span>
                     </button>
                 </div>

@@ -43,6 +43,7 @@ import RecurringTaskDetail from './pages/Admin/RecurringTaskDetail';
 import EditRecurringTask from './pages/Admin/EditRecurringTask';
 import MyTasks from './pages/User/MyTasks';
 import TaskDetail from './pages/TaskDetail';
+import TaskReport from './pages/Admin/TaskReport';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -154,6 +155,10 @@ function App() {
 
   // Helper to check management roles
   const isManagement = ['HR', 'ADMIN', 'MANAGER', 'ACCOUNTS', 'TEAM LEAD'].includes(userRole);
+  // Task Report calls the same endpoints as task assignment (CAN_ASSIGN on
+  // the server) — ACCOUNTS is management but was never able to assign or
+  // view tasks, so it's excluded here same as it already is from Assign Task.
+  const canSeeTaskReport = ['HR', 'ADMIN', 'MANAGER', 'TEAM LEAD'].includes(userRole);
 
   return (
     <Router>
@@ -194,6 +199,7 @@ function App() {
             <Route path="/Employee-requests" element={isManagement ? <EmployeeRequests /> : <Navigate to="/dashboard" />} />
             <Route path="/projects" element={isManagement ? <Projects /> : <Navigate to="/dashboard" />} />
             <Route path="/tasks" element={isManagement ? <Tasks /> : <Navigate to="/dashboard" />} />
+            <Route path="/task-report" element={canSeeTaskReport ? <TaskReport /> : <Navigate to="/dashboard" />} />
             <Route path="/add-task" element={isManagement ? <AddTask /> : <Navigate to="/dashboard" />} />
             {/* Open to anyone signed in, not just management: an assignee is
                 notified about the schedule's discussion and the notification
