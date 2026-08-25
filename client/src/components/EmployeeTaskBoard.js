@@ -324,7 +324,10 @@ const EmployeeTaskBoard = () => {
                             <span className="wl-dept-count">{members.length}</span>
                         </div>
 
-                        <div className="wl-grid">
+                        {/* Uniform card heights only while nothing is expanded —
+                            see .wl-grid.is-uniform for why an open card has to
+                            drop it. */}
+                        <div className={`wl-grid ${expanded.size === 0 ? 'is-uniform' : ''}`}>
                             {members.map((emp, idx) => {
                                 const isOpen = expanded.has(emp._id);
                                 const c = emp.counts;
