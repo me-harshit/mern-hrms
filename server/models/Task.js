@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { computeOverdueAt } = require('../utils/taskOverdue');
+const { computeOverdueAt, computeExpectedStartAt } = require('../utils/taskOverdue');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
@@ -62,7 +62,54 @@ const taskSchema = new mongoose.Schema({
     },
     statusNote: { type: String, default: "" },
     statusUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    /**
+     * When the task was last marked Completed.
+     *
+     * Cleared when it moves back out of Completed, so it always answers "is
+     * this finished, and when" — but that also means it cannot answer "was
+     * this ever finished before". firstCompletedAt below is the one that
+     * survives a reopen, and statusHistory has the full picture.
+     */
     completedAt: { type: Date },
+
+    /**
+     * The actual timeline, for the performance reporting in TaskPlan.md §18.
+     *
+     * The planned times (startDate/startTime/dueDate/dueTime) say what was
+     * asked for; these say what happened. Kept as an append-only log rather
+     * than a few summary fields because the interesting questions are about
+     * transitions — how long it sat On Hold, whether it was reopened after
+     * being called done, who moved it at each step — and none of those can be
+     * reconstructed from statusUpdatedBy, which only ever holds the last
+     * person to touch it.
+     *
+     * Nothing backfills this: tasks that predate it simply have an empty
+     * array, and any report has to treat "no history" as unknown rather than
+     * as zero.
+     */
+    statusHistory: [{
+        from: { type: String, default: null },   // null on the very first entry
+        to: { type: String, required: true },
+        at: { type: Date, required: true },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        note: { type: String, default: "" }
+    }],
+
+    /**
+     * Set once, the first time work actually starts, and never rewritten.
+     *
+     * This is the field that makes "how long did it take" answerable at all.
+     * completedAt - createdAt measures time since it was *assigned*, which
+     * includes however long it sat waiting for its start date; against a task
+     * created three days before its due date that overstates the effort by
+     * days.
+     */
+    firstStartedAt: { type: Date, default: null },
+
+    // Survives a reopen, so rework is visible: a task with firstCompletedAt
+    // set and status back to In Progress was handed back.
+    firstCompletedAt: { type: Date, default: null },
 
     startDate: { type: Date },
     dueDate: { type: Date, required: true },
@@ -88,6 +135,17 @@ const taskSchema = new mongoose.Schema({
      * can express). Kept in step by the pre-save hook below.
      */
     overdueAt: { type: Date, required: true },
+
+    /**
+     * The other end of the window overdueAt closes: when the clock starts.
+     *
+     * An explicit startTime if one was given, otherwise the assignee's shift
+     * start on the start date — so "no time allotted" means the whole working
+     * day, 09:30 to 18:00, rather than midnight to 18:00. Stored rather than
+     * derived for the same reason overdueAt is: it depends on a Settings and
+     * User lookup that no query can express.
+     */
+    expectedStartAt: { type: Date, default: null },
 
     attachments: [mediaSchema],
     completionProof: [mediaSchema],
@@ -165,31 +223,71 @@ taskSchema.index({ overdueAt: 1, status: 1 });
  * otherwise fail validation the moment anything next calls .save() on it,
  * on a field the caller never touched. This makes that self-healing instead.
  *
- * Recurring-generated tasks are left alone deliberately (TaskPlan.md §16):
- * they already get a lenient end-of-local-day dueDate from the schedule
- * (recurringSchedule.js's dayBounds), and folding them into the shift-end
- * fallback here would make them overdue *earlier* than they are today, which
- * nobody asked for.
+ * Recurring-generated tasks default to the schedule's lenient end-of-local-
+ * day dueDate (recurringSchedule.js's dayBounds) rather than the shift-end
+ * fallback below, which would make them overdue *earlier* than that default —
+ * but a schedule *with* an explicit time window (TaskPlan.md §16) copies its
+ * dueTime onto every occurrence at generation time, and that explicit choice
+ * still wins here exactly like it does for a one-off task. Only the absence
+ * of one falls back to end-of-day instead of shift-end.
  *
  * pre('validate'), not pre('save'): overdueAt is `required`, and Mongoose
  * runs schema validation before user pre('save') hooks fire — a save with
  * overdueAt still unset at that point fails validation before this ever gets
  * a chance to set it.
  */
-taskSchema.pre('validate', async function () {
-    if (this.recurringTaskId) {
-        if (!this.overdueAt || this.isModified('dueDate')) this.overdueAt = this.dueDate;
-        return;
+/**
+ * Seeds the timeline with the moment the task came into existence, so a
+ * report never has to special-case "the history starts at the first move".
+ * Lives on the model rather than in the routes because all three creation
+ * paths — manager-assigned, self-assigned, and the recurring cron — go
+ * through save().
+ *
+ * `by` is deliberately left unset: the model doesn't know who called save(),
+ * and assignedBy would be wrong for a self-assigned task, where it holds the
+ * person the employee *named* rather than the person who created it. Who
+ * created a task is already answerable from assignedBy plus isSelfAssigned.
+ */
+taskSchema.pre('validate', function () {
+    if (this.isNew && this.statusHistory.length === 0) {
+        this.statusHistory.push({
+            from: null,
+            to: this.status,
+            at: new Date(),
+            note: 'Created'
+        });
     }
+});
 
-    const needsRecompute = this.isNew || !this.overdueAt ||
-        this.isModified('dueDate') || this.isModified('dueTime') || this.isModified('assignees');
+taskSchema.pre('validate', async function () {
+    const needsRecompute = this.isNew || !this.overdueAt || !this.expectedStartAt ||
+        this.isModified('dueDate') || this.isModified('dueTime') ||
+        this.isModified('startDate') || this.isModified('startTime') ||
+        this.isModified('assignees');
     if (!needsRecompute) return;
+
+    // One rule for every kind of task: an explicit time window if the
+    // assigner set one, otherwise the assignee's working day. Recurring
+    // occurrences used to be exempt and kept their end-of-day dueDate, which
+    // made a daily task due at 23:59 while an identical one-off was due at
+    // shift end — the same work with two different deadlines.
+    // occurrenceDate is the authoritative calendar day for a generated task —
+    // see dayOf() for why its startDate/dueDate cannot be read directly.
+    const dayStr = this.occurrenceDate || undefined;
 
     this.overdueAt = await computeOverdueAt({
         dueDate: this.dueDate,
         dueTime: this.dueTime,
-        assignees: this.assignees
+        assignees: this.assignees,
+        dayStr
+    });
+
+    this.expectedStartAt = await computeExpectedStartAt({
+        startDate: this.startDate,
+        dueDate: this.dueDate,
+        startTime: this.startTime,
+        assignees: this.assignees,
+        dayStr
     });
 });
 

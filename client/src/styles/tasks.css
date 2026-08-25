@@ -143,6 +143,8 @@
 .task-status-badge.completed { background: #dcfce7; color: #15803d; }
 /* Used for the overdue counter, not a task status. */
 .task-status-badge.blocked { background: #fee2e2; color: #b91c1c; }
+/* Used for "nothing due today", not a task status either. */
+.task-status-badge.today { background: #ede9fe; color: #6d28d9; }
 
 .task-due-date.overdue {
     color: #dc2626;
@@ -3070,63 +3072,97 @@
 }
 
 /* --- The roster itself --- */
-.emp-board {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+/* --- Department-grouped workload grid --- */
+.wl-dept-section {
+    margin-bottom: 22px;
 }
 
-.emp-row {
+.wl-dept-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.wl-dept-count {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    padding: 1px 9px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.wl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    /* Not the default `stretch`: an expanded card would drag every sibling in
+       its row to the same height, leaving them full of dead space. */
+    align-items: start;
+}
+
+/* Every card exactly the same size while the grid is just a summary. 1fr
+   auto-rows makes each row as tall as the tallest card, and stretch fills
+   each card to its row.
+   Deliberately dropped the moment any card is expanded (the component only
+   sets this class while nothing is open): with 1fr rows, one card opening
+   its task list would make every other card in the grid grow to match it. */
+.wl-grid.is-uniform {
+    grid-auto-rows: 1fr;
+    align-items: stretch;
+}
+
+.wl-card {
     background: #fff;
     border: 1px solid #e9edf2;
     border-radius: 12px;
     overflow: hidden;
+    border-top: 3px solid #cbd5e1;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    /* A column so the footer can sit on the bottom edge of a stretched card
+       rather than floating up under the badges. */
+    display: flex;
+    flex-direction: column;
+    /* Holds the cards close to uniform in the expanded state too, where
+       .is-uniform is off — one open card shouldn't make the rest ragged. */
+    min-height: 132px;
 }
 
-.emp-row:hover {
-    border-color: #cbd5e1;
-}
+.wl-card:hover { box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06); }
+.wl-card.is-open { border-color: #215D7B; }
 
-.emp-row.open {
-    border-color: #215D7B;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-}
+.wl-card.wl-empty { border-top-color: #cbd5e1; background: #fcfdfe; }
+.wl-card.wl-light { border-top-color: #22c55e; }
+.wl-card.wl-loaded { border-top-color: #f59e0b; }
+.wl-card.wl-heavy { border-top-color: #dc2626; }
 
-/* Nobody assigned: muted, with a dashed edge so it reads as an opening
-   rather than a problem. */
-.emp-row.is-free {
-    border-style: dashed;
-    background: #fcfdfe;
-}
-
-.emp-row-head {
+.wl-card-head {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 16px;
+    gap: 10px;
+    padding: 12px 12px 8px;
     cursor: pointer;
 }
 
-.emp-row.is-free .emp-row-head {
-    cursor: default;
-}
+.wl-card.wl-empty .wl-card-head { cursor: default; }
+.wl-card.wl-empty .assignee-avatar { background: #cbd5e1; color: #64748b; }
 
-.emp-row.is-free .assignee-avatar {
-    background: #cbd5e1;
-    color: #64748b;
-}
-
-.emp-identity {
+.wl-identity {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    flex: 0 0 auto;
-    width: 210px;
+    flex: 1;
 }
 
-.emp-name {
-    font-size: 0.92rem;
+.wl-name {
+    font-size: 0.88rem;
     font-weight: 700;
     color: #1e293b;
     white-space: nowrap;
@@ -3134,21 +3170,31 @@
     text-overflow: ellipsis;
 }
 
-.emp-sub {
-    font-size: 0.74rem;
+.wl-role {
+    font-size: 0.72rem;
     color: #94a3b8;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.emp-counts {
+.wl-add {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+}
+
+/* Takes the slack on a stretched card, so the extra height lands here rather
+   than spreading the head and footer apart. align-content keeps the badges
+   themselves packed at the top of that space. */
+.wl-badges {
     display: flex;
-    align-items: center;
-    gap: 6px;
     flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 5px;
+    padding: 0 12px 10px;
+    min-height: 22px;
     flex: 1;
-    min-width: 0;
 }
 
 .emp-none-pill {
@@ -3158,22 +3204,143 @@
     font-style: italic;
 }
 
-.emp-row-actions {
+.wl-foot {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 0.72rem;
+    color: #94a3b8;
     flex-shrink: 0;
 }
 
-.emp-open-count {
-    font-size: 0.78rem;
+.wl-open {
     font-weight: 700;
     color: #215D7B;
-    white-space: nowrap;
 }
 
-.emp-row.is-free .emp-open-count {
-    color: #cbd5e1;
+.wl-card.wl-empty .wl-open { color: #cbd5e1; }
+
+.wl-foot .emp-caret { margin-left: auto; }
+
+/* --- Expanded task list inside a card ---
+   The list's default template is six columns needing ~476px; a card's inner
+   width is nearer 220px, so without this the fixed columns overflow and their
+   nowrap text draws straight over the neighbouring column. The stacked
+   treatment below is the same one the mobile breakpoint uses, but keyed to
+   the card rather than the viewport — a card stays ~260px wide however big
+   the monitor is, so a viewport media query never fires for it. */
+.wl-card .emp-task-list {
+    padding: 8px;
+    border-radius: 0;
+}
+
+.wl-card .emp-task-head { display: none; }
+
+/* Two real columns, and the status stripe lifted out of the grid entirely.
+   As a grid item the stripe only ever occupied row 1 of column 1, so the
+   value cells auto-flowed into row 2 *starting at that same 4px column* —
+   which is what made "Assigned" paint straight over "Due". Positioning it
+   absolutely leaves every column a usable width. */
+.wl-card .emp-task {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    row-gap: 8px;
+    column-gap: 10px;
+    align-items: start;
+    padding-left: 16px;
+}
+
+.wl-card .emp-task-bar {
+    position: absolute;
+    left: 7px;
+    top: 9px;
+    bottom: 9px;
+    width: 4px;
+    align-self: auto;
+}
+
+.wl-card .emp-task-main { grid-column: 1 / -1; }
+
+.wl-card .emp-task-cell::before {
+    content: attr(data-label);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #b0bccb;
+}
+
+/* Ellipsising a title to ~20 characters hides more than it shows at this
+   width, so it wraps instead. */
+.wl-card .emp-task-title {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.35;
+}
+
+.wl-card .emp-task-meta { gap: 4px 10px; }
+
+/* Sideways nudge on hover would push a full-width row out of a narrow card. */
+.wl-card .emp-task:hover { transform: none; }
+
+/* ==========================================================================
+   MOTION
+   Entrance for cards as the filtered set changes, and for a task list as it
+   opens. Everything here is decoration — the layout above is correct with
+   all of it switched off, which is what the reduced-motion block does.
+   ========================================================================== */
+
+@keyframes wl-card-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+.wl-card {
+    animation: wl-card-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes wl-dept-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.wl-dept-section {
+    animation: wl-dept-in 0.2s ease both;
+}
+
+/* 0fr -> 1fr animates to the content's own height, which a plain
+   `height: auto` transition cannot do and a max-height guess would clip on
+   anyone carrying more tasks than the guess allowed for. */
+@keyframes wl-expand-in {
+    from { grid-template-rows: 0fr; opacity: 0; }
+    to { grid-template-rows: 1fr; opacity: 1; }
+}
+
+.wl-expand {
+    display: grid;
+    grid-template-rows: 1fr;
+    animation: wl-expand-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Both needed for the collapsed (0fr) state to actually clip rather than
+   spill its content out of the card. */
+.wl-expand > * {
+    overflow: hidden;
+    min-height: 0;
+}
+
+.wl-card { transition: box-shadow 0.18s ease, border-color 0.18s ease; }
+.wl-card-head, .wl-foot { transition: background 0.15s ease; }
+.wl-card.is-open .wl-foot { background: #f8fafc; }
+
+@media (prefers-reduced-motion: reduce) {
+    .wl-card,
+    .wl-dept-section,
+    .wl-expand {
+        animation: none !important;
+    }
 }
 
 .emp-caret {
@@ -3312,19 +3479,9 @@
 .emp-task-due-note.soon { color: #b45309; }
 
 @media (max-width: 900px) {
-    .emp-row-head {
-        flex-wrap: wrap;
-    }
-
-    .emp-identity {
-        width: auto;
-        flex: 1;
-    }
-
-    .emp-counts {
-        flex-basis: 100%;
-        order: 3;
-    }
+    /* .emp-row-head / .emp-identity / .emp-counts rules lived here for the
+       flat row layout this component used before the card grid replaced it.
+       Their markup is gone, so they were doing nothing. */
 
     /* Too narrow for six columns: the title takes a full row and the four
        values pair up beneath it, each carrying the header's label inline. */

@@ -37,8 +37,13 @@ const sendEmail = async (options) => {
 
         await transporter.sendMail(mailOptions);
         console.log(`Email sent successfully to ${options.email}`);
+        // Callers that need to record whether delivery actually happened
+        // (e.g. marking a payslip as emailed) check this. Existing callers
+        // ignore it, so the previous fire-and-forget behaviour is unchanged.
+        return true;
     } catch (error) {
         console.error('Error sending email:', error);
+        return false;
     }
 };
 

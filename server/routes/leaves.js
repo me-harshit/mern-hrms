@@ -6,6 +6,7 @@ const Leave = require('../models/Leave');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const sendEmail = require('../utils/sendEmail');
+const { canAccessSalary, sanitizeSalary } = require('../utils/permissions');
 
 // @route   GET /api/leaves/my-leaves
 // @desc    Get history AND fetch stored balances (with Auto-Reset logic)
@@ -506,13 +507,15 @@ router.post('/admin/update-balance', auth, async (req, res) => {
 
         if (cl !== undefined) user.casualLeaveBalance = Number(cl);
         if (el !== undefined) user.earnedLeaveBalance = Number(el);
-        if (salary !== undefined) user.salary = Number(salary);
+        // Salary is an ADMIN/HR-only field — this endpoint is otherwise open to
+        // MANAGER/TEAM LEAD/ACCOUNTS, so ignore the field for them.
+        if (salary !== undefined && canAccessSalary(req.user)) user.salary = Number(salary);
 
         // Reset the auto-accrual timer so the system doesn't immediately give them back past leaves
         user.leavesLastReset = new Date();
 
         await user.save();
-        res.json({ message: 'User profile updated successfully', user });
+        res.json({ message: 'User profile updated successfully', user: sanitizeSalary(user, req.user) });
     } catch (err) { res.status(500).send('Server Error'); }
 });
 

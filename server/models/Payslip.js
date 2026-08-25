@@ -42,8 +42,30 @@ const payslipSchema = new mongoose.Schema({
         type: String,
         enum: ['Generated', 'Paid'],
         default: 'Generated'
+    },
+    // Employee-initiated request to have this payslip emailed to them.
+    // A payslip must already be finalized before it can be requested; a new
+    // request overwrites the previous one, so an employee can ask again for a
+    // resend after a rejection or a bounced email.
+    request: {
+        status: {
+            type: String,
+            enum: ['None', 'Pending', 'Approved', 'Rejected'],
+            default: 'None'
+        },
+        requestedAt: { type: Date },
+        actionedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        actionedAt: { type: Date },
+        rejectionReason: { type: String, default: '' },
+        // Where the payslip was actually delivered, recorded only on a
+        // confirmed send so a failed SMTP attempt isn't reported as sent.
+        emailedTo: { type: String, default: '' },
+        emailedAt: { type: Date }
     }
 }, { timestamps: true });
+
+// Admin queue reads pending requests across all users, oldest first.
+payslipSchema.index({ 'request.status': 1, 'request.requestedAt': 1 });
 
 // Ensure one payslip per user per month/year
 payslipSchema.index({ userId: 1, month: 1, year: 1 }, { unique: true });

@@ -18,18 +18,19 @@ const addMinutes = (hhmm, mins) => {
 };
 
 /**
- * The optional time-of-day window on a task's due date (TaskPlan.md §16):
- * an optional amount of time allotted, and a start/due clock time either
- * derived from it or set directly.
+ * The optional time-of-day window on a task's due date, or on a recurring
+ * schedule's brief (TaskPlan.md §16): an optional amount of time allotted,
+ * and a start/due clock time either derived from it or set directly.
  *
- * Deliberately not shown for recurring schedules — see the note on
- * overdueAt in models/Task.js for why those keep their existing, more
- * lenient end-of-day behaviour untouched.
+ * `fallbackLabel` names what happens when this is left blank — a one-off
+ * task falls back to the assignee's shift end (models/Task.js), while a
+ * recurring schedule's occurrences fall back to end of that day instead
+ * (they always have, and adding a time window doesn't change that default).
  *
  * Collapsed by default so the common case (no time window) stays a one-line
  * affordance; opens automatically if the task being edited already has one.
  */
-const TaskTimeWindow = ({ startTime, dueTime, timeAllottedMinutes, onChange }) => {
+const TaskTimeWindow = ({ startTime, dueTime, timeAllottedMinutes, onChange, fallbackLabel = "the assignee's shift ends" }) => {
     const hasWindow = Boolean(startTime || dueTime || timeAllottedMinutes);
     const [open, setOpen] = useState(hasWindow);
 
@@ -62,7 +63,7 @@ const TaskTimeWindow = ({ startTime, dueTime, timeAllottedMinutes, onChange }) =
         return (
             <button type="button" className="ttw-toggle" onClick={openPanel}>
                 <FontAwesomeIcon icon={faClock} /> Set a specific time window
-                <span className="ttw-toggle-hint">Optional — otherwise due at end of shift</span>
+                <span className="ttw-toggle-hint">Optional — otherwise due when {fallbackLabel}</span>
             </button>
         );
     }
@@ -102,8 +103,8 @@ const TaskTimeWindow = ({ startTime, dueTime, timeAllottedMinutes, onChange }) =
                 </div>
             </div>
             <small className="ttw-hint">
-                Overdue is measured from this time. Leave it blank and the task is only
-                overdue once the assignee's shift ends on the due date.
+                Overdue is measured from this time. Leave it blank and it's only
+                overdue once {fallbackLabel} on the due date.
             </small>
         </div>
     );

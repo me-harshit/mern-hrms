@@ -1886,3 +1886,75 @@ html {
   flex-shrink: 0;
   object-fit: cover;
 }
+
+/* ==========================================================
+   PAYROLL SECTION TABS (Calculate Payroll / Payslip Requests)
+   ========================================================== */
+.payroll-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0;
+}
+
+.payroll-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 12px 18px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.payroll-tab:hover {
+  color: #215D7B;
+}
+
+.payroll-tab.active {
+  color: #215D7B;
+  border-bottom-color: #215D7B;
+}
+
+.payroll-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* Breathing light — signals requests are waiting without being loud. */
+.payroll-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  animation: payroll-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes payroll-breathe {
+  0%   { opacity: 1;   box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+  70%  { opacity: 0.6; box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }
+  100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+/* Respect users who ask the OS to reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  .payroll-pulse-dot { animation: none; }
+}

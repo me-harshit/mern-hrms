@@ -70,12 +70,17 @@ const istInstant = (dueDate, hhmm) => new Date(`${new Date(dueDate).toISOString(
 const TaskCountdown = ({ task, compact = false }) => {
     const now = useClockNow();
 
-    // An explicit start time wins; otherwise the window is "since this task
-    // became live" — its start date if the assigner gave it one (a
-    // self-assigned task's timeline can run days), or when it was created.
-    const start = task.startTime
-        ? istInstant(task.dueDate, task.startTime)
-        : new Date(task.startDate || task.createdAt || task.dueDate).getTime();
+    // expectedStartAt is the server's own answer to "when does the clock
+    // start" — an explicit startTime, or the assignee's shift start. Using it
+    // here is what makes a task with no time window run 09:30→18:00 rather
+    // than from startDate, which is stored at midnight UTC (05:30 IST) and
+    // charged four hours of elapsed time before the working day began.
+    // The fallbacks only matter for a payload predating the field.
+    const start = task.expectedStartAt
+        ? new Date(task.expectedStartAt).getTime()
+        : task.startTime
+            ? istInstant(task.dueDate, task.startTime)
+            : new Date(task.startDate || task.createdAt || task.dueDate).getTime();
     // overdueAt is the same instant the server's own overdue queries use —
     // preferring it here keeps this bar and every "Overdue" badge elsewhere
     // in perfect agreement, whether that instant is an explicit due time or

@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCalculator, faCheck, faFileInvoiceDollar, faSearch, faEye } from '@fortawesome/free-solid-svg-icons';
+import { faCalculator, faCheck, faFileInvoiceDollar, faSearch, faEye, faEnvelope, faTimes, faInbox } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/App.css';
 
 const Payroll = () => {
     const user = JSON.parse(localStorage.getItem('user'));
     const userRole = user?.role || 'EMPLOYEE';
-    const isManagement = ['ADMIN', 'HR', 'ACCOUNTS'].includes(userRole);
+    // Must stay in sync with SALARY_ROLES in server/utils/permissions.js —
+    // anyone not listed here gets the personal "My Payroll" view instead.
+    const isManagement = ['ADMIN', 'HR'].includes(userRole);
 
     // --- ADMIN / HR STATE ---
     const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -23,10 +25,26 @@ const Payroll = () => {
     const [myPayslips, setMyPayslips] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(true);
 
+    // --- ADMIN/HR: PAYSLIP EMAIL REQUEST QUEUE ---
+    const [payslipRequests, setPayslipRequests] = useState([]);
+    const [actioningId, setActioningId] = useState(null);
+    // Which of the two sections is open: 'calculate' | 'requests'
+    const [activeSection, setActiveSection] = useState('calculate');
+
+    // Only 'Pending' rows drive the indicator, so the light goes out as soon
+    // as the queue is cleared.
+    const pendingCount = payslipRequests.filter(r => r.request?.status === 'Pending').length;
+
     useEffect(() => {
         if (!isManagement) {
             fetchMyPayslips();
+            return;
         }
+        fetchPayslipRequests();
+        // Requests arrive while HR is already on the page, so poll rather than
+        // relying on a reload to surface them.
+        const poll = setInterval(fetchPayslipRequests, 60000);
+        return () => clearInterval(poll);
     }, [isManagement]);
 
     const fetchMyPayslips = async () => {
@@ -38,6 +56,111 @@ const Payroll = () => {
             console.error("Failed to fetch payslips", err);
         } finally {
             setHistoryLoading(false);
+        }
+    };
+
+    const fetchPayslipRequests = async () => {
+        try {
+            const res = await api.get('/payroll/requests');
+            setPayslipRequests(res.data.data);
+        } catch (err) {
+            console.error("Failed to fetch payslip requests", err);
+        }
+    };
+
+    // --- ADMIN/HR: APPROVE (emails the slip) OR REJECT A REQUEST ---
+    const handleRequestAction = async (slip, action) => {
+        const period = new Date(slip.year, slip.month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
+        const target = slip.userId?.workEmail || slip.userId?.email;
+
+        let reason = '';
+        if (action === 'reject') {
+            const { value, isConfirmed } = await Swal.fire({
+                title: 'Decline Request?',
+                input: 'text',
+                inputLabel: `Reason (optional) — shown to ${slip.userId?.name}`,
+                inputPlaceholder: 'e.g. Contact HR directly for this month',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                confirmButtonText: 'Decline'
+            });
+            if (!isConfirmed) return;
+            reason = value || '';
+        } else {
+            const { isConfirmed } = await Swal.fire({
+                title: 'Send Payslip?',
+                html: `Email the <strong>${period}</strong> payslip to <strong>${slip.userId?.name}</strong> at <strong>${target}</strong>?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#215D7B',
+                confirmButtonText: 'Approve & Send'
+            });
+            if (!isConfirmed) return;
+        }
+
+        setActioningId(slip._id);
+        try {
+            const res = await api.post('/payroll/request/action', { payslipId: slip._id, action, reason });
+            Swal.fire('Done', res.data.message, 'success');
+            fetchPayslipRequests();
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Action failed', 'error');
+        } finally {
+            setActioningId(null);
+        }
+    };
+
+    // Shows where an email request currently stands, for both the employee
+    // table and the HR queue.
+    const renderRequestState = (request) => {
+        const status = request?.status;
+        if (!status || status === 'None') return <span className="text-muted">—</span>;
+
+        if (status === 'Pending') {
+            return <span className="status-badge warning">Pending with HR</span>;
+        }
+        if (status === 'Rejected') {
+            return (
+                <div>
+                    <span className="status-badge danger">Declined</span>
+                    {request.rejectionReason && (
+                        <div className="text-small text-muted" style={{ marginTop: '4px' }}>{request.rejectionReason}</div>
+                    )}
+                </div>
+            );
+        }
+        return (
+            <div>
+                <span className="status-badge success">Emailed</span>
+                {request.emailedTo && (
+                    <div className="text-small text-muted" style={{ marginTop: '4px' }}>
+                        to {request.emailedTo}
+                        {request.emailedAt ? ` on ${new Date(request.emailedAt).toLocaleDateString('en-IN')}` : ''}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // --- EMPLOYEE: ASK HR TO EMAIL THIS PAYSLIP ---
+    const handleRequestPayslip = async (slip) => {
+        const period = new Date(slip.year, slip.month - 1).toLocaleString('en', { month: 'long', year: 'numeric' });
+        const confirm = await Swal.fire({
+            title: 'Request Payslip?',
+            html: `Ask HR to email your payslip for <strong>${period}</strong>.<br/><span class="text-muted" style="font-size:0.85rem;">It will be sent to your work email once approved.</span>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#215D7B',
+            confirmButtonText: 'Send Request'
+        });
+        if (!confirm.isConfirmed) return;
+
+        try {
+            const res = await api.post('/payroll/request', { month: slip.month, year: slip.year });
+            Swal.fire('Requested', res.data.message, 'success');
+            fetchMyPayslips();
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Failed to submit request', 'error');
         }
     };
 
@@ -383,6 +506,7 @@ const Payroll = () => {
                                     <th>Payable Days</th>
                                     <th>Net Salary</th>
                                     <th>Status</th>
+                                    <th>Email Request</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -404,14 +528,28 @@ const Payroll = () => {
                                         <td data-label="Status">
                                             <span className="status-badge success">{slip.status || 'Finalized'}</span>
                                         </td>
+                                        <td data-label="Email Request">
+                                            {renderRequestState(slip.request)}
+                                        </td>
                                         <td data-label="Action">
-                                            <button 
-                                                className="gts-btn primary" 
-                                                style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                onClick={() => handleViewPayslip(slip)}
-                                            >
-                                                <FontAwesomeIcon icon={faEye} style={{ marginRight: '5px' }} /> Request Payslip
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                <button
+                                                    className="gts-btn"
+                                                    style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                    onClick={() => handleViewPayslip(slip)}
+                                                >
+                                                    <FontAwesomeIcon icon={faEye} style={{ marginRight: '5px' }} /> View / Print
+                                                </button>
+                                                <button
+                                                    className="gts-btn primary"
+                                                    style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                    disabled={slip.request?.status === 'Pending'}
+                                                    onClick={() => handleRequestPayslip(slip)}
+                                                >
+                                                    <FontAwesomeIcon icon={faEnvelope} style={{ marginRight: '5px' }} />
+                                                    {slip.request?.status === 'Pending' ? 'Requested' : 'Request by Email'}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -429,7 +567,111 @@ const Payroll = () => {
     return (
         <div className="attendance-container fade-in">
             <h1 className="page-title header-no-margin mb-20">Payroll Management</h1>
-            
+
+            {/* --- SECTION SWITCHER --- */}
+            <div className="payroll-tabs">
+                <button
+                    className={`payroll-tab ${activeSection === 'calculate' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('calculate')}
+                >
+                    <FontAwesomeIcon icon={faCalculator} style={{ marginRight: '8px' }} />
+                    Calculate Payroll
+                </button>
+
+                <button
+                    className={`payroll-tab ${activeSection === 'requests' ? 'active' : ''}`}
+                    onClick={() => setActiveSection('requests')}
+                >
+                    <FontAwesomeIcon icon={faInbox} style={{ marginRight: '8px' }} />
+                    Payslip Requests
+                    {/* Breathing dot + count only while something is actually waiting */}
+                    {pendingCount > 0 && (
+                        <span className="payroll-tab-badge">
+                            <span className="payroll-pulse-dot" aria-hidden="true" />
+                            {pendingCount}
+                        </span>
+                    )}
+                </button>
+            </div>
+
+            {/* ================= SECTION 2: PAYSLIP REQUESTS ================= */}
+            {activeSection === 'requests' && (
+                payslipRequests.length === 0 ? (
+                    <div className="control-card text-center fade-in" style={{ padding: '40px' }}>
+                        <FontAwesomeIcon icon={faInbox} style={{ fontSize: '3rem', color: '#cbd5e1', marginBottom: '15px' }} />
+                        <h3>No Pending Requests</h3>
+                        <p className="text-muted">
+                            When an employee asks for a payslip by email, it will appear here for you to approve.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="control-card fade-in" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
+                        <h3 className="section-title" style={{ marginTop: 0, marginBottom: '15px', fontSize: '1.05rem' }}>
+                            <FontAwesomeIcon icon={faInbox} className="mr-10 text-primary" />
+                            Awaiting Approval
+                            <span className="status-badge warning" style={{ marginLeft: '10px' }}>{payslipRequests.length}</span>
+                        </h3>
+
+                        <div className="employee-table-container">
+                            <table className="employee-table">
+                                <thead>
+                                    <tr>
+                                        <th>Employee</th>
+                                        <th>Pay Period</th>
+                                        <th>Send To</th>
+                                        <th>Requested</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {payslipRequests.map(slip => (
+                                        <tr key={slip._id}>
+                                            <td data-label="Employee" className="fw-600">
+                                                {slip.userId?.name || 'Unknown'}
+                                                <div className="text-small text-muted">{slip.userId?.employeeId || '—'}</div>
+                                            </td>
+                                            <td data-label="Pay Period" className="fw-bold text-primary">
+                                                {new Date(slip.year, slip.month - 1).toLocaleString('en', { month: 'long', year: 'numeric' })}
+                                            </td>
+                                            <td data-label="Send To" className="text-small">
+                                                {slip.userId?.workEmail || slip.userId?.email || <span className="text-danger">No email on file</span>}
+                                            </td>
+                                            <td data-label="Requested" className="text-small text-muted">
+                                                {slip.request?.requestedAt ? new Date(slip.request.requestedAt).toLocaleDateString('en-IN') : '—'}
+                                            </td>
+                                            <td data-label="Action">
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        className="gts-btn primary"
+                                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                        disabled={actioningId === slip._id}
+                                                        onClick={() => handleRequestAction(slip, 'approve')}
+                                                    >
+                                                        <FontAwesomeIcon icon={faCheck} style={{ marginRight: '5px' }} />
+                                                        {actioningId === slip._id ? 'Sending...' : 'Approve & Send'}
+                                                    </button>
+                                                    <button
+                                                        className="gts-btn danger"
+                                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                        disabled={actioningId === slip._id}
+                                                        onClick={() => handleRequestAction(slip, 'reject')}
+                                                    >
+                                                        <FontAwesomeIcon icon={faTimes} style={{ marginRight: '5px' }} /> Decline
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )
+            )}
+
+            {/* ================= SECTION 1: CALCULATE PAYROLL ================= */}
+            {activeSection === 'calculate' && (
+            <>
             <div className="filter-bar-card fade-in" style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                     <label className="fw-600 text-dark-gray">Month:</label>
@@ -572,6 +814,8 @@ const Payroll = () => {
                         </tbody>
                     </table>
                 </div>
+            )}
+            </>
             )}
         </div>
     );

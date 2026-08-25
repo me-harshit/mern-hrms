@@ -11,6 +11,7 @@ import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
+import TaskTimeWindow from '../../components/TaskTimeWindow';
 import ScheduleProjection from '../../components/ScheduleProjection';
 import { resolveMediaUrl } from '../../utils/taskHelpers';
 import { prettyDate, todayYmd } from '../../utils/scheduleDates';
@@ -40,7 +41,8 @@ const EditRecurringTask = () => {
     const [employeesList, setEmployeesList] = useState([]);
 
     const [formData, setFormData] = useState({
-        title: '', description: '', taskType: 'Project Task', projectId: '', priority: 'Medium'
+        title: '', description: '', taskType: 'Project Task', projectId: '', priority: 'Medium',
+        startTime: '', dueTime: '', timeAllottedMinutes: ''
     });
 
     const [selectedAssignees, setSelectedAssignees] = useState([]);
@@ -73,7 +75,10 @@ const EditRecurringTask = () => {
                     description: s.description || '',
                     taskType: s.taskType || 'Project Task',
                     projectId: s.projectId?._id || '',
-                    priority: s.priority || 'Medium'
+                    priority: s.priority || 'Medium',
+                    startTime: s.startTime || '',
+                    dueTime: s.dueTime || '',
+                    timeAllottedMinutes: s.timeAllottedMinutes || ''
                 });
                 setSelectedAssignees(s.assignees.map(a => a._id));
                 setExistingAssignees(s.assignees);
@@ -200,6 +205,9 @@ const EditRecurringTask = () => {
         }
         if (plannedDates.length === 0) {
             return Swal.fire('Pick Some Days', 'Choose at least one day for this task to run.', 'warning');
+        }
+        if (formData.startTime && formData.dueTime && formData.dueTime <= formData.startTime) {
+            return Swal.fire('Check Times', 'The due/end time must be after the start time.', 'warning');
         }
 
         setLoading(true);
@@ -367,6 +375,18 @@ const EditRecurringTask = () => {
                                     stay on the plan. {futureCount} still ahead.
                                 </p>
                             )}
+
+                            {/* Only days generated after this save pick up a change here —
+                                days already sent out keep whatever they were given. */}
+                            <div className="form-group task-field">
+                                <TaskTimeWindow
+                                    startTime={formData.startTime}
+                                    dueTime={formData.dueTime}
+                                    timeAllottedMinutes={formData.timeAllottedMinutes}
+                                    onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                                    fallbackLabel="that day ends"
+                                />
+                            </div>
 
                             {plannedDates.length > 0 && (
                                 <ScheduleProjection
