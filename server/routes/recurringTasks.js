@@ -27,6 +27,7 @@ const {
     dateToStr,
     addDays
 } = require('../utils/recurringSchedule');
+const { parseTimeWindow } = require('../utils/taskOverdue');
 
 const Holiday = require('../models/Holiday');
 const { buildDiscussionHandlers } = require('../utils/taskDiscussion');
@@ -210,6 +211,7 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
         }
 
         const { title, description, projectId, priority } = req.body;
+        const timeWindow = parseTimeWindow(req.body);
         const assigneeIds = parseIdList(req.body.assigneeIds);
         const taskType = TASK_TYPES.includes(req.body.taskType) ? req.body.taskType : 'Project Task';
         const isOfficeTask = taskType === 'Regular Office Task';
@@ -263,6 +265,7 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
             taskType,
             projectId: isOfficeTask ? null : projectId,
             priority: priority || 'Medium',
+            ...timeWindow,
             attachments: media,
             assignedBy: req.user.id,
             assignees: assigneeIds,
@@ -701,6 +704,12 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
                     schedule.assigneeState.some(st => st.status === 'Active')) {
                     schedule.status = 'Active';
                 }
+            }
+
+            // --- the time window --- only occurrences generated *after* this
+            // edit pick it up, same as every other brief field above.
+            if (req.body.startTime !== undefined || req.body.dueTime !== undefined || req.body.timeAllottedMinutes !== undefined) {
+                Object.assign(schedule, parseTimeWindow(req.body));
             }
 
             // --- the brief's media ---

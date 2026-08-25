@@ -78,6 +78,19 @@ const recurringTaskSchema = new mongoose.Schema({
     },
 
     /**
+     * The same optional time-of-day window a one-off task can carry
+     * (TaskPlan.md §16), copied onto each day's generated Task at creation.
+     * Lives on the schedule rather than per-occurrence because the whole
+     * point of a schedule is that every day repeats the same brief — the
+     * time window is part of that brief, not something that varies day to
+     * day. Editing it only changes occurrences generated *after* the edit,
+     * the same way editing plannedDates or assignees already works here.
+     */
+    startTime: { type: String, default: null },
+    dueTime: { type: String, default: null },
+    timeAllottedMinutes: { type: Number, default: null },
+
+    /**
      * Reference media for the brief. Generated tasks *point back* at this array
      * rather than copying it (TaskPlan.md §13.7): a video here is staged on the
      * VPS until the midnight job moves it to S3 and deletes the local file, so

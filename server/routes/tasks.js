@@ -33,6 +33,7 @@ const {
     getTaskVisibilityFilter
 } = require('../utils/taskScoping');
 const { todayIST, addDays } = require('../utils/recurringSchedule');
+const { parseTimeWindow } = require('../utils/taskOverdue');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
@@ -62,20 +63,6 @@ const parseIdList = (raw) => {
     }
     return [];
 };
-
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-// A multipart body carries these as plain strings, empty when the assigner
-// left the time window closed — normalise all three together so a route
-// can't end up with a timeAllottedMinutes but no startTime, or a malformed
-// clock string reaching the schema.
-const parseTimeWindow = (body) => ({
-    startTime: TIME_RE.test(body.startTime) ? body.startTime : null,
-    dueTime: TIME_RE.test(body.dueTime) ? body.dueTime : null,
-    timeAllottedMinutes: body.timeAllottedMinutes && Number(body.timeAllottedMinutes) > 0
-        ? Number(body.timeAllottedMinutes)
-        : null
-});
 
 const notify = async (recipientId, title, message, link) => {
     try {

@@ -141,6 +141,15 @@ const generateForSchedule = async (schedule, dateStr) => {
                 status: 'Pending',
                 startDate: bounds.start,
                 dueDate: bounds.end,
+                // The schedule's time window (TaskPlan.md §16), copied onto
+                // every day it generates — the brief includes it the same way
+                // it includes the title and priority, so it doesn't vary
+                // day to day. Absent on the schedule, these stay null and
+                // the Task model's own pre-validate hook falls back to
+                // bounds.end (end of day) exactly as before.
+                startTime: schedule.startTime || null,
+                dueTime: schedule.dueTime || null,
+                timeAllottedMinutes: schedule.timeAllottedMinutes || null,
                 // The brief is *referenced*, never copied — see TaskPlan.md
                 // §13.7. Copying a still-compressing video here would leave this
                 // task pointing at a staged file the midnight job later deletes.
