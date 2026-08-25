@@ -875,7 +875,7 @@ router.get('/by-employee', auth, async (req, res) => {
             assignees: { $in: pageIds },
             approvalStatus: { $nin: ['Pending', 'Rejected'] }
         })
-            .select('title status priority startDate dueDate startTime dueTime overdueAt createdAt taskType projectId assignedBy assignees attachments')
+            .select('title status priority startDate dueDate startTime dueTime expectedStartAt overdueAt createdAt taskType projectId assignedBy assignees attachments')
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
             .lean();
@@ -894,6 +894,7 @@ router.get('/by-employee', auth, async (req, res) => {
                 dueDate: task.dueDate,
                 startTime: task.startTime,
                 dueTime: task.dueTime,
+                expectedStartAt: task.expectedStartAt,
                 overdueAt: task.overdueAt,
                 taskType: task.taskType,
                 projectId: task.projectId,
@@ -1256,6 +1257,33 @@ router.put('/:id/status', auth, taskUpload.array('completionProof', 10), async (
         task.statusUpdatedBy = req.user.id;
         if (statusNote !== undefined) task.statusNote = statusNote;
         task.completedAt = status === 'Completed' ? new Date() : null;
+
+        // The actual timeline (TaskPlan.md §18). Only real transitions are
+        // logged — re-saving the same status (which happens whenever proof is
+        // attached without moving the task) would otherwise fill the history
+        // with entries that mean nothing.
+        if (changed) {
+            const now = new Date();
+            task.statusHistory.push({
+                from: previousStatus,
+                to: status,
+                at: now,
+                by: req.user.id,
+                note: statusNote || ''
+            });
+
+            // Both are first-write-wins: they exist to survive a reopen, so
+            // overwriting them on the second pass would defeat the point.
+            if (status === 'In Progress' && !task.firstStartedAt) task.firstStartedAt = now;
+            if (status === 'Completed' && !task.firstCompletedAt) task.firstCompletedAt = now;
+
+            // A task finished without ever being moved to In Progress still
+            // needs a start for duration to be computable at all. Recording
+            // the completion instant makes that duration zero rather than
+            // silently falling back to createdAt, which would report days of
+            // waiting as time worked.
+            if (status === 'Completed' && !task.firstStartedAt) task.firstStartedAt = now;
+        }
 
         const project = task.projectId ? await Project.findById(task.projectId).select('name') : null;
         const proofFolder = task.taskType === 'Regular Office Task'

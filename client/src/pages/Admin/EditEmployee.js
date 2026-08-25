@@ -22,6 +22,8 @@ const EditEmployee = () => {
     const [newPassword, setNewPassword] = useState(''); // Separated for safety
     const [leaveStats, setLeaveStats] = useState({ history: [] });
     const currentUser = JSON.parse(localStorage.getItem('user'));
+    // Salary is ADMIN/HR only — mirrors SALARY_ROLES in server/utils/permissions.js
+    const canSeeSalary = ['ADMIN', 'HR'].includes(currentUser?.role);
 
     // --- WALLET STATES ---
     const [walletBalance, setWalletBalance] = useState(0);
@@ -113,7 +115,9 @@ const EditEmployee = () => {
                 userId: id,
                 cl: user.casualLeaveBalance,
                 el: user.earnedLeaveBalance,
-                salary: user.salary
+                // Non-ADMIN/HR never load a salary value, so don't send the key
+                // at all — the server ignores it for them regardless.
+                ...(canSeeSalary ? { salary: user.salary } : {})
             });
             Swal.fire('Success', 'Employee Balances updated', 'success');
             fetchEmployeeData();
@@ -469,7 +473,9 @@ const EditEmployee = () => {
                                     <FontAwesomeIcon icon={faMoneyBillWave} className="mr-10 text-primary" /> Payroll & Wallet
                                 </h3>
                                 <div className="form-grid-2-col">
-                                    <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} /></div>
+                                    {canSeeSalary && (
+                                        <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary || ''} onChange={e => setUser({ ...user, salary: Number(e.target.value) })} /></div>
+                                    )}
                             <div className="form-group">
                                 <label className="input-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span><FontAwesomeIcon icon={faWallet} style={{ color: 'var(--primary, #215D7B)', marginRight: '6px' }} /> Employee Wallet</span>

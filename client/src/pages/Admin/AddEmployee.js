@@ -14,6 +14,10 @@ const AddEmployee = () => {
     const [managersList, setManagersList] = useState([]);
     const [teamLeadsList, setTeamLeadsList] = useState([]);
 
+    // Salary, role assignment and purchaser access are ADMIN/HR only —
+    // mirrors SALARY_ROLES / PRIVILEGED_FIELDS in server/utils/permissions.js
+    const isAdminOrHr = ['ADMIN', 'HR'].includes(JSON.parse(localStorage.getItem('user'))?.role);
+
     const [user, setUser] = useState({
         name: '', email: '', workEmail: '', employeeId: '', password: '', phoneNumber: '',
         dateOfBirth: '', joiningDate: new Date().toISOString().split('T')[0],
@@ -110,13 +114,17 @@ const AddEmployee = () => {
                     <div className="form-grid mt-15 mb-30" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                         <div className="form-group">
                             <label className="input-label">System Role *</label>
-                            <select className="custom-input" value={user.role} onChange={e => setUser({ ...user, role: e.target.value })}>
+                            {/* Only ADMIN/HR may assign a role above EMPLOYEE — the
+                                server enforces this too. */}
+                            <select className="custom-input" value={user.role} onChange={e => setUser({ ...user, role: e.target.value })} disabled={!isAdminOrHr} style={{ opacity: isAdminOrHr ? 1 : 0.6 }}>
                                 <option value="EMPLOYEE">Employee</option>
-                                <option value="TEAM LEAD">Team Lead</option>
-                                <option value="MANAGER">Manager</option>
-                                <option value="HR">HR</option>
-                                <option value="ACCOUNTS">Accounts</option>
-                                <option value="ADMIN">Admin</option>
+                                {isAdminOrHr && <>
+                                    <option value="TEAM LEAD">Team Lead</option>
+                                    <option value="MANAGER">Manager</option>
+                                    <option value="HR">HR</option>
+                                    <option value="ACCOUNTS">Accounts</option>
+                                    <option value="ADMIN">Admin</option>
+                                </>}
                             </select>
                         </div>
                         <div className="form-group"><label className="input-label">Shift Timing *</label><select className="custom-input" value={user.shiftType} onChange={e => setUser({ ...user, shiftType: e.target.value })}><option value="DAY">Day Shift</option><option value="NIGHT">Night Shift</option></select></div>
@@ -185,13 +193,19 @@ const AddEmployee = () => {
                                 }}
                             />
                         </div>
-                        <div className="form-group checkbox-container" style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center' }}><label className="checkbox-label" style={{ fontWeight: '600', color: '#0f172a', margin: 0 }}><input type="checkbox" className="custom-checkbox" checked={user.isPurchaser} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} />Grant Purchaser Access</label></div>
+                        {isAdminOrHr && (
+                            <div className="form-group checkbox-container" style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center' }}><label className="checkbox-label" style={{ fontWeight: '600', color: '#0f172a', margin: 0 }}><input type="checkbox" className="custom-checkbox" checked={user.isPurchaser} onChange={e => setUser({ ...user, isPurchaser: e.target.checked })} />Grant Purchaser Access</label></div>
+                        )}
                     </div>
 
-                    <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faMoneyBillWave} className="mr-5 text-muted" /> Payroll</h3>
-                    <div className="form-grid mt-15" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-                        <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary} onChange={e => setUser({ ...user, salary: e.target.value ? Number(e.target.value) : '' })} /></div>
-                    </div>
+                    {isAdminOrHr && (
+                        <>
+                            <h3 className="section-title border-bottom pb-10"><FontAwesomeIcon icon={faMoneyBillWave} className="mr-5 text-muted" /> Payroll</h3>
+                            <div className="form-grid mt-15" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+                                <div className="form-group"><label className="input-label">Salary (Monthly) (₹)</label><input type="number" className="custom-input" placeholder="Enter amount" value={user.salary} onChange={e => setUser({ ...user, salary: e.target.value ? Number(e.target.value) : '' })} /></div>
+                            </div>
+                        </>
+                    )}
 
                     <div className="border-top pt-20 mt-30" style={{ display: 'flex', justifyContent: 'flex-end' }}>
                         <button type="submit" className="gts-btn primary btn-large" disabled={loading}>

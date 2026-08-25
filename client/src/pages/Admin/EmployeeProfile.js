@@ -25,6 +25,8 @@ const EmployeeProfile = () => {
     const [activeTab, setActiveTab] = useState('details');
 
     const currentUser = JSON.parse(localStorage.getItem('user'));
+    // Salary is ADMIN/HR only — mirrors SALARY_ROLES in server/utils/permissions.js
+    const canSeeSalary = ['ADMIN', 'HR'].includes(currentUser?.role);
     const [user, setUser] = useState({});
     const [usersList, setUsersList] = useState([]);
     const [leaveStats, setLeaveStats] = useState({ history: [] });
@@ -567,7 +569,9 @@ const EmployeeProfile = () => {
                         <div><label className="text-muted text-small d-block mb-5">Account Status</label><span className={`status-badge ${user.status === 'ACTIVE' ? 'success' : 'danger'}`} style={{ padding: '2px 6px', fontSize: '10px' }}>{user.status || 'ACTIVE'}</span></div>
                         <div><label className="text-muted text-small d-block mb-5">Reporting Managers</label><div className="fw-600">{(user.reportingManagerName && user.reportingManagerName.length > 0) ? user.reportingManagerName.join(', ') : 'None'}</div><div className="text-small text-muted">{(user.reportingManagerEmail || []).join(', ')}</div></div>
                         <div><label className="text-muted text-small d-block mb-5">Purchaser Access</label><div className={`fw-600 ${user.isPurchaser ? 'text-success' : 'text-muted'}`}>{user.isPurchaser ? 'Authorized' : 'Not Authorized'}</div></div>
-                        <div><label className="text-muted text-small d-block mb-5">Monthly Salary</label><div className="fw-bold" style={{ fontSize: '18px' }}>₹ {user.salary ? user.salary.toLocaleString('en-IN') : '0'}</div></div>
+                        {canSeeSalary && (
+                            <div><label className="text-muted text-small d-block mb-5">Monthly Salary</label><div className="fw-bold" style={{ fontSize: '18px' }}>₹ {user.salary ? user.salary.toLocaleString('en-IN') : '0'}</div></div>
+                        )}
                     </div>
                 </div>
             )}
