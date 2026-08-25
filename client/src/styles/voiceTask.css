@@ -12,13 +12,15 @@
     gap: 10px;
 }
 
-.vtb-unsupported {
-    flex-direction: row;
+.vtb-status-inline {
+    display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     color: #92400e;
     background: #fffbeb;
-    border-color: #fde68a;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 10px 12px;
 }
 
 .vtb-header {
@@ -207,10 +209,36 @@
     gap: 10px;
 }
 
+.vdl-select-all {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.vdl-select-all input {
+    width: 15px;
+    height: 15px;
+    accent-color: #215D7B;
+}
+
 .vdl-list {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.vdl-empty {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #64748b;
+    background: #f7fafc;
+    border: 1.5px dashed #d7e0ea;
+    border-radius: 10px;
+    padding: 18px;
 }
 
 .vdl-card {
@@ -273,6 +301,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.vdl-note-dot {
+    color: #b45309;
+    font-size: 12px;
+    cursor: help;
+}
+
+.vdl-kind-toggle {
+    max-width: 320px;
 }
 
 .vdl-card-actions {

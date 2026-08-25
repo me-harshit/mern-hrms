@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faMicrophone, faStop, faWandMagicSparkles, faRotateLeft,
+    faMicrophone, faStop, faWandMagicSparkles,
     faTriangleExclamation, faSpinner, faXmark
 } from '@fortawesome/free-solid-svg-icons';
 import { useVoiceDictation } from '../hooks/useVoiceDictation';
@@ -16,6 +16,11 @@ const fmtElapsed = (ms) => {
 /**
  * Speak a task briefing, review/fix the transcript, then hand it to Gemini
  * to come back as one or more reviewable drafts (BulkVoiceTask.md §2-3).
+ *
+ * The transcript box is always there and always editable — recording just
+ * fills it. That matters on its own: Firefox/Safari have no SpeechRecognition
+ * at all, and even on Chrome/Edge some managers will just prefer typing. Voice
+ * is one way to fill the box, not a requirement for using this page.
  *
  * Speech-to-text only — no audio ever leaves the browser. Nothing is created
  * from here; `onParsed` hands the caller drafts to review, never a save.
@@ -33,18 +38,6 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
     useEffect(() => {
         if (status === 'stopped') setEditedText(transcript);
     }, [status, transcript]);
-
-    if (!isSupported) {
-        return (
-            <div className="vtb-panel vtb-unsupported">
-                <FontAwesomeIcon icon={faTriangleExclamation} />
-                <span>Voice input needs Chrome or Edge on desktop. Use the form below instead.</span>
-                <button type="button" className="vtb-close" onClick={onClose}>
-                    <FontAwesomeIcon icon={faXmark} />
-                </button>
-            </div>
-        );
-    }
 
     const handleMicClick = () => {
         if (status === 'listening') {
@@ -78,6 +71,13 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
         }
     };
 
+    const handleTranscriptKeyDown = (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            handleParse();
+        }
+    };
+
     const isListening = status === 'listening';
     const hasText = editedText.trim().length > 0;
 
@@ -92,27 +92,35 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
                 </button>
             </div>
 
-            <div className="vtb-controls">
-                <button
-                    type="button"
-                    className={`vtb-mic ${isListening ? 'is-live' : ''}`}
-                    onClick={handleMicClick}
-                    disabled={parsing}
-                >
-                    <FontAwesomeIcon icon={isListening ? faStop : faMicrophone} />
-                </button>
-                <div className="vtb-status">
-                    {isListening ? (
-                        <>
-                            <span className="vtb-live-dot" /> Listening… {fmtElapsed(elapsedMs)} / {fmtElapsed(maxMs)}
-                        </>
-                    ) : hasText ? (
-                        'Review the transcript below, edit anything misheard, then parse it.'
-                    ) : (
-                        'Tap the mic and describe the task — who it\'s for, what it is, when it\'s due. Say "every day for N days" for a repeating task.'
-                    )}
+            {isSupported ? (
+                <div className="vtb-controls">
+                    <button
+                        type="button"
+                        className={`vtb-mic ${isListening ? 'is-live' : ''}`}
+                        onClick={handleMicClick}
+                        disabled={parsing}
+                        title={isListening ? 'Stop' : hasText ? 'Re-record' : 'Record'}
+                    >
+                        <FontAwesomeIcon icon={isListening ? faStop : faMicrophone} />
+                    </button>
+                    <div className="vtb-status" aria-live="polite">
+                        {isListening ? (
+                            <>
+                                <span className="vtb-live-dot" /> Listening… {fmtElapsed(elapsedMs)} / {fmtElapsed(maxMs)}
+                            </>
+                        ) : hasText ? (
+                            'Review the transcript below, edit anything misheard, then parse it.'
+                        ) : (
+                            'Tap the mic and describe the task — who it\'s for, what it is, when it\'s due. Say "every day for N days" for a repeating task. Or just type it below.'
+                        )}
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className="vtb-status vtb-status-inline">
+                    <FontAwesomeIcon icon={faTriangleExclamation} />
+                    Voice input needs Chrome or Edge on desktop — type your briefing below instead.
+                </div>
+            )}
 
             {isListening && (
                 <div className="vtb-live-caption">
@@ -124,38 +132,34 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
                 <div className="vtb-error"><FontAwesomeIcon icon={faTriangleExclamation} /> {error}</div>
             )}
 
-            {!isListening && (editedText || status === 'stopped') && (
-                <>
-                    <textarea
-                        className="vtb-transcript custom-input"
-                        rows={3}
-                        value={editedText}
-                        onChange={(e) => setEditedText(e.target.value)}
-                        placeholder="Transcript will appear here — you can edit it before parsing."
-                        disabled={parsing}
-                    />
+            <textarea
+                className="vtb-transcript custom-input"
+                rows={3}
+                value={isListening ? transcript : editedText}
+                onChange={(e) => setEditedText(e.target.value)}
+                onKeyDown={handleTranscriptKeyDown}
+                placeholder={isSupported
+                    ? 'Type a task briefing, or tap the mic to dictate it…'
+                    : 'Type a task briefing — who it\'s for, what it is, when it\'s due…'}
+                disabled={parsing || isListening}
+            />
 
-                    {parseError && (
-                        <div className="vtb-error"><FontAwesomeIcon icon={faTriangleExclamation} /> {parseError}</div>
-                    )}
-
-                    <div className="vtb-actions">
-                        <button type="button" className="gts-btn secondary" onClick={handleMicClick} disabled={parsing}>
-                            <FontAwesomeIcon icon={faRotateLeft} /> Re-record
-                        </button>
-                        <button
-                            type="button"
-                            className="gts-btn primary"
-                            onClick={handleParse}
-                            disabled={!hasText || parsing}
-                        >
-                            {parsing
-                                ? <><FontAwesomeIcon icon={faSpinner} spin /> Parsing…</>
-                                : <><FontAwesomeIcon icon={faWandMagicSparkles} /> Parse with AI</>}
-                        </button>
-                    </div>
-                </>
+            {parseError && (
+                <div className="vtb-error"><FontAwesomeIcon icon={faTriangleExclamation} /> {parseError}</div>
             )}
+
+            <div className="vtb-actions">
+                <button
+                    type="button"
+                    className="gts-btn primary"
+                    onClick={handleParse}
+                    disabled={!hasText || parsing || isListening}
+                >
+                    {parsing
+                        ? <><FontAwesomeIcon icon={faSpinner} spin /> Parsing…</>
+                        : <><FontAwesomeIcon icon={faWandMagicSparkles} /> Parse with AI</>}
+                </button>
+            </div>
         </div>
     );
 };
