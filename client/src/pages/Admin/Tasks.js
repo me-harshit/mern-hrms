@@ -15,6 +15,7 @@ import Avatar from '../../components/Avatar';
 import TaskCountdown, { hasTimeWindow } from '../../components/TaskCountdown';
 import '../../styles/App.css';
 import '../../styles/tasks.css';
+import '../../styles/taskCards.css';
 import '../../styles/selftask.css';
 
 const DEFAULT_FILTERS = { status: 'All', priority: 'All', projectId: 'All', taskType: 'All' };
@@ -288,117 +289,125 @@ const Tasks = () => {
                     )}
                 </div>
             ) : (
-                <div className="employee-table-container">
-                    <table className="employee-table task-table">
-                        <thead>
-                            <tr>
-                                <th className="col-task">Task</th>
-                                <th className="col-project">Type / Project</th>
-                                <th className="col-assignees">Assignees</th>
-                                <th className="col-priority">Priority</th>
-                                <th className="col-due">Due Date</th>
-                                <th className="col-progress">Progress</th>
-                                <th className="col-actions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {tasks.map(task => {
-                                const pct = STATUS_PROGRESS[task.status] ?? 0;
+                <div className="tgrid">
+                    {tasks.map((task, idx) => {
+                        const pct = STATUS_PROGRESS[task.status] ?? 0;
+                        const overdue = isOverdue(task);
+                        // Overdue outranks the work status on the stripe — it's
+                        // the thing that needs acting on.
+                        const tone = task.status === 'Completed' ? 'green'
+                            : overdue ? 'red'
+                                : task.status === 'In Progress' ? 'blue'
+                                    : task.status === 'On Hold' ? 'amber' : 'grey';
 
-                                return (
-                                    <tr key={task._id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/task/${task._id}`)}>
-                                        <td data-label="Task" className="col-task">
-                                            <span className="task-title-cell" title={task.title}>{task.title}</span>
-                                            <span className="task-title-sub">
-                                                <span className={`task-status-badge ${slug(task.status)}`}>
-                                                    {task.status}
+                        return (
+                            <div
+                                key={task._id}
+                                className={`tcard tone-${tone}`}
+                                style={{ animationDelay: `${Math.min(idx * 18, 220)}ms` }}
+                                onClick={() => navigate(`/task/${task._id}`)}
+                            >
+                                <div className="tcard-head">
+                                    <div className="tcard-titlewrap">
+                                        <span className="tcard-title" title={task.title}>{task.title}</span>
+                                        <div className="tcard-badges">
+                                            <span className={`task-status-badge ${slug(task.status)}`}>{task.status}</span>
+                                            <span className={`priority-badge ${slug(task.priority)}`}>{task.priority}</span>
+                                            {overdue && <span className="task-status-badge blocked">Overdue</span>}
+                                            {task.isSelfAssigned && (
+                                                <span className="ap-badge self" title="The employee logged this themselves">
+                                                    <FontAwesomeIcon icon={faUserPen} /> Self Assigned
                                                 </span>
-                                                {task.isSelfAssigned && (
-                                                    <span className="ap-badge self" title="The employee logged this themselves">
-                                                        <FontAwesomeIcon icon={faUserPen} /> Self Assigned
-                                                    </span>
-                                                )}
-                                                {task.attachments?.length > 0 && (
-                                                    <span className="task-media-count">
-                                                        <FontAwesomeIcon icon={faPaperclip} /> {task.attachments.length}
-                                                    </span>
-                                                )}
-                                            </span>
-                                        </td>
+                                            )}
+                                            {task.attachments?.length > 0 && (
+                                                <span className="task-media-count">
+                                                    <FontAwesomeIcon icon={faPaperclip} /> {task.attachments.length}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
 
-                                        {/* Holds either a project name or "Regular Office",
-                                            so the icon carries the distinction. */}
-                                        <td data-label="Type / Project" className="col-project">
+                                    <div className="tcard-actions" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            className="icon-btn" title="Edit task" aria-label="Edit task"
+                                            onClick={() => navigate(`/edit-task/${task._id}`)}
+                                        >
+                                            <FontAwesomeIcon icon={faEdit} />
+                                        </button>
+                                        <button
+                                            className="icon-btn danger" title="Remove task" aria-label="Remove task"
+                                            onClick={() => handleDelete(task)}
+                                        >
+                                            <FontAwesomeIcon icon={faTrash} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="tcard-meta">
+                                    {/* Holds either a project name or "Regular Office",
+                                        so the icon carries the distinction. */}
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Type / Project</span>
+                                        <span className="tcard-value">
                                             <span className={`task-context ${task.taskType === 'Regular Office Task' ? 'is-office' : ''}`}>
                                                 <FontAwesomeIcon icon={task.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
                                                 <span className="task-context-label">{taskContextLabel(task)}</span>
                                             </span>
-                                        </td>
+                                        </span>
+                                    </div>
 
-                                        <td data-label="Assignees" className="col-assignees">
-                                            <div className="avatar-stack" title={task.assignees.map(a => a?.name).join(', ')}>
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Due date</span>
+                                        <span className="tcard-value">
+                                            <span className={`task-due-date ${overdue ? 'overdue' : ''}`}>
+                                                {new Date(task.dueDate).toLocaleDateString('en-GB')}
+                                            </span>
+                                        </span>
+                                        {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
+                                    </div>
+
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Assigned to</span>
+                                        <span className="tcard-value">
+                                            <span className="avatar-stack" title={task.assignees.map(a => a?.name).join(', ')}>
                                                 {task.assignees.slice(0, 4).map(a => (
                                                     <Avatar key={a._id} name={a?.name} profilePic={a?.profilePic} className="assignee-avatar" />
                                                 ))}
                                                 {task.assignees.length > 4 && (
-                                                    <div className="assignee-avatar avatar-more">+{task.assignees.length - 4}</div>
+                                                    <span className="assignee-avatar avatar-more">+{task.assignees.length - 4}</span>
                                                 )}
-                                            </div>
-                                            {task.assignedBy?.name && (
-                                                <span className="assignee-by-note" title={`Assigned by ${task.assignedBy.name}`}>
-                                                    by {task.assignedBy.name}
-                                                </span>
-                                            )}
-                                        </td>
-
-                                        <td data-label="Priority" className="col-priority">
-                                            <span className={`priority-badge ${slug(task.priority)}`}>{task.priority}</span>
-                                        </td>
-
-                                        <td data-label="Due Date" className="col-due">
-                                            <span className={`task-due-date ${isOverdue(task) ? 'overdue' : ''}`}>
-                                                {new Date(task.dueDate).toLocaleDateString('en-GB')}
                                             </span>
-                                            {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
-                                        </td>
+                                        </span>
+                                    </div>
 
-                                        <td data-label="Progress" className="col-progress">
-                                            <div className="task-progress">
-                                                <div className="task-progress-track">
-                                                    <div
-                                                        className={`task-progress-fill ${slug(task.status)}`}
-                                                        style={{ width: `${pct}%` }}
-                                                    />
-                                                </div>
-                                                <span className="task-progress-label">{pct}%</span>
-                                            </div>
-                                        </td>
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Assigned by</span>
+                                        <span className="tcard-value is-muted">
+                                            {task.assignedBy?.name ? (
+                                                <span className="tcard-person">
+                                                    <Avatar name={task.assignedBy.name} profilePic={task.assignedBy.profilePic} className="assignee-avatar" />
+                                                    <span className="tcard-ellipsis">{task.assignedBy.name}</span>
+                                                </span>
+                                            ) : '—'}
+                                        </span>
+                                    </div>
+                                </div>
 
-                                        <td
-                                            data-label="Actions"
-                                            className="col-actions task-actions-cell"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <div className="task-actions-inner">
-                                                <button
-                                                    className="icon-btn" title="Edit task" aria-label="Edit task"
-                                                    onClick={() => navigate(`/edit-task/${task._id}`)}
-                                                >
-                                                    <FontAwesomeIcon icon={faEdit} />
-                                                </button>
-                                                <button
-                                                    className="icon-btn danger" title="Remove task" aria-label="Remove task"
-                                                    onClick={() => handleDelete(task)}
-                                                >
-                                                    <FontAwesomeIcon icon={faTrash} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                <div className="tcard-foot">
+                                    <span className="tcard-label">Progress</span>
+                                    <div className="task-progress">
+                                        <div className="task-progress-track">
+                                            <div
+                                                className={`task-progress-fill ${slug(task.status)}`}
+                                                style={{ width: `${pct}%` }}
+                                            />
+                                        </div>
+                                        <span className="task-progress-label">{pct}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

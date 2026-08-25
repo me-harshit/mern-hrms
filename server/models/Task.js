@@ -165,11 +165,13 @@ taskSchema.index({ overdueAt: 1, status: 1 });
  * otherwise fail validation the moment anything next calls .save() on it,
  * on a field the caller never touched. This makes that self-healing instead.
  *
- * Recurring-generated tasks are left alone deliberately (TaskPlan.md §16):
- * they already get a lenient end-of-local-day dueDate from the schedule
- * (recurringSchedule.js's dayBounds), and folding them into the shift-end
- * fallback here would make them overdue *earlier* than they are today, which
- * nobody asked for.
+ * Recurring-generated tasks default to the schedule's lenient end-of-local-
+ * day dueDate (recurringSchedule.js's dayBounds) rather than the shift-end
+ * fallback below, which would make them overdue *earlier* than that default —
+ * but a schedule *with* an explicit time window (TaskPlan.md §16) copies its
+ * dueTime onto every occurrence at generation time, and that explicit choice
+ * still wins here exactly like it does for a one-off task. Only the absence
+ * of one falls back to end-of-day instead of shift-end.
  *
  * pre('validate'), not pre('save'): overdueAt is `required`, and Mongoose
  * runs schema validation before user pre('save') hooks fire — a save with
@@ -177,7 +179,7 @@ taskSchema.index({ overdueAt: 1, status: 1 });
  * a chance to set it.
  */
 taskSchema.pre('validate', async function () {
-    if (this.recurringTaskId) {
+    if (this.recurringTaskId && !this.dueTime) {
         if (!this.overdueAt || this.isModified('dueDate')) this.overdueAt = this.dueDate;
         return;
     }

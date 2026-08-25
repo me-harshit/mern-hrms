@@ -221,7 +221,7 @@ const AddTask = () => {
         if (!isRecurring && formData.startDate && formData.dueDate && new Date(formData.dueDate) < new Date(formData.startDate)) {
             return Swal.fire('Check Dates', 'The due date cannot be before the start date.', 'warning');
         }
-        if (!isRecurring && formData.startTime && formData.dueTime && formData.dueTime <= formData.startTime) {
+        if (formData.startTime && formData.dueTime && formData.dueTime <= formData.startTime) {
             return Swal.fire('Check Times', 'The due/end time must be after the start time.', 'warning');
         }
 
@@ -235,8 +235,10 @@ const AddTask = () => {
 
             if (isRecurring) {
                 // A schedule has no single due date — each generated task gets
-                // its own, on the day it lands.
-                ['title', 'description', 'taskType', 'projectId', 'priority']
+                // its own, on the day it lands. The time window travels with
+                // the brief though, same as title/priority: it's copied onto
+                // every day this schedule generates.
+                ['title', 'description', 'taskType', 'projectId', 'priority', 'startTime', 'dueTime', 'timeAllottedMinutes']
                     .forEach(key => data.append(key, formData[key]));
                 data.append('plannedDates', JSON.stringify(plannedDates));
             } else {
@@ -436,15 +438,15 @@ const AddTask = () => {
                                 </div>
                             </div>
 
-                            {!isRecurring && (
-                                <div className="form-group task-field">
-                                    <TaskTimeWindow
-                                        startTime={formData.startTime}
-                                        dueTime={formData.dueTime}
-                                        timeAllottedMinutes={formData.timeAllottedMinutes}
-                                        onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
-                                    />
-                                </div>
+                            <div className="form-group task-field">
+                                <TaskTimeWindow
+                                    startTime={formData.startTime}
+                                    dueTime={formData.dueTime}
+                                    timeAllottedMinutes={formData.timeAllottedMinutes}
+                                    onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                                    {...(isRecurring ? { fallbackLabel: 'that day ends' } : {})}
+                                />
+                            </div>
                             )}
 
                             {/* The full skip breakdown sits in the form, not in the

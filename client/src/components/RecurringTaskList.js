@@ -5,13 +5,14 @@ import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faPlus, faSearch, faTimes, faPause, faPlay, faBan, faTrash, faEdit,
-    faFolderOpen, faBuilding, faCalendarCheck
+    faFolderOpen, faBuilding, faCalendarCheck, faRepeat
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from './Pagination';
 import { slug, taskContextLabel, confirmDeleteSchedule } from '../utils/taskHelpers';
 import Avatar from './Avatar';
 import '../styles/App.css';
 import '../styles/tasks.css';
+import '../styles/taskCards.css';
 import '../styles/recurring.css';
 
 /**
@@ -175,114 +176,111 @@ const RecurringTaskList = () => {
                     )}
                 </div>
             ) : (
-                <div className="employee-table-container">
-                    <table className="employee-table task-table rt-table">
-                        <thead>
-                            <tr>
-                                <th className="col-task">Schedule</th>
-                                <th className="col-project">Type / Project</th>
-                                <th className="col-assignees">Assignees</th>
-                                <th className="col-progress">Progress</th>
-                                <th className="col-priority">Status</th>
-                                <th className="col-actions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {schedules.map(s => {
-                                const p = s.progress || {};
-                                const total = p.total || 1;
-                                // Two-colour bar: what got done, and what was let slip.
-                                const donePct = Math.round(((p.done || 0) / total) * 100);
-                                const missedPct = Math.round(((p.missed || 0) / total) * 100);
+                <div className="tgrid">
+                    {schedules.map((s, idx) => {
+                        const p = s.progress || {};
+                        const total = p.total || 1;
+                        // Two-colour bar: what got done, and what was let slip.
+                        const donePct = Math.round(((p.done || 0) / total) * 100);
+                        const missedPct = Math.round(((p.missed || 0) / total) * 100);
 
-                                return (
-                                    <tr key={s._id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/tasks/recurring/${s._id}`)}>
-                                        <td data-label="Schedule" className="col-task">
-                                            <span className="task-title-cell" title={s.title}>{s.title}</span>
-                                            <span className="task-title-sub">
-                                                <span className={`priority-badge ${slug(s.priority)}`}>{s.priority}</span>
-                                                <span className="task-media-count">
-                                                    {s.targetCount} day{s.targetCount === 1 ? '' : 's'} each
-                                                </span>
+                        const tone = s.status === 'Completed' ? 'green'
+                            : s.status === 'Cancelled' ? 'red'
+                                : s.status === 'Paused' ? 'amber' : 'blue';
+
+                        return (
+                            <div
+                                key={s._id}
+                                className={`tcard tone-${tone}`}
+                                style={{ animationDelay: `${Math.min(idx * 18, 220)}ms` }}
+                                onClick={() => navigate(`/tasks/recurring/${s._id}`)}
+                            >
+                                <div className="tcard-head">
+                                    <div className="tcard-titlewrap">
+                                        <span className="tcard-title" title={s.title}>{s.title}</span>
+                                        <div className="tcard-badges">
+                                            <span className={`rt-status-badge ${slug(s.status)}`}>{s.status}</span>
+                                            <span className={`priority-badge ${slug(s.priority)}`}>{s.priority}</span>
+                                            <span className="task-media-count">
+                                                <FontAwesomeIcon icon={faRepeat} /> {s.targetCount} day{s.targetCount === 1 ? '' : 's'} each
                                             </span>
-                                        </td>
+                                        </div>
+                                    </div>
 
-                                        <td data-label="Type / Project" className="col-project">
+                                    <div className="tcard-actions" onClick={(e) => e.stopPropagation()}>
+                                        <button className="icon-btn" title="Edit schedule" aria-label="Edit schedule"
+                                            onClick={() => navigate(`/tasks/recurring/${s._id}/edit`)}>
+                                            <FontAwesomeIcon icon={faEdit} />
+                                        </button>
+                                        {s.status === 'Active' && (
+                                            <button className="icon-btn" title="Pause schedule" aria-label="Pause schedule"
+                                                onClick={() => act(s, 'pause')}>
+                                                <FontAwesomeIcon icon={faPause} />
+                                            </button>
+                                        )}
+                                        {s.status === 'Paused' && (
+                                            <button className="icon-btn" title="Resume schedule" aria-label="Resume schedule"
+                                                onClick={() => act(s, 'resume')}>
+                                                <FontAwesomeIcon icon={faPlay} />
+                                            </button>
+                                        )}
+                                        {['Active', 'Paused'].includes(s.status) && (
+                                            <button className="icon-btn" title="End schedule (keep it in the list)" aria-label="End schedule"
+                                                onClick={() => act(s, 'cancel')}>
+                                                <FontAwesomeIcon icon={faBan} />
+                                            </button>
+                                        )}
+                                        <button className="icon-btn danger" title="Delete schedule" aria-label="Delete schedule"
+                                            onClick={() => remove(s)}>
+                                            <FontAwesomeIcon icon={faTrash} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="tcard-meta">
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Type / Project</span>
+                                        <span className="tcard-value">
                                             <span className={`task-context ${s.taskType === 'Regular Office Task' ? 'is-office' : ''}`}>
                                                 <FontAwesomeIcon icon={s.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
                                                 <span className="task-context-label">{taskContextLabel(s)}</span>
                                             </span>
-                                        </td>
+                                        </span>
+                                    </div>
 
-                                        <td data-label="Assignees" className="col-assignees">
-                                            <div className="avatar-stack" title={s.assignees.map(a => a?.name).join(', ')}>
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Running for</span>
+                                        <span className="tcard-value">
+                                            <span className="avatar-stack" title={s.assignees.map(a => a?.name).join(', ')}>
                                                 {s.assignees.slice(0, 4).map(a => (
                                                     <Avatar key={a._id} name={a?.name} profilePic={a?.profilePic} className="assignee-avatar" />
                                                 ))}
                                                 {s.assignees.length > 4 && (
-                                                    <div className="assignee-avatar avatar-more">+{s.assignees.length - 4}</div>
+                                                    <span className="assignee-avatar avatar-more">+{s.assignees.length - 4}</span>
                                                 )}
-                                            </div>
-                                        </td>
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
 
-                                        <td data-label="Progress" className="col-progress">
-                                            <div className="rt-progress-wrap">
-                                                <div className="rt-progress-track">
-                                                    <div className="rt-progress-done" style={{ width: `${donePct}%` }} />
-                                                    <div className="rt-progress-missed" style={{ width: `${missedPct}%` }} />
-                                                </div>
-                                                <span className="rt-progress-label">
-                                                    {p.done || 0} done
-                                                    {p.missed > 0 && ` · ${p.missed} missed`}
-                                                    {p.skipped > 0 && ` · ${p.skipped} skipped`}
-                                                    {` · of ${total}`}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        <td data-label="Status" className="col-priority">
-                                            <span className={`rt-status-badge ${slug(s.status)}`}>{s.status}</span>
-                                        </td>
-
-                                        <td
-                                            data-label="Actions"
-                                            className="col-actions task-actions-cell"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <div className="task-actions-inner">
-                                                <button className="icon-btn" title="Edit schedule" aria-label="Edit schedule"
-                                                    onClick={() => navigate(`/tasks/recurring/${s._id}/edit`)}>
-                                                    <FontAwesomeIcon icon={faEdit} />
-                                                </button>
-                                                {s.status === 'Active' && (
-                                                    <button className="icon-btn" title="Pause schedule" aria-label="Pause schedule"
-                                                        onClick={() => act(s, 'pause')}>
-                                                        <FontAwesomeIcon icon={faPause} />
-                                                    </button>
-                                                )}
-                                                {s.status === 'Paused' && (
-                                                    <button className="icon-btn" title="Resume schedule" aria-label="Resume schedule"
-                                                        onClick={() => act(s, 'resume')}>
-                                                        <FontAwesomeIcon icon={faPlay} />
-                                                    </button>
-                                                )}
-                                                {['Active', 'Paused'].includes(s.status) && (
-                                                    <button className="icon-btn" title="End schedule (keep it in the list)" aria-label="End schedule"
-                                                        onClick={() => act(s, 'cancel')}>
-                                                        <FontAwesomeIcon icon={faBan} />
-                                                    </button>
-                                                )}
-                                                <button className="icon-btn danger" title="Delete schedule" aria-label="Delete schedule"
-                                                    onClick={() => remove(s)}>
-                                                    <FontAwesomeIcon icon={faTrash} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                <div className="tcard-foot">
+                                    <span className="tcard-label">Progress</span>
+                                    <div className="rt-progress-wrap">
+                                        <div className="rt-progress-track">
+                                            <div className="rt-progress-done" style={{ width: `${donePct}%` }} />
+                                            <div className="rt-progress-missed" style={{ width: `${missedPct}%` }} />
+                                        </div>
+                                        <span className="rt-progress-label">
+                                            {p.done || 0} done
+                                            {p.missed > 0 && ` · ${p.missed} missed`}
+                                            {p.skipped > 0 && ` · ${p.skipped} skipped`}
+                                            {` · of ${total}`}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

@@ -870,60 +870,9 @@
     }
 }
 
-/* ------------------------------------------
-   WIDER STATUS / ACTIONS COLUMNS
-   .task-table is table-layout: fixed, so a cell whose content is wider than its
-   column spills into the next one rather than pushing it along. The shared
-   .col-actions is 104px, which fits the two buttons the main Tasks table has —
-   these two tables carry more, so they get their own widths.
-   ------------------------------------------ */
-
-/* Recurring: Edit + Pause/Resume + End + Delete = four 32px buttons + gaps. */
-.rt-table .col-actions {
-    width: 186px;
-}
-
-.rt-table .col-priority {
-    width: 124px;
-}
-
-/* Self-Assigned: Approve + Reject + Delete, and the status cell also carries
-   the "by <name>" line underneath. */
-.sa-table .col-actions {
-    /* Edit + Approve + Reject + Delete. */
-    width: 186px;
-}
-
-.sa-table .col-priority {
-    /* Two stacked badges: approval state and work state. */
-    width: 168px;
-}
-
-/* Nothing in either actions cell may wrap onto a second line. */
-.rt-table .task-actions-inner,
-.sa-table .task-actions-inner {
-    flex-wrap: nowrap;
-}
-
-/* The columns beside them were cramped once Status and Actions took their
-   proper width: the timeline broke across three lines, employee names across
-   two, and the progress caption wrapped. In a fixed-layout table the space
-   comes out of col-task, which has 240px of min-width to spare. */
-.sa-table .col-assignees {
-    width: 176px;
-}
-
-.sa-table .col-due {
-    width: 196px;
-}
-
-.rt-table .col-progress {
-    width: 168px;
-}
-
-.rt-table .col-assignees {
-    width: 120px;
-}
+/* The .rt-table / .sa-table column-width rules that lived here sized the
+   Recurring and Self-Assigned tables. Both are card grids now (.tgrid in
+   taskCards.css), so there are no columns left to size. */
 
 /* Says which thread this is — the schedule's, not one day's. */
 .rt-thread-note {
