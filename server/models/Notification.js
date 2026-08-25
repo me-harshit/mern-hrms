@@ -25,6 +25,14 @@ const NotificationSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    // Stable identifier for the thing this notification is about, so it can be
+    // targeted later without matching on human-readable text.
+    // Payroll uses `salary:<userId>:<month>:<year>`.
+    refKey: {
+        type: String,
+        default: "",
+        index: true
+    },
     isRead: {
         type: Boolean,
         default: false

@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
 const bcrypt = require('bcryptjs');
+const { canAccessSalary, canEditPrivilegedFields, sanitizeSalary } = require('../utils/permissions');
 
 // @route   GET /api/employees/managers
 // @desc    Get all users who can be assigned as reporting managers
@@ -85,12 +86,13 @@ router.get('/', auth, async (req, res) => {
         const totalPages = Math.ceil(totalRecords / limit);
 
         const employees = await User.find(query)
+            .select('-password')
             .sort({ employeeId: 1 }) // Sorted by ID alphabetically
             .skip(skip)
             .limit(limit);
 
         res.json({
-            data: employees,
+            data: sanitizeSalary(employees, req.user),
             pagination: { totalRecords, totalPages, currentPage: page, limit }
         });
 
@@ -148,7 +150,7 @@ router.get('/:id', auth, async (req, res) => {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access denied' });
         const user = await User.findById(req.params.id).select('-password');
         if (!user) return res.status(404).json({ message: 'Employee not found' });
-        res.json(user);
+        res.json(sanitizeSalary(user, req.user));
     } catch (err) {
         console.error(err.message);
         if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Employee not found' });
@@ -159,6 +161,10 @@ router.get('/:id', auth, async (req, res) => {
 // @route   POST /api/employees/add
 router.post('/add', auth, async (req, res) => {
     try {
+        // This route had no role gate at all — any logged-in user could create
+        // an account, including one with role ADMIN.
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access denied' });
+
         const {
             name, email, workEmail, password, role, shiftType,
             joiningDate, dateOfBirth, bloodGroup, aadhaar, phoneNumber,
@@ -167,7 +173,7 @@ router.post('/add', auth, async (req, res) => {
             jobTitle, department, workLocation, employmentType,
             reportingManagerName, reportingManagerEmail,
             teamLeadsName, teamLeadsEmail,
-            employeeId, isPurchaser
+            employeeId, isPurchaser, salary
         } = req.body;
 
         const sanitizedEmail = email ? email.trim().toLowerCase() : '';
@@ -176,12 +182,19 @@ router.post('/add', auth, async (req, res) => {
         let user = await User.findOne({ email: sanitizedEmail });
         if (user) return res.status(400).json({ message: 'User already exists' });
 
+        // MANAGER/TEAM LEAD may onboard people, but only ADMIN/HR decide what
+        // role a new account gets — otherwise they could mint an ADMIN.
+        const mayEditPrivileged = canEditPrivilegedFields(req.user);
+        if (role && role !== 'EMPLOYEE' && !mayEditPrivileged) {
+            return res.status(403).json({ message: 'Only ADMIN or HR can assign a role other than EMPLOYEE' });
+        }
+
         user = new User({
             name,
             email: sanitizedEmail,
-            workEmail: sanitizedWorkEmail, 
+            workEmail: sanitizedWorkEmail,
             password,
-            role,
+            role: mayEditPrivileged ? role : 'EMPLOYEE',
             shiftType: shiftType || 'DAY',
             joiningDate,
             dateOfBirth,
@@ -203,7 +216,9 @@ router.post('/add', auth, async (req, res) => {
             teamLeadsName,
             teamLeadsEmail,
             employeeId,
-            isPurchaser: isPurchaser || false
+            isPurchaser: (mayEditPrivileged && isPurchaser) || false,
+            // Only ADMIN/HR may set a starting salary; others default to 0.
+            salary: (canAccessSalary(req.user) && salary) ? Number(salary) : 0
         });
 
         const salt = await bcrypt.genSalt(10);
@@ -233,13 +248,21 @@ router.put('/:id', auth, async (req, res) => {
             employeeId, isPurchaser
         } = req.body;
 
+        // role / password / status / isPurchaser grant privilege or control
+        // account access. Without this gate a TEAM LEAD or MANAGER could PUT
+        // themselves to ADMIN, reset anyone's password, or disable an account.
+        // These are dropped rather than rejected: the edit form always submits
+        // every field, so a 403 would block otherwise-legitimate saves. The UI
+        // already disables these controls for the roles that can't use them.
+        const mayEditPrivileged = canEditPrivilegedFields(req.user);
+
         let updateData = {};
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (workEmail !== undefined) updateData.workEmail = workEmail;
-        if (role) updateData.role = role;
+        if (role && mayEditPrivileged) updateData.role = role;
         if (shiftType) updateData.shiftType = shiftType;
-        if (status) updateData.status = status;
+        if (status && mayEditPrivileged) updateData.status = status;
         if (joiningDate) updateData.joiningDate = joiningDate;
         if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
         if (bloodGroup !== undefined) updateData.bloodGroup = bloodGroup;
@@ -258,7 +281,9 @@ router.put('/:id', auth, async (req, res) => {
         if (workLocation !== undefined) updateData.workLocation = workLocation;
         if (employmentType !== undefined) updateData.employmentType = employmentType;
 
-        if (salary !== undefined) updateData.salary = salary;
+        // Only ADMIN/HR may set salary — silently ignore it for anyone else so a
+        // MANAGER/TEAM LEAD editing a teammate can't change their pay.
+        if (salary !== undefined && canAccessSalary(req.user)) updateData.salary = salary;
         if (casualLeaveBalance !== undefined) updateData.casualLeaveBalance = casualLeaveBalance;
         if (earnedLeaveBalance !== undefined) updateData.earnedLeaveBalance = earnedLeaveBalance;
 
@@ -268,10 +293,10 @@ router.put('/:id', auth, async (req, res) => {
         if (teamLeadsEmail !== undefined) updateData.teamLeadsEmail = teamLeadsEmail;
 
         if (employeeId !== undefined) updateData.employeeId = employeeId;
-        if (isPurchaser !== undefined) updateData.isPurchaser = isPurchaser;
+        if (isPurchaser !== undefined && mayEditPrivileged) updateData.isPurchaser = isPurchaser;
 
         // 👇 FIXED: Safely hash and append to updateData
-        if (password && password.trim() !== "") {
+        if (password && password.trim() !== "" && mayEditPrivileged) {
             const salt = await bcrypt.genSalt(10);
             updateData.password = await bcrypt.hash(password, salt);
         }
@@ -284,7 +309,7 @@ router.put('/:id', auth, async (req, res) => {
 
         if (!updatedEmployee) return res.status(404).json({ message: 'User not found' });
 
-        res.json(updatedEmployee);
+        res.json(sanitizeSalary(updatedEmployee, req.user));
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

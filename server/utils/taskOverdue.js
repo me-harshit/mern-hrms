@@ -33,6 +33,28 @@ const istWallClockToUTC = (dateStr, hh, mm) => {
 };
 
 const DEFAULT_SHIFT_END = { DAY: '18:30', NIGHT: '04:00' };
+const DEFAULT_SHIFT_START = { DAY: '09:30', NIGHT: '19:30' };
+
+// One lookup for both ends of the shift, so a task's window can't be built
+// from two different reads of Settings.
+const shiftFor = async (assigneeId) => {
+    const User = modelOrNull('User');
+    const Settings = modelOrNull('Settings');
+
+    const [assignee, settings] = await Promise.all([
+        assigneeId && User ? User.findById(assigneeId).select('shiftType') : null,
+        Settings ? Settings.findOne() : null
+    ]);
+
+    const isNight = assignee?.shiftType === 'NIGHT';
+    return {
+        isNight,
+        start: (isNight ? settings?.nightShiftStartTime : settings?.dayShiftStartTime)
+            || (isNight ? DEFAULT_SHIFT_START.NIGHT : DEFAULT_SHIFT_START.DAY),
+        end: (isNight ? settings?.nightShiftEndTime : settings?.dayShiftEndTime)
+            || (isNight ? DEFAULT_SHIFT_END.NIGHT : DEFAULT_SHIFT_END.DAY)
+    };
+};
 
 /**
  * "End of shift" on a given due date, for whichever employee the task is
@@ -44,18 +66,8 @@ const DEFAULT_SHIFT_END = { DAY: '18:30', NIGHT: '04:00' };
  * marked overdue while that employee's shift hasn't even started yet.
  */
 const shiftEndInstant = async (dueDateStr, assigneeId) => {
-    const User = modelOrNull('User');
-    const Settings = modelOrNull('Settings');
-
-    const [assignee, settings] = await Promise.all([
-        assigneeId && User ? User.findById(assigneeId).select('shiftType') : null,
-        Settings ? Settings.findOne() : null
-    ]);
-
-    const isNight = assignee?.shiftType === 'NIGHT';
-    const endStr = (isNight ? settings?.nightShiftEndTime : settings?.dayShiftEndTime)
-        || (isNight ? DEFAULT_SHIFT_END.NIGHT : DEFAULT_SHIFT_END.DAY);
-    const [hh, mm] = endStr.split(':').map(Number);
+    const { isNight, end } = await shiftFor(assigneeId);
+    const [hh, mm] = end.split(':').map(Number);
 
     let dateStr = dueDateStr;
     if (isNight && hh < 14) {
@@ -67,6 +79,19 @@ const shiftEndInstant = async (dueDateStr, assigneeId) => {
 };
 
 /**
+ * The other end of the same window: when the working day opens.
+ *
+ * No rollover here, unlike shiftEndInstant — a night shift *starts* on the
+ * evening of its own date (19:30) and only its end spills into the next
+ * morning, so shifting this forward would put the start after the end.
+ */
+const shiftStartInstant = async (startDateStr, assigneeId) => {
+    const { start } = await shiftFor(assigneeId);
+    const [hh, mm] = start.split(':').map(Number);
+    return istWallClockToUTC(startDateStr, hh, mm);
+};
+
+/**
  * The instant a task should flip overdue. An explicit due time wins; absent
  * one, it's the primary assignee's shift end on the due date.
  *
@@ -75,8 +100,21 @@ const shiftEndInstant = async (dueDateStr, assigneeId) => {
  * comment on that), so one overdue instant for the group is consistent with
  * that, not a new inconsistency.
  */
-const computeOverdueAt = async ({ dueDate, dueTime, assignees }) => {
-    const dateStr = new Date(dueDate).toISOString().slice(0, 10);
+/**
+ * Which calendar day a stored Date stands for.
+ *
+ * Deliberately takes an explicit `dayStr` override, because the two creation
+ * paths encode the day differently and neither can be read the same way:
+ * a task from the client carries a bare 'YYYY-MM-DD' cast to UTC midnight,
+ * while the recurring cron writes dayBounds(), which is *local* midnight —
+ * on an IST server that is 18:30 the previous UTC day, so slicing its ISO
+ * string yields the day before. A recurring occurrence knows its own date as
+ * a string, so it passes that and the ambiguity disappears.
+ */
+const dayOf = (value, dayStr) => dayStr || new Date(value).toISOString().slice(0, 10);
+
+const computeOverdueAt = async ({ dueDate, dueTime, assignees, dayStr }) => {
+    const dateStr = dayOf(dueDate, dayStr);
 
     if (dueTime) {
         const [hh, mm] = dueTime.split(':').map(Number);
@@ -85,6 +123,30 @@ const computeOverdueAt = async ({ dueDate, dueTime, assignees }) => {
 
     const primaryAssignee = Array.isArray(assignees) ? assignees[0] : assignees;
     return shiftEndInstant(dateStr, primaryAssignee);
+};
+
+/**
+ * When the clock should be considered to start — the mirror of
+ * computeOverdueAt, and the other half of "the whole day is shift start to
+ * shift end".
+ *
+ * Without this the only available start was startDate, which is stored at
+ * midnight UTC (05:30 IST) and therefore charged a task four hours of
+ * elapsed time before the employee's day had even begun.
+ *
+ * Falls back to the due date when no startDate was given, so a task always
+ * has a window rather than none.
+ */
+const computeExpectedStartAt = async ({ startDate, dueDate, startTime, assignees, dayStr }) => {
+    const dateStr = dayOf(startDate || dueDate, dayStr);
+
+    if (startTime) {
+        const [hh, mm] = startTime.split(':').map(Number);
+        return istWallClockToUTC(dateStr, hh, mm);
+    }
+
+    const primaryAssignee = Array.isArray(assignees) ? assignees[0] : assignees;
+    return shiftStartInstant(dateStr, primaryAssignee);
 };
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -107,4 +169,11 @@ const parseTimeWindow = (body) => ({
         : null
 });
 
-module.exports = { computeOverdueAt, istWallClockToUTC, shiftEndInstant, parseTimeWindow };
+module.exports = {
+    computeOverdueAt,
+    computeExpectedStartAt,
+    istWallClockToUTC,
+    shiftEndInstant,
+    shiftStartInstant,
+    parseTimeWindow
+};
