@@ -5,7 +5,8 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faSave, faPaperclip, faInfoCircle, faUsers, faSpinner,
-    faClipboardList, faFilm, faFolderOpen, faBuilding, faCalendarDay, faRepeat
+    faClipboardList, faFilm, faFolderOpen, faBuilding, faCalendarDay, faRepeat,
+    faMicrophone
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import ScreenRecorder from '../../components/ScreenRecorder';
@@ -302,6 +303,14 @@ const AddTask = () => {
                     <FontAwesomeIcon icon={faClipboardList} style={{ marginRight: '10px', color: '#215D7B' }} />
                     {isRecurring ? 'Schedule a Daily Task' : 'Assign New Task'}
                 </h1>
+                <button
+                    type="button"
+                    className="gts-btn secondary"
+                    onClick={() => navigate('/add-task/voice')}
+                    style={{ marginLeft: 'auto' }}
+                >
+                    <FontAwesomeIcon icon={faMicrophone} /> Voice Assign
+                </button>
             </div>
 
             <form onSubmit={handleSubmit}>

@@ -79,3 +79,22 @@ export const addMonths = (year, month, n) => {
     const d = new Date(year, month + n, 1);
     return { year: d.getFullYear(), month: d.getMonth() };
 };
+
+// Same walk as ScheduleCalendar's "Next N working days" quick-pick, just
+// parameterised on a start date instead of always starting today — used by
+// the voice-task draft list to let a manager retime a recurring draft
+// without redoing the whole calendar picker (client/src/components/
+// VoiceTaskDraftList.js). Ignores holidays/leave on purpose: those are
+// re-checked fresh every morning by the generation cron regardless of what
+// plannedDates says (TaskPlan.md §13.5), so baking them in here would be
+// false precision.
+export const nextWorkingDays = (start, count) => {
+    const out = [];
+    let d = start;
+    let guard = 0;
+    while (out.length < count && guard++ < count + 120) {
+        if (!isSunday(d)) out.push(d);
+        d = addDays(d, 1);
+    }
+    return out;
+};
