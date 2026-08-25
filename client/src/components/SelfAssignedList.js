@@ -12,6 +12,7 @@ import Avatar from './Avatar';
 import TaskCountdown, { hasTimeWindow } from './TaskCountdown';
 import { slug, taskContextLabel, shortDate } from '../utils/taskHelpers';
 import '../styles/tasks.css';
+import '../styles/taskCards.css';
 import '../styles/selftask.css';
 
 /**
@@ -218,135 +219,128 @@ const SelfAssignedList = () => {
                     </p>
                 </div>
             ) : (
-                <div className="employee-table-container">
-                    <table className="employee-table task-table sa-table">
-                        <thead>
-                            <tr>
-                                <th className="col-assignees">Employee</th>
-                                <th className="col-task">Task</th>
-                                <th className="col-project">Type / Project</th>
-                                <th className="col-due">Timeline</th>
-                                <th className="col-priority">Status</th>
-                                <th className="col-actions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {tasks.map(task => {
-                                const emp = task.assignees[0];
-                                const busy = deciding === task._id;
+                <div className="tgrid">
+                    {tasks.map((task, idx) => {
+                        const emp = task.assignees[0];
+                        const busy = deciding === task._id;
+                        const tone = task.approvalStatus === 'Approved' ? 'green'
+                            : task.approvalStatus === 'Rejected' ? 'red' : 'amber';
 
-                                return (
-                                    <tr key={task._id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/task/${task._id}`)}>
-                                        <td data-label="Employee" className="col-assignees">
-                                            <div className="sa-employee">
-                                                <Avatar
-                                                    name={emp?.name}
-                                                    profilePic={emp?.profilePic}
-                                                    className="sa-employee-avatar"
-                                                />
-                                                <div>
-                                                    <div className="sa-employee-name">{emp?.name || 'Unknown'}</div>
-                                                    <div className="sa-employee-id">{emp?.employeeId || emp?.email}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-
-                                        <td data-label="Task" className="col-task">
-                                            <span className="task-title-cell" title={task.title}>{task.title}</span>
-                                            <span className="sa-claimed">
-                                                <Avatar
-                                                    name={task.assignedBy?.name}
-                                                    profilePic={task.assignedBy?.profilePic}
-                                                    className="sa-inline-avatar"
-                                                />
-                                                asked by {task.assignedBy?.name || 'someone'}
+                        return (
+                            <div
+                                key={task._id}
+                                className={`tcard tone-${tone}`}
+                                style={{ animationDelay: `${Math.min(idx * 18, 220)}ms` }}
+                                onClick={() => navigate(`/task/${task._id}`)}
+                            >
+                                <div className="tcard-head">
+                                    <div className="tcard-titlewrap">
+                                        <span className="tcard-title" title={task.title}>{task.title}</span>
+                                        <div className="tcard-badges">
+                                            <span
+                                                className={`ap-badge ${slug(task.approvalStatus)}`}
+                                                title={task.approvedBy ? `Decided by ${task.approvedBy.name}` : 'Waiting on approval'}
+                                            >
+                                                {task.approvalStatus === 'Pending' ? 'Awaiting' : task.approvalStatus}
                                             </span>
-                                            {task.approvalStatus === 'Rejected' && task.approvalNote && (
-                                                <span className="sa-note">“{task.approvalNote}”</span>
-                                            )}
-                                        </td>
+                                            {/* Approval and progress are different questions: a task can be
+                                                approved and untouched, or half done and still unapproved. */}
+                                            <span className={`task-status-badge ${slug(task.status)}`} title="Work status">
+                                                {task.status}
+                                            </span>
+                                        </div>
+                                    </div>
 
-                                        <td data-label="Type / Project" className="col-project">
+                                    <div className="tcard-actions" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            className="icon-btn" title="Edit task" aria-label="Edit task"
+                                            disabled={busy} onClick={() => navigate(`/edit-task/${task._id}`)}
+                                        >
+                                            <FontAwesomeIcon icon={faEdit} />
+                                        </button>
+                                        {task.approvalStatus !== 'Approved' && (
+                                            <button
+                                                className="icon-btn" title="Approve" aria-label="Approve"
+                                                disabled={busy} onClick={() => decide(task, 'Approved')}
+                                            >
+                                                <FontAwesomeIcon icon={faCheck} />
+                                            </button>
+                                        )}
+                                        {task.approvalStatus !== 'Rejected' && (
+                                            <button
+                                                className="icon-btn" title="Reject (they can fix and resubmit)" aria-label="Reject"
+                                                disabled={busy} onClick={() => decide(task, 'Rejected')}
+                                            >
+                                                <FontAwesomeIcon icon={faBan} />
+                                            </button>
+                                        )}
+                                        <button
+                                            className="icon-btn danger" title="Delete task" aria-label="Delete task"
+                                            disabled={busy} onClick={() => remove(task)}
+                                        >
+                                            <FontAwesomeIcon icon={faTrash} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="tcard-meta">
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Logged by</span>
+                                        <span className="tcard-value">
+                                            <span className="tcard-person">
+                                                <Avatar name={emp?.name} profilePic={emp?.profilePic} className="assignee-avatar" />
+                                                <span className="tcard-ellipsis">{emp?.name || 'Unknown'}</span>
+                                            </span>
+                                        </span>
+                                    </div>
+
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Asked by</span>
+                                        <span className="tcard-value is-muted">
+                                            <span className="tcard-person">
+                                                <Avatar name={task.assignedBy?.name} profilePic={task.assignedBy?.profilePic} className="assignee-avatar" />
+                                                <span className="tcard-ellipsis">{task.assignedBy?.name || 'someone'}</span>
+                                            </span>
+                                        </span>
+                                    </div>
+
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Type / Project</span>
+                                        <span className="tcard-value">
                                             <span className={`task-context ${task.taskType === 'Regular Office Task' ? 'is-office' : ''}`}>
                                                 <FontAwesomeIcon icon={task.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
                                                 <span className="task-context-label">{taskContextLabel(task)}</span>
                                             </span>
-                                        </td>
+                                        </span>
+                                    </div>
 
-                                        <td data-label="Timeline" className="col-due">
-                                            <span className="task-due-date">
-                                                {timeline(task.startDate, task.dueDate)}
+                                    <div className="tcard-field">
+                                        <span className="tcard-label">Timeline</span>
+                                        <span className="tcard-value">
+                                            <span className="task-due-date">{timeline(task.startDate, task.dueDate)}</span>
+                                        </span>
+                                        {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
+                                    </div>
+
+                                    {task.approvedBy && (
+                                        <div className="tcard-field is-wide">
+                                            <span className="tcard-label">{task.approvalStatus} by</span>
+                                            <span className="tcard-value is-muted">
+                                                <span className="tcard-person">
+                                                    <Avatar name={task.approvedBy.name} profilePic={task.approvedBy.profilePic} className="assignee-avatar" />
+                                                    <span className="tcard-ellipsis">{task.approvedBy.name}</span>
+                                                </span>
                                             </span>
-                                            {hasTimeWindow(task) && <TaskCountdown task={task} compact />}
-                                        </td>
+                                        </div>
+                                    )}
+                                </div>
 
-                                        <td data-label="Status" className="col-priority">
-                                            <div className="sa-status">
-                                                <span
-                                                    className={`ap-badge ${slug(task.approvalStatus)}`}
-                                                    title={task.approvedBy ? `Decided by ${task.approvedBy.name}` : 'Waiting on approval'}
-                                                >
-                                                    {task.approvalStatus === 'Pending' ? 'Awaiting' : task.approvalStatus}
-                                                </span>
-                                                {/* Approval and progress are different questions: a task can be
-                                                    approved and untouched, or half done and still unapproved. */}
-                                                <span className={`task-status-badge ${slug(task.status)}`} title="Work status">
-                                                    {task.status}
-                                                </span>
-                                            </div>
-                                            {task.approvedBy && (
-                                                <div className="sa-decider" title={`${task.approvalStatus} by ${task.approvedBy.name}`}>
-                                                    <Avatar
-                                                        name={task.approvedBy.name}
-                                                        profilePic={task.approvedBy.profilePic}
-                                                        className="sa-inline-avatar"
-                                                    />
-                                                    by {task.approvedBy.name}
-                                                </div>
-                                            )}
-                                        </td>
-
-                                        <td
-                                            data-label="Actions"
-                                            className="col-actions task-actions-cell"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <div className="task-actions-inner">
-                                                <button
-                                                    className="icon-btn" title="Edit task" aria-label="Edit task"
-                                                    disabled={busy} onClick={() => navigate(`/edit-task/${task._id}`)}
-                                                >
-                                                    <FontAwesomeIcon icon={faEdit} />
-                                                </button>
-                                                {task.approvalStatus !== 'Approved' && (
-                                                    <button
-                                                        className="icon-btn" title="Approve" aria-label="Approve"
-                                                        disabled={busy} onClick={() => decide(task, 'Approved')}
-                                                    >
-                                                        <FontAwesomeIcon icon={faCheck} />
-                                                    </button>
-                                                )}
-                                                {task.approvalStatus !== 'Rejected' && (
-                                                    <button
-                                                        className="icon-btn" title="Reject (they can fix and resubmit)" aria-label="Reject"
-                                                        disabled={busy} onClick={() => decide(task, 'Rejected')}
-                                                    >
-                                                        <FontAwesomeIcon icon={faBan} />
-                                                    </button>
-                                                )}
-                                                <button
-                                                    className="icon-btn danger" title="Delete task" aria-label="Delete task"
-                                                    disabled={busy} onClick={() => remove(task)}
-                                                >
-                                                    <FontAwesomeIcon icon={faTrash} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                {task.approvalStatus === 'Rejected' && task.approvalNote && (
+                                    <div className="tcard-note">“{task.approvalNote}”</div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
