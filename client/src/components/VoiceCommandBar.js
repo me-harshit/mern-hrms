@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faMicrophone, faStop, faWandMagicSparkles,
@@ -22,6 +22,13 @@ const fmtElapsed = (ms) => {
  * at all, and even on Chrome/Edge some managers will just prefer typing. Voice
  * is one way to fill the box, not a requirement for using this page.
  *
+ * Stopping (on silence, or the manager tapping Stop) never throws anything
+ * away: `baseTextRef` holds whatever was already confirmed — spoken earlier,
+ * or hand-typed — and each new listening session appends onto it rather than
+ * replacing it. So the loop is: speak, pause, fix a misheard word or add a
+ * sentence by typing, tap the mic again to add more by voice, repeat, then
+ * Parse — never "lost my recording because I paused too long."
+ *
  * Speech-to-text only — no audio ever leaves the browser. Nothing is created
  * from here; `onParsed` hands the caller drafts to review, never a save.
  */
@@ -35,8 +42,17 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
     const [parsing, setParsing] = useState(false);
     const [parseError, setParseError] = useState(null);
 
+    // What was already confirmed (spoken in an earlier session, or hand-typed)
+    // before this listening session started — the new transcript gets
+    // appended onto this, never replaces it.
+    const baseTextRef = useRef('');
+
     useEffect(() => {
-        if (status === 'stopped') setEditedText(transcript);
+        if (status === 'stopped') {
+            const merged = [baseTextRef.current, transcript].filter(Boolean).join(' ').trim();
+            setEditedText(merged);
+            baseTextRef.current = '';
+        }
     }, [status, transcript]);
 
     const handleMicClick = () => {
@@ -44,10 +60,16 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
             stopListening();
             return;
         }
-        reset();
-        setEditedText('');
+        baseTextRef.current = editedText;
         setParseError(null);
+        reset();
         startListening();
+    };
+
+    const handleClear = () => {
+        setEditedText('');
+        baseTextRef.current = '';
+        setParseError(null);
     };
 
     const handleParse = async () => {
@@ -80,6 +102,9 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
 
     const isListening = status === 'listening';
     const hasText = editedText.trim().length > 0;
+    const liveMergedText = isListening
+        ? [baseTextRef.current, transcript].filter(Boolean).join(' ').trim()
+        : editedText;
 
     return (
         <div className="vtb-panel">
@@ -99,7 +124,7 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
                         className={`vtb-mic ${isListening ? 'is-live' : ''}`}
                         onClick={handleMicClick}
                         disabled={parsing}
-                        title={isListening ? 'Stop' : hasText ? 'Re-record' : 'Record'}
+                        title={isListening ? 'Stop' : hasText ? 'Add more' : 'Record'}
                     >
                         <FontAwesomeIcon icon={isListening ? faStop : faMicrophone} />
                     </button>
@@ -107,9 +132,10 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
                         {isListening ? (
                             <>
                                 <span className="vtb-live-dot" /> Listening… {fmtElapsed(elapsedMs)} / {fmtElapsed(maxMs)}
+                                {' '}— tap the mic to stop whenever you're done.
                             </>
                         ) : hasText ? (
-                            'Review the transcript below, edit anything misheard, then parse it.'
+                            'Edit anything misheard below, tap the mic to add more, then parse it — nothing is lost between takes.'
                         ) : (
                             'Tap the mic and describe the task — who it\'s for, what it is, when it\'s due. Say "every day for N days" for a repeating task. Or just type it below.'
                         )}
@@ -122,10 +148,8 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
                 </div>
             )}
 
-            {isListening && (
-                <div className="vtb-live-caption">
-                    {transcript} <em>{interimText}</em>
-                </div>
+            {isListening && interimText && (
+                <div className="vtb-live-caption"><em>{interimText}</em></div>
             )}
 
             {error && (
@@ -135,7 +159,7 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
             <textarea
                 className="vtb-transcript custom-input"
                 rows={3}
-                value={isListening ? transcript : editedText}
+                value={liveMergedText}
                 onChange={(e) => setEditedText(e.target.value)}
                 onKeyDown={handleTranscriptKeyDown}
                 placeholder={isSupported
@@ -149,6 +173,11 @@ const VoiceCommandBar = ({ onParsed, onClose }) => {
             )}
 
             <div className="vtb-actions">
+                {hasText && !isListening && (
+                    <button type="button" className="gts-btn secondary" onClick={handleClear} disabled={parsing}>
+                        Clear
+                    </button>
+                )}
                 <button
                     type="button"
                     className="gts-btn primary"
