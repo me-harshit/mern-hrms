@@ -452,14 +452,18 @@
     border-bottom: none;
 }
 
-/* Fixed widths keep the actions column from drifting as content changes. */
+/* Fixed widths keep the actions column from drifting as content changes.
+   `col-actions` must fit its buttons exactly: each is 32px wide with a 6px gap,
+   so three of them need 108px plus the cell's own 12px horizontal padding.
+   It was 104px — sized for two — which is why the third button overflowed and
+   sat on top of the progress bar. */
 .col-task { width: auto; min-width: 240px; }
-.col-project { width: 15%; }
-.col-assignees { width: 130px; }
-.col-priority { width: 110px; }
-.col-due { width: 120px; }
-.col-progress { width: 140px; }
-.col-actions { width: 104px; }
+.col-project { width: 14%; }
+.col-assignees { width: 120px; }
+.col-priority { width: 100px; }
+.col-due { width: 115px; }
+.col-progress { width: 130px; }
+.col-actions { width: 132px; }
 
 .task-title-cell {
     display: block;
@@ -487,6 +491,9 @@
 .task-actions-cell {
     text-align: right;
     white-space: nowrap;
+    /* Belt and braces: if a fourth action is ever added, it wraps or clips
+       inside its own cell rather than spilling over the neighbouring column. */
+    overflow: hidden;
 }
 
 .task-actions-inner {

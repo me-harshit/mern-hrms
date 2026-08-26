@@ -6,7 +6,7 @@
  * { ok, detail } result. When OpenWA is swapped for the Meta Cloud API, or for
  * a different self-hosted bridge, only this file changes.
  *
- * See Whatsapp-Plan.md for the server-side setup this talks to.
+ * See Whatsapp.md for the server-side setup this talks to.
  *
  * Two rules hold everywhere in here:
  *

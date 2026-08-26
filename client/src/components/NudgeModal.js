@@ -1,42 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faBell, faTimes, faSpinner, faEnvelope, faCommentDots, faPaperPlane
+    faBell, faTimes, faSpinner, faCommentDots, faPaperPlane
 } from '@fortawesome/free-solid-svg-icons';
 import api from '../utils/api';
 import Avatar from './Avatar';
+import { isOnCooldown, cooldownTitle } from '../utils/nudgeCooldown';
 import '../styles/nudge.css';
 
 /**
- * "How long will this take?" — the compose side of a nudge.
+ * "Someone is waiting on this" — the compose side of a nudge.
  *
  * Shared by the task page and the task list so a quick chase from a table row
  * and a considered one from the task itself send exactly the same thing.
  *
- * The in-app notification is not offered as a choice. It always goes, because
- * it is the record of the nudge inside the product — the thing the employee
- * answers and the sender later looks back at. Email and WhatsApp are only ways
- * of getting somebody's attention away from their desk, which is why those two
- * are the toggles.
+ * There is no message box. A nudge is a fixed, one-tap ping — a free-text field
+ * on a chase button invites the exact messages a chase should not carry, and
+ * anything worth actually saying belongs in the task's discussion thread, which
+ * already exists and is better at it.
+ *
+ * The in-app notification is not offered as a choice either. It always goes,
+ * because it is the record of the nudge inside the product and the thing the
+ * per-task count counts. WhatsApp is the one real decision here.
  */
 
-const CHANNELS = [
-    {
-        key: 'email',
-        label: 'Email',
-        icon: faEnvelope,
-        hint: 'One-tap answer buttons, no login needed'
-    },
-    {
-        key: 'whatsapp',
-        label: 'WhatsApp',
-        icon: faCommentDots,
-        hint: 'Sent to their WhatsApp number'
-    }
-];
+const NudgeModal = ({ task, currentUserId, cooldowns: given, onClose, onSent }) => {
+    /**
+     * Who this user cannot nudge yet.
+     *
+     * Passed in from the task page, which already has it. Fetched here when
+     * opened from the task list, which does not — working it out for every row
+     * would be a query per task for a panel most people never open, so the cost
+     * is paid once, on demand, by whoever actually opens the dialog.
+     */
+    const [cooldowns, setCooldowns] = useState(given || {});
 
-const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
+    useEffect(() => {
+        if (given) return;
+        let alive = true;
+        api.get(`/tasks/${task._id}/nudges`)
+            .then(res => { if (alive) setCooldowns(res.data?.cooldowns || {}); })
+            // A failure here only costs the greying-out; the server still
+            // refuses the send and the dialog reports it as a skip.
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [task._id, given]);
+
     // Everyone on the task except whoever is asking — you cannot nudge
     // yourself, and a lone self-assigned task therefore has nobody to nudge.
     const candidates = (task.assignees || []).filter(a => {
@@ -44,13 +54,41 @@ const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
         return String(id) !== String(currentUserId);
     });
 
-    const [selected, setSelected] = useState(() => candidates.map(a => String(a?._id || a)));
-    const [message, setMessage] = useState('');
-    const [channels, setChannels] = useState(['email']);
+    // Ticks so a cooldown that lapses while the dialog is open re-enables the
+    // person, instead of leaving them greyed out until a manual refresh.
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const t = setInterval(() => setNow(Date.now()), 30000);
+        return () => clearInterval(t);
+    }, []);
+
+    const blocked = (id) => isOnCooldown(cooldowns, id, now);
+    const available = candidates.filter(a => !blocked(String(a?._id || a)));
+
+    // Pre-select only the people who can actually be nudged. Selecting someone
+    // on cooldown by default would guarantee a partial send on every press.
+    const [selected, setSelected] = useState(() => available.map(a => String(a?._id || a)));
+    const [viaWhatsApp, setViaWhatsApp] = useState(true);
     const [sending, setSending] = useState(false);
 
-    const toggle = (list, value, setter) =>
-        setter(list.includes(value) ? list.filter(v => v !== value) : [...list, value]);
+    const togglePerson = (value) => {
+        if (blocked(value)) return;
+        setSelected(prev => (prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]));
+    };
+
+    /**
+     * Drop anyone who is blocked from the selection.
+     *
+     * Runs on `cooldowns` as well as `now`: opened from the task list, the
+     * cooldown map arrives *after* mount, so the initial pre-selection was made
+     * without it and would otherwise keep someone ticked who cannot be nudged.
+     *
+     * Only ever removes. Someone the user deliberately unticked stays off.
+     */
+    useEffect(() => {
+        setSelected(prev => prev.filter(id => !blocked(id)));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [now, cooldowns]);
 
     const send = async () => {
         if (selected.length === 0) {
@@ -61,8 +99,7 @@ const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
         try {
             const res = await api.post(`/tasks/${task._id}/nudge`, {
                 recipientIds: selected,
-                message: message.trim(),
-                channels
+                channels: viaWhatsApp ? ['whatsapp'] : []
             });
 
             const { sent = [], skipped = [] } = res.data;
@@ -80,7 +117,7 @@ const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
             } else {
                 Swal.fire({
                     icon: 'success',
-                    title: `Nudge sent to ${sent.length} ${sent.length === 1 ? 'person' : 'people'}`,
+                    title: `Nudged ${sent.length} ${sent.length === 1 ? 'person' : 'people'}`,
                     toast: true, position: 'top-end', timer: 2200, showConfirmButton: false
                 });
             }
@@ -102,7 +139,7 @@ const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
         <div className="nudge-overlay" onClick={onClose}>
             <div className="nudge-modal" onClick={(e) => e.stopPropagation()}>
                 <header className="nudge-modal-head">
-                    <h3><FontAwesomeIcon icon={faBell} /> Nudge for an update</h3>
+                    <h3><FontAwesomeIcon icon={faBell} /> Nudge</h3>
                     <button className="nudge-close" onClick={onClose} aria-label="Close">
                         <FontAwesomeIcon icon={faTimes} />
                     </button>
@@ -111,7 +148,7 @@ const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
                 <div className="nudge-modal-body">
                     <p className="nudge-task-line" title={task.title}>{task.title}</p>
 
-                    <label className="nudge-label">Who are you asking?</label>
+                    <label className="nudge-label">Who are you nudging?</label>
                     {candidates.length === 0 ? (
                         <p className="nudge-empty">
                             There is nobody else on this task to nudge.
@@ -121,54 +158,48 @@ const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
                             {candidates.map(a => {
                                 const id = String(a?._id || a);
                                 const on = selected.includes(id);
+                                const cooling = blocked(id);
                                 return (
                                     <button
                                         key={id} type="button"
-                                        className={`nudge-person ${on ? 'is-on' : ''}`}
-                                        onClick={() => toggle(selected, id, setSelected)}
-                                        disabled={sending}
+                                        className={`nudge-person ${on ? 'is-on' : ''} ${cooling ? 'is-cooling' : ''}`}
+                                        onClick={() => togglePerson(id)}
+                                        disabled={sending || cooling}
+                                        title={cooling ? cooldownTitle(cooldowns, id, now) : undefined}
                                     >
                                         <Avatar name={a?.name} profilePic={a?.profilePic} className="nudge-person-avatar" />
                                         <span>{a?.name || 'Employee'}</span>
+                                        {cooling && <span className="nudge-person-wait">on cooldown</span>}
                                     </button>
                                 );
                             })}
                         </div>
                     )}
 
-                    <label className="nudge-label">What do you want to ask?</label>
-                    <textarea
-                        className="custom-input" rows="2" value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        maxLength={500}
-                        placeholder="How long will this take to complete?"
-                        disabled={sending}
-                    />
-                    <p className="nudge-hint">
-                        Leave it blank to ask the default question. They can answer with a
-                        one-tap estimate.
-                    </p>
-
-                    <label className="nudge-label">Also send it as</label>
+                    <label className="nudge-label">Where should it go?</label>
                     <div className="nudge-channels">
-                        {CHANNELS.map(c => {
-                            const on = channels.includes(c.key);
-                            return (
-                                <button
-                                    key={c.key} type="button"
-                                    className={`nudge-channel ${on ? 'is-on' : ''}`}
-                                    onClick={() => toggle(channels, c.key, setChannels)}
-                                    disabled={sending}
-                                >
-                                    <FontAwesomeIcon icon={c.icon} />
-                                    <span className="nudge-channel-label">{c.label}</span>
-                                    <span className="nudge-channel-hint">{c.hint}</span>
-                                </button>
-                            );
-                        })}
+                        <div className="nudge-channel is-fixed">
+                            <FontAwesomeIcon icon={faBell} />
+                            <span className="nudge-channel-label">In app</span>
+                            <span className="nudge-channel-hint">Always sent</span>
+                        </div>
+
+                        <button
+                            type="button"
+                            className={`nudge-channel ${viaWhatsApp ? 'is-on' : ''}`}
+                            onClick={() => setViaWhatsApp(v => !v)}
+                            disabled={sending}
+                        >
+                            <FontAwesomeIcon icon={faCommentDots} />
+                            <span className="nudge-channel-label">WhatsApp</span>
+                            <span className="nudge-channel-hint">
+                                {viaWhatsApp ? 'Will be sent' : 'Off'}
+                            </span>
+                        </button>
                     </div>
                     <p className="nudge-hint">
-                        An in-app notification goes either way — these are extra.
+                        They just get the nudge — there is nothing for them to reply to.
+                        The task keeps a count of how many it has had.
                     </p>
                 </div>
 
@@ -176,7 +207,7 @@ const NudgeModal = ({ task, currentUserId, onClose, onSent }) => {
                     <button className="gts-btn secondary" onClick={onClose} disabled={sending}>Cancel</button>
                     <button
                         className="gts-btn primary" onClick={send}
-                        disabled={sending || candidates.length === 0}
+                        disabled={sending || selected.length === 0}
                     >
                         {sending
                             ? <><FontAwesomeIcon icon={faSpinner} spin /> Sending...</>

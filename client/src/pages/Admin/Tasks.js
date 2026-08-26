@@ -211,7 +211,7 @@ const Tasks = () => {
                     <FontAwesomeIcon icon={faSearch} className="task-search-icon" />
                     <input
                         type="text"
-                        placeholder="Search tasks by title or description..."
+                        placeholder="Search by task, employee, project or type..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />

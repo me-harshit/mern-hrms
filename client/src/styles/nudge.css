@@ -35,72 +35,6 @@
     color: #fff;
 }
 
-/* --- Being asked -------------------------------------------------------- */
-
-/* Tinted rather than plain white: this is the one block on the task page that
-   is waiting on the person reading it. */
-.nudge-ask {
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 14px;
-}
-
-.nudge-ask-head {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 0.82rem;
-    color: #475569;
-}
-
-.nudge-question {
-    margin: 10px 0 12px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #0f172a;
-    line-height: 1.5;
-}
-
-.nudge-presets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-}
-
-.nudge-preset {
-    padding: 8px 13px;
-    border: 1px solid #cbd5e1;
-    border-radius: 20px;
-    background: #fff;
-    color: #334155;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.nudge-preset:hover:not(:disabled) {
-    border-color: #215D7B;
-    background: #215D7B;
-    color: #fff;
-}
-
-.nudge-preset.is-blocked:hover:not(:disabled) {
-    border-color: #A6477F;
-    background: #A6477F;
-}
-
-.nudge-preset:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.nudge-note {
-    margin-top: 10px;
-}
-
 /* --- History ------------------------------------------------------------ */
 
 .nudge-history {
@@ -118,17 +52,6 @@
     border-radius: 8px;
     padding: 10px 12px;
     background: #fff;
-}
-
-/* An unanswered nudge is the only state anyone needs to act on, so it is the
-   only one that gets a colour. */
-.nudge-item.is-pending {
-    border-left-color: #d97706;
-    background: #fffbeb;
-}
-
-.nudge-item.is-answered {
-    border-left-color: #16a34a;
 }
 
 .nudge-item-head {
@@ -159,35 +82,6 @@
     font-size: 0.82rem;
     color: #475569;
     line-height: 1.5;
-}
-
-.nudge-answer {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 9px;
-    font-size: 0.8rem;
-    color: #15803d;
-}
-
-.nudge-answer-eta {
-    font-weight: 700;
-}
-
-.nudge-answer-note {
-    color: #475569;
-    font-style: italic;
-}
-
-.nudge-waiting {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin-top: 9px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #b45309;
 }
 
 /* --- Delivery problems -------------------------------------------------- */
@@ -418,74 +312,116 @@
     }
 }
 
-/* --- Cross-task strip (PendingNudges, on My Tasks) ---------------------- */
 
-.pn-strip {
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 18px;
-}
+/* --- Per-person tallies -------------------------------------------------- */
 
-.pn-head {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 0.85rem;
-    color: #b45309;
-    margin-bottom: 10px;
-}
-
-.pn-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 10px 0;
-    border-top: 1px solid #fde3c4;
-}
-
-.pn-row-text {
-    flex: 1;
-    min-width: 200px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.pn-task {
-    font-size: 0.86rem;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-.pn-ask {
-    font-size: 0.78rem;
-    color: #78716c;
-    line-height: 1.45;
-}
-
-.pn-actions {
+/* The summary the panel leads with: who has been chased, and how often. */
+.nudge-tallies {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e5e7eb;
 }
 
-.pn-open {
+.nudge-tally {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-    color: #215D7B;
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
+    gap: 8px;
+    padding: 5px 6px 5px 5px;
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+    background: #fff;
 }
 
-.pn-open:hover {
-    text-decoration: underline;
+.nudge-tally-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.nudge-tally-count {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    background: #215D7B;
+    color: #fff;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+
+/* Marks a log row that also went out over WhatsApp. */
+.nudge-via-wa {
+    margin-left: 6px;
+    color: #16a34a;
+    font-size: 0.72rem;
+}
+
+/* The in-app row in the compose dialog: shown so the sender knows it happens,
+   styled flat so it does not read as something they can switch off. */
+.nudge-channel.is-fixed {
+    background: #f8fafc;
+    border-style: dashed;
+    cursor: default;
+}
+
+/* --- Cooldown states ----------------------------------------------------- */
+
+/* The trigger while every candidate is still cooling. Greyed rather than
+   hidden: a button that vanishes reads as a bug, one that explains itself on
+   hover reads as a rule. */
+.nudge-trigger.is-cooling,
+.nudge-trigger:disabled {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+.nudge-trigger.is-cooling:hover,
+.nudge-trigger:disabled:hover {
+    background: #f8fafc;
+    color: #94a3b8;
+}
+
+/* A person who cannot be picked yet. Kept visible so the sender can see who is
+   on the task, and why they are unavailable. */
+.nudge-person.is-cooling {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: #f8fafc;
+    border-style: dashed;
+}
+
+.nudge-person.is-cooling:hover {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+}
+
+.nudge-person-wait {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #b45309;
+    background: #fef3c7;
+    padding: 2px 7px;
+    border-radius: 10px;
+}
+
+/* Row action in the task list, disabled while its assignees are cooling. */
+.icon-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.icon-btn:disabled:hover {
+    background: #fff;
+    color: #64748b;
+    border-color: #e2e8f0;
 }

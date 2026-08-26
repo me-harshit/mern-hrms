@@ -17,8 +17,6 @@ import '../../styles/tasks.css';
 import '../../styles/recurring.css';
 import '../../styles/selftask.css';
 import SelfTaskForm from '../../components/SelfTaskForm';
-import PendingNudges from '../../components/PendingNudges';
-import '../../styles/nudge.css';
 
 const COLUMNS = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const VIEW_KEY = 'mytasks_view';
@@ -281,11 +279,6 @@ const MyTasks = () => {
                 </div>
             </header>
 
-            {/* Someone is waiting on an answer. It sits above the board because
-                a question you have not noticed is worse than a task you have
-                not started. */}
-            <PendingNudges onOpen={(taskId) => navigate(`/task/${taskId}`)} />
-
             {/* ---------- Stat tiles ---------- */}
             <div className="tk-stats">
                 <div className="tk-stat">
@@ -311,7 +304,7 @@ const MyTasks = () => {
                 <div className="tk-search">
                     <FontAwesomeIcon icon={faSearch} />
                     <input
-                        type="text" placeholder="Search your tasks..."
+                        type="text" placeholder="Search by task, colleague or project..."
                         value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
