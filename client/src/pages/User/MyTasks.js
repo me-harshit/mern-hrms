@@ -17,6 +17,8 @@ import '../../styles/tasks.css';
 import '../../styles/recurring.css';
 import '../../styles/selftask.css';
 import SelfTaskForm from '../../components/SelfTaskForm';
+import PendingNudges from '../../components/PendingNudges';
+import '../../styles/nudge.css';
 
 const COLUMNS = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const VIEW_KEY = 'mytasks_view';
@@ -278,6 +280,11 @@ const MyTasks = () => {
                     </button>
                 </div>
             </header>
+
+            {/* Someone is waiting on an answer. It sits above the board because
+                a question you have not noticed is worse than a task you have
+                not started. */}
+            <PendingNudges onOpen={(taskId) => navigate(`/task/${taskId}`)} />
 
             {/* ---------- Stat tiles ---------- */}
             <div className="tk-stats">

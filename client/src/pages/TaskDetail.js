@@ -13,6 +13,7 @@ import TaskMediaGrid from '../components/TaskMediaGrid';
 import ScreenRecorder from '../components/ScreenRecorder';
 import Avatar from '../components/Avatar';
 import TaskCountdown, { hasTimeWindow } from '../components/TaskCountdown';
+import TaskNudges from '../components/TaskNudges';
 import { STATUS_OPTIONS, slug, dueLabel, taskContextLabel } from '../utils/taskHelpers';
 import '../styles/App.css';
 import '../styles/tasks.css';
@@ -393,6 +394,11 @@ const TaskDetail = () => {
                             </div>
                         )}
                     </section>
+
+                    {/* Chasing an ETA, and the record of who has already been
+                        chased. Above Details because an unanswered check-in is
+                        something to act on, and the details are only reference. */}
+                    <TaskNudges task={task} currentUserId={currentUserId} />
 
                     {/* Where this task came from. Self-assigned work has two people
                         behind it — whoever the employee says asked for it, and

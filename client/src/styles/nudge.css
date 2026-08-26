@@ -1,0 +1,491 @@
+/* ==========================================================================
+   Nudges — "how long will this take?"
+
+   Two surfaces share this file: the panel on the task page (TaskNudges) and
+   the compose dialog (NudgeModal), which is opened from both the task page and
+   the task list. Everything inherits the same palette the task pages already
+   use — #215D7B for actions, #A6477F for anything that needs attention.
+   ========================================================================== */
+
+/* --- Panel ------------------------------------------------------------- */
+
+.nudge-panel {
+    margin-bottom: 14px;
+}
+
+/* Sits on the right of the panel header, opposite the title. */
+.nudge-trigger {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid #215D7B;
+    border-radius: 20px;
+    background: #fff;
+    color: #215D7B;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nudge-trigger:hover {
+    background: #215D7B;
+    color: #fff;
+}
+
+/* --- Being asked -------------------------------------------------------- */
+
+/* Tinted rather than plain white: this is the one block on the task page that
+   is waiting on the person reading it. */
+.nudge-ask {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+.nudge-ask-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.82rem;
+    color: #475569;
+}
+
+.nudge-question {
+    margin: 10px 0 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.5;
+}
+
+.nudge-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.nudge-preset {
+    padding: 8px 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 20px;
+    background: #fff;
+    color: #334155;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.nudge-preset:hover:not(:disabled) {
+    border-color: #215D7B;
+    background: #215D7B;
+    color: #fff;
+}
+
+.nudge-preset.is-blocked:hover:not(:disabled) {
+    border-color: #A6477F;
+    background: #A6477F;
+}
+
+.nudge-preset:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.nudge-note {
+    margin-top: 10px;
+}
+
+/* --- History ------------------------------------------------------------ */
+
+.nudge-history {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.nudge-item {
+    border: 1px solid #e5e7eb;
+    border-left: 3px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fff;
+}
+
+/* An unanswered nudge is the only state anyone needs to act on, so it is the
+   only one that gets a colour. */
+.nudge-item.is-pending {
+    border-left-color: #d97706;
+    background: #fffbeb;
+}
+
+.nudge-item.is-answered {
+    border-left-color: #16a34a;
+}
+
+.nudge-item-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #475569;
+}
+
+.nudge-item-line {
+    flex: 1;
+    min-width: 0;
+}
+
+.nudge-item-line strong {
+    color: #0f172a;
+}
+
+.nudge-ago {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.nudge-item-msg {
+    margin: 7px 0 0;
+    font-size: 0.82rem;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.nudge-answer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 9px;
+    font-size: 0.8rem;
+    color: #15803d;
+}
+
+.nudge-answer-eta {
+    font-weight: 700;
+}
+
+.nudge-answer-note {
+    color: #475569;
+    font-style: italic;
+}
+
+.nudge-waiting {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 9px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #b45309;
+}
+
+/* --- Delivery problems -------------------------------------------------- */
+
+.nudge-trouble {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nudge-trouble-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: #92400e;
+}
+
+.nudge-trouble-row.failed {
+    color: #b91c1c;
+}
+
+/* --- Compose dialog ----------------------------------------------------- */
+
+.nudge-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 2200;
+}
+
+.nudge-modal {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+}
+
+.nudge-modal-head {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fbfcfd;
+}
+
+.nudge-modal-head h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.nudge-modal-head h3 svg {
+    color: #215D7B;
+}
+
+.nudge-close {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.nudge-close:hover {
+    color: #0f172a;
+}
+
+.nudge-modal-body {
+    padding: 18px 20px;
+    overflow-y: auto;
+}
+
+.nudge-task-line {
+    margin: 0 0 16px;
+    padding: 9px 12px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nudge-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin: 16px 0 8px;
+}
+
+.nudge-label:first-of-type {
+    margin-top: 0;
+}
+
+.nudge-hint {
+    margin: 7px 0 0;
+    font-size: 0.74rem;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+.nudge-empty {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #94a3b8;
+}
+
+.nudge-people {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.nudge-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 13px 6px 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+    background: #fff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.nudge-person.is-on {
+    border-color: #215D7B;
+    background: #eff6ff;
+    color: #215D7B;
+}
+
+.nudge-person-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 0.68rem;
+    flex-shrink: 0;
+}
+
+.nudge-channels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.nudge-channel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    padding: 11px 13px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.nudge-channel svg {
+    color: #94a3b8;
+    font-size: 0.95rem;
+}
+
+.nudge-channel.is-on {
+    border-color: #215D7B;
+    background: #eff6ff;
+}
+
+.nudge-channel.is-on svg {
+    color: #215D7B;
+}
+
+.nudge-channel-label {
+    font-size: 0.83rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.nudge-channel-hint {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+
+.nudge-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #fbfcfd;
+}
+
+@media (max-width: 520px) {
+    .nudge-channels {
+        grid-template-columns: 1fr;
+    }
+
+    .nudge-modal-foot .gts-btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+/* --- Cross-task strip (PendingNudges, on My Tasks) ---------------------- */
+
+.pn-strip {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+}
+
+.pn-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.85rem;
+    color: #b45309;
+    margin-bottom: 10px;
+}
+
+.pn-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid #fde3c4;
+}
+
+.pn-row-text {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pn-task {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.pn-ask {
+    font-size: 0.78rem;
+    color: #78716c;
+    line-height: 1.45;
+}
+
+.pn-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.pn-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: #215D7B;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.pn-open:hover {
+    text-decoration: underline;
+}
