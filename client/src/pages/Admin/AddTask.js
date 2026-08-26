@@ -447,7 +447,6 @@ const AddTask = () => {
                                     {...(isRecurring ? { fallbackLabel: 'that day ends' } : {})}
                                 />
                             </div>
-                            )}
 
                             {/* The full skip breakdown sits in the form, not in the
                                 popover — it can run to several lines, and keeping it
