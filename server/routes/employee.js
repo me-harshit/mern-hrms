@@ -240,6 +240,7 @@ router.put('/:id', auth, async (req, res) => {
         const {
             name, email, workEmail, role, shiftType, status, joiningDate, dateOfBirth, bloodGroup, password,
             aadhaar, emergencyContact, emergencyContactName, emergencyContactRelation, phoneNumber,
+            whatsappNumber, whatsappNotificationsEnabled,
             address, permanentAddress, currentAddress,
             jobTitle, department, workLocation, employmentType,
             salary, casualLeaveBalance, earnedLeaveBalance,
@@ -272,6 +273,13 @@ router.put('/:id', auth, async (req, res) => {
         if (emergencyContactName !== undefined) updateData.emergencyContactName = emergencyContactName;
         if (emergencyContactRelation !== undefined) updateData.emergencyContactRelation = emergencyContactRelation;
         if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
+
+        // Kept separate from phoneNumber on purpose — see models/User.js. Left
+        // blank, WhatsApp notifications fall back to phoneNumber.
+        if (whatsappNumber !== undefined) updateData.whatsappNumber = whatsappNumber;
+        if (whatsappNotificationsEnabled !== undefined) {
+            updateData.whatsappNotificationsEnabled = Boolean(whatsappNotificationsEnabled);
+        }
         if (address !== undefined) updateData.address = address;
         if (permanentAddress !== undefined) updateData.permanentAddress = permanentAddress;
         if (currentAddress !== undefined) updateData.currentAddress = currentAddress;

@@ -23,8 +23,17 @@ const sendEmail = async (options) => {
             to: options.email,
             cc: options.cc || '',
             subject: options.subject,
-            // Spam filters penalize HTML-only emails. We add a plain-text version by stripping HTML tags:
-            text: options.message.replace(/<[^>]*>?/gm, '').trim(),
+            /**
+             * Spam filters penalize HTML-only emails, so there is always a
+             * plain-text part. Stripping the tags is a decent default, but it
+             * throws away every href — which on a mail built out of link
+             * buttons leaves a text part with no urls at all while the HTML has
+             * several. Filters score that mismatch against you.
+             *
+             * So callers whose mail is mostly links pass their own `text`.
+             * Everyone else is unchanged.
+             */
+            text: options.text || options.message.replace(/<[^>]*>?/gm, '').trim(),
             // Wrap your message in a proper HTML document structure
             html: `<!DOCTYPE html>
                    <html>
@@ -36,7 +45,15 @@ const sendEmail = async (options) => {
         };
 
         await transporter.sendMail(mailOptions);
-        console.log(`Email sent successfully to ${options.email}`);
+        /**
+         * Deliberately not "sent successfully".
+         *
+         * All this proves is that the SMTP relay accepted the message. It can
+         * still be deferred, discarded by a router, or bounced afterwards, and
+         * none of that is visible from here — which is exactly how a fortnight
+         * of mail can vanish while the logs read green.
+         */
+        console.log(`[MAIL] accepted by relay for ${options.email} (acceptance is not delivery)`);
         // Callers that need to record whether delivery actually happened
         // (e.g. marking a payslip as emailed) check this. Existing callers
         // ignore it, so the previous fire-and-forget behaviour is unchanged.

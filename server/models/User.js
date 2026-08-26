@@ -26,6 +26,24 @@ const userSchema = new mongoose.Schema({
 
     // --- CONTACT DETAILS ---
     phoneNumber: { type: String, default: "" },
+
+    /**
+     * WhatsApp is deliberately its own field rather than reusing phoneNumber.
+     *
+     * The two are the same number for most people and emphatically not for
+     * some — a work handset that has never had WhatsApp installed, a personal
+     * number someone is happy to be messaged on but does not want in the
+     * directory. Sending automated messages to whatever happens to be in
+     * `phoneNumber` is how a company ends up texting a landline every morning.
+     *
+     * Left empty, notifications fall back to phoneNumber, so nothing has to be
+     * backfilled for the feature to work on day one.
+     */
+    whatsappNumber: { type: String, default: "" },
+
+    // Opt-out. Defaults to true so existing employees are reachable, and the
+    // nudge/notification path checks it before every WhatsApp send.
+    whatsappNotificationsEnabled: { type: Boolean, default: true },
     address: { type: String, default: "" }, // kept for backward compatibility (mirrors currentAddress)
     permanentAddress: { type: String, default: "" },
     currentAddress: { type: String, default: "" },

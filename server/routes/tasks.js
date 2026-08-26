@@ -14,7 +14,16 @@ const TaskComment = require('../models/TaskComment');
 // Mongoose needs that schema registered. It only worked before because
 // index.js loads the recurring cron, which is a fragile thing to rely on.
 require('../models/RecurringTask');
+const Nudge = require('../models/Nudge');
 const { buildDiscussionHandlers } = require('../utils/taskDiscussion');
+const {
+    canNudgeOn,
+    dispatchNudge,
+    recordResponse,
+    NUDGE_COOLDOWN_MINUTES,
+    esc
+} = require('../utils/nudge');
+const jwt = require('jsonwebtoken');
 const { emitToTask } = require('../utils/realtime');
 const { deleteFromS3 } = require('../utils/s3Service');
 const fs = require('fs');
@@ -1018,6 +1027,304 @@ router.get('/calendar', auth, async (req, res) => {
     } catch (err) {
         console.error('Task Calendar Error:', err);
         res.status(500).send('Server Error');
+    }
+});
+
+// ==========================================
+// 4b. NUDGES — "how long will this take?"
+// ==========================================
+
+/**
+ * Every one of these sits *above* `GET /:id` on purpose.
+ *
+ * Express matches in declaration order, so a `/nudge-reply` or
+ * `/nudges/pending` declared after the `/:id` route would be swallowed by it
+ * and answer "Task not found" for a perfectly valid link.
+ */
+
+// Where the app lives, for links inside an email. Same derivation the leave
+// magic-links already use, with an override for local development where the
+// React dev server is on a different port from the API.
+const backendUrlFor = (req) => process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+const appUrlFor = (req) => process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+
+/**
+ * A nudge sent from a developer machine builds its email links out of the
+ * request host, which is `localhost:5000` — dead buttons in the recipient's
+ * inbox, and a mail full of unroutable links for a spam filter to object to.
+ *
+ * It cannot be fixed automatically (the server genuinely does not know its own
+ * public name), so it is said loudly instead of shipping quietly broken mail.
+ */
+const warnIfLocalLinks = (url) => {
+    if (!/localhost|127\.0\.0\.1|\[::1\]/i.test(url)) return;
+    console.warn(
+        `[NUDGE] Email links point at ${url} — the recipient cannot open them. ` +
+        `Set APP_BASE_URL and API_BASE_URL in server/.env to the public HRMS url.`
+    );
+};
+
+/**
+ * Answering a nudge straight from the email, with no session.
+ *
+ * Deliberately a GET with no auth middleware: it is reached by tapping a button
+ * in a mail client, which cannot send a token header and will not survive a
+ * redirect through the login page. The signed JWT in the query string *is* the
+ * authorisation, and it authorises exactly one thing — recording one preset
+ * answer against one nudge.
+ */
+router.get('/nudge-reply', async (req, res) => {
+    // Small standalone page, since there is no logged-in app around this.
+    const page = (title, body, colour = '#215D7B') => `
+        <div style="font-family:'Segoe UI',sans-serif; max-width:520px; margin:60px auto; padding:40px 30px; text-align:center; color:#0f172a; border:1px solid #e2e8f0; border-radius:12px;">
+            <h2 style="color:${colour}; margin:0 0 12px;">${title}</h2>
+            <p style="color:#475569; font-size:15px; line-height:1.6; margin:0;">${body}</p>
+            <p style="color:#94a3b8; font-size:13px; margin-top:22px;">You may safely close this window.</p>
+        </div>`;
+
+    try {
+        const { token } = req.query;
+        if (!token) return res.send(page('Invalid link', 'This link is missing its token.', '#A6477F'));
+
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.send(page('Link expired', 'This check-in link is no longer valid. Please open the task in HRMS to reply.', '#A6477F'));
+        }
+
+        // A leave-approval token must not be usable here, and vice versa.
+        if (decoded.kind !== 'nudge-reply' || !decoded.nudgeId) {
+            return res.send(page('Invalid link', 'This link cannot be used to answer a check-in.', '#A6477F'));
+        }
+
+        const nudge = await Nudge.findById(decoded.nudgeId);
+        if (!nudge) return res.send(page('Not found', 'That check-in no longer exists.', '#A6477F'));
+
+        if (nudge.status !== 'pending') {
+            const already = nudge.response?.etaLabel || 'answered';
+            return res.send(page('Already answered', `You have already replied to this check-in — <strong>${esc(already)}</strong>.`));
+        }
+
+        const updated = await recordResponse(nudge, { preset: decoded.preset, via: 'email' });
+        const label = updated?.response?.etaLabel || 'your answer';
+
+        return res.send(page(
+            'Thanks — that has been sent',
+            `We have told the requester: <strong>${esc(label)}</strong>.`,
+            '#16a34a'
+        ));
+    } catch (err) {
+        console.error('Nudge Reply Error:', err);
+        return res.send(page('Something went wrong', 'Please open the task in HRMS to reply.', '#A6477F'));
+    }
+});
+
+/**
+ * The current user's unanswered nudges.
+ *
+ * Drives a badge, and lets the task page show the response box without having
+ * to fetch the whole nudge history for a task the user is only reading.
+ */
+router.get('/nudges/pending', auth, async (req, res) => {
+    try {
+        const nudges = await Nudge.find({ recipient: req.user.id, status: 'pending' })
+            .populate('nudgedBy', 'name profilePic')
+            .populate('taskId', 'title dueDate status')
+            .sort({ createdAt: -1 })
+            .limit(50);
+
+        res.json(nudges);
+    } catch (err) {
+        console.error('Pending Nudges Error:', err);
+        res.status(500).send('Server Error');
+    }
+});
+
+/** The nudge history on one task — who asked whom, and what came back. */
+router.get('/:id/nudges', auth, async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.id).select('assignees assignedBy title');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        if (!(await canNudgeOn(task, req.user))) {
+            return res.status(403).json({ message: 'Unauthorized to view this task' });
+        }
+
+        const nudges = await Nudge.find({ taskId: task._id, ownerModel: 'Task' })
+            .populate('nudgedBy', 'name profilePic')
+            .populate('recipient', 'name profilePic')
+            .sort({ createdAt: -1 })
+            .limit(50);
+
+        res.json(nudges);
+    } catch (err) {
+        console.error('Task Nudges Error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Task not found' });
+        res.status(500).send('Server Error');
+    }
+});
+
+/**
+ * Send a nudge.
+ *
+ * One document per recipient, dispatched independently — see models/Nudge.js
+ * for why. A recipient who is on cooldown is reported back in `skipped` rather
+ * than failing the whole request, so nudging a pair where you have just chased
+ * one of them still reaches the other.
+ */
+router.post('/:id/nudge', auth, async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.id)
+            .select('assignees assignedBy title dueDate dueTime status');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        if (!(await canNudgeOn(task, req.user))) {
+            return res.status(403).json({ message: 'You do not have access to this task' });
+        }
+
+        // Nothing to chase on finished work.
+        if (task.status === 'Completed') {
+            return res.status(400).json({ message: 'This task is already completed' });
+        }
+
+        // Default to everyone on the task except whoever is asking — an
+        // assignee nudging their own co-assignees is legitimate, nudging
+        // themselves is not.
+        const requested = parseIdList(req.body.recipientIds);
+        const assigneeIds = task.assignees.map(a => a.toString());
+        const targets = (requested.length > 0 ? requested : assigneeIds)
+            .filter(id => id !== req.user.id);
+
+        const outsiders = targets.filter(id => !assigneeIds.includes(id));
+        if (outsiders.length > 0) {
+            return res.status(400).json({ message: 'You can only nudge people working on this task' });
+        }
+        if (targets.length === 0) {
+            return res.status(400).json({ message: 'There is nobody on this task to nudge' });
+        }
+
+        // In-app is not optional — it is the record inside the product. Email
+        // and WhatsApp are the sender's choice on top of it.
+        const picked = Array.isArray(req.body.channels)
+            ? req.body.channels
+            : String(req.body.channels || '').split(',');
+        const channels = ['inApp', ...picked
+            .map(c => String(c).trim())
+            .filter(c => c === 'email' || c === 'whatsapp')];
+
+        const message = String(req.body.message || '').trim().slice(0, 500);
+
+        const sender = await User.findById(req.user.id).select('name');
+        const backendUrl = backendUrlFor(req);
+        const appUrl = appUrlFor(req);
+        if (channels.includes('email')) warnIfLocalLinks(backendUrl);
+        const cooldownSince = new Date(Date.now() - NUDGE_COOLDOWN_MINUTES * 60 * 1000);
+
+        const sent = [];
+        const skipped = [];
+
+        for (const recipientId of targets) {
+            const recipient = await User.findById(recipientId)
+                .select('name email workEmail phoneNumber whatsappNumber whatsappNotificationsEnabled');
+            if (!recipient) {
+                skipped.push({ recipientId, reason: 'Employee not found' });
+                continue;
+            }
+
+            // Already asked, still waiting. Asking again inside the window is
+            // pestering, not chasing.
+            const outstanding = await Nudge.findOne({
+                taskId: task._id,
+                ownerModel: 'Task',
+                nudgedBy: req.user.id,
+                recipient: recipientId,
+                status: 'pending',
+                createdAt: { $gte: cooldownSince }
+            }).select('createdAt');
+
+            if (outstanding) {
+                const mins = Math.max(1, NUDGE_COOLDOWN_MINUTES -
+                    Math.floor((Date.now() - outstanding.createdAt.getTime()) / 60000));
+                skipped.push({
+                    recipientId,
+                    name: recipient.name,
+                    reason: `Already nudged — waiting on a reply. You can ask again in ${mins} min.`
+                });
+                continue;
+            }
+
+            const nudge = await Nudge.create({
+                ownerModel: 'Task',
+                taskId: task._id,
+                nudgedBy: req.user.id,
+                recipient: recipientId,
+                message,
+                channels
+            });
+
+            const dispatched = await dispatchNudge({
+                nudge, doc: task, sender, recipient, backendUrl, appUrl
+            });
+            sent.push(dispatched);
+        }
+
+        if (sent.length === 0) {
+            // 429 only when the reason really was "you have already asked" —
+            // a missing employee is a bad request, not rate limiting, and
+            // reporting it as one would send the client into a pointless wait.
+            const allCooldown = skipped.every(s => s.reason.includes('Already nudged'));
+            return res.status(allCooldown ? 429 : 400).json({
+                message: skipped[0]?.reason || 'Nothing was sent',
+                sent, skipped
+            });
+        }
+
+        res.status(201).json({ sent, skipped });
+    } catch (err) {
+        console.error('Nudge Send Error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Task not found' });
+        res.status(500).json({ message: 'Server Error while sending the nudge' });
+    }
+});
+
+/**
+ * Answer a nudge from inside the app.
+ *
+ * Only the person who was asked may answer — a manager "helpfully" filling in
+ * someone else's ETA would make the whole record worthless.
+ */
+router.post('/:id/nudges/:nudgeId/respond', auth, async (req, res) => {
+    try {
+        const nudge = await Nudge.findOne({
+            _id: req.params.nudgeId,
+            taskId: req.params.id,
+            ownerModel: 'Task'
+        });
+        if (!nudge) return res.status(404).json({ message: 'Check-in not found' });
+
+        if (nudge.recipient.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Only the person asked can answer this' });
+        }
+        if (nudge.status !== 'pending') {
+            return res.status(400).json({ message: 'You have already answered this check-in' });
+        }
+
+        const { preset, etaAt, note } = req.body;
+        if (!preset && !etaAt && !String(note || '').trim()) {
+            return res.status(400).json({ message: 'Pick an estimate or write a reply' });
+        }
+
+        const updated = await recordResponse(nudge, { preset, etaAt, note, via: 'app' });
+        // null means it was answered between the check above and the write —
+        // two tabs, or a tap in the email a moment earlier.
+        if (!updated) return res.status(400).json({ message: 'You have already answered this check-in' });
+
+        res.json(updated);
+    } catch (err) {
+        console.error('Nudge Respond Error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Check-in not found' });
+        res.status(500).json({ message: 'Server Error while saving your reply' });
     }
 });
 

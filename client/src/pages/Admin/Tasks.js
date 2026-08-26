@@ -5,10 +5,11 @@ import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faClipboardList, faPlus, faSearch, faEdit, faTrash,
-    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faRepeat, faUserPen
+    faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faRepeat, faUserPen, faBell
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import RecurringTaskList from '../../components/RecurringTaskList';
+import NudgeModal from '../../components/NudgeModal';
 import SelfAssignedList from '../../components/SelfAssignedList';
 import { slug, taskContextLabel } from '../../utils/taskHelpers';
 import Avatar from '../../components/Avatar';
@@ -30,6 +31,7 @@ const STATUS_PROGRESS = {
 const Tasks = () => {
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user'));
+    const currentUserId = currentUser?.id || currentUser?._id;
     const isPrivileged = ['ADMIN', 'HR'].includes(currentUser?.role);
     const [searchParams] = useSearchParams();
 
@@ -42,6 +44,10 @@ const Tasks = () => {
         const v = searchParams.get('view');
         return VIEWS.includes(v) ? v : 'tasks';
     });
+
+    // The task a quick nudge is being composed for, straight from the row —
+    // chasing someone should not require opening the task first.
+    const [nudgeTarget, setNudgeTarget] = useState(null);
 
     // Drives the amber count on the Self-Assigned tab, so a manager can see
     // there is something waiting without opening it.
@@ -380,6 +386,17 @@ const Tasks = () => {
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="task-actions-inner">
+                                                {/* Only worth offering on work that is still
+                                                    running and has somebody other than you on it. */}
+                                                {task.status !== 'Completed' &&
+                                                    task.assignees.some(a => a?._id !== currentUserId) && (
+                                                        <button
+                                                            className="icon-btn" title="Nudge for an update" aria-label="Nudge for an update"
+                                                            onClick={() => setNudgeTarget(task)}
+                                                        >
+                                                            <FontAwesomeIcon icon={faBell} />
+                                                        </button>
+                                                    )}
                                                 <button
                                                     className="icon-btn" title="Edit task" aria-label="Edit task"
                                                     onClick={() => navigate(`/edit-task/${task._id}`)}
@@ -414,6 +431,14 @@ const Tasks = () => {
             )}
 
             </>
+            )}
+
+            {nudgeTarget && (
+                <NudgeModal
+                    task={nudgeTarget}
+                    currentUserId={currentUserId}
+                    onClose={() => setNudgeTarget(null)}
+                />
             )}
 
         </div>
