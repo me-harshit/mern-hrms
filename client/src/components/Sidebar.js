@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import api from '../utils/api';
 import {
+    faCommentDots,
     faThLarge,
     faCalendarCheck,
     faUser,
@@ -235,6 +236,9 @@ const Sidebar = ({ isOpen, onClose }) => {
                         <div className="sidebar-section-label">System</div>
                         <Link to="/admin-settings" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/admin-settings' ? 'active' : ''}`}>
                             <FontAwesomeIcon icon={faShieldAlt} className="nav-icon" /> <span>Admin Control</span>
+                        </Link>
+                        <Link to="/whatsapp" onClick={handleLinkClick} className={`nav-link ${location.pathname === '/whatsapp' ? 'active' : ''}`}>
+                            <FontAwesomeIcon icon={faCommentDots} className="nav-icon" /> <span>WhatsApp</span>
                         </Link>
                     </>
                 )}

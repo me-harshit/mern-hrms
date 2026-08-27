@@ -1,0 +1,312 @@
+/* ==========================================================================
+   WhatsApp gateway control (admin settings)
+   ========================================================================== */
+
+.wa-card {
+    margin-bottom: 20px;
+}
+
+.wa-head {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.wa-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.wa-title svg {
+    color: #25D366;
+}
+
+.wa-refresh {
+    margin-left: auto;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.wa-refresh:hover {
+    background: #f1f5f9;
+    color: #215D7B;
+}
+
+.wa-loading {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+/* --- State banner -------------------------------------------------------- */
+
+/* Each state names its own next step, so a red light is never just a red
+   light — "gateway down" and "not linked" need different people to do
+   different things. */
+.wa-state {
+    display: flex;
+    gap: 13px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid;
+    margin-bottom: 18px;
+}
+
+.wa-state.is-ok {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.wa-state.is-warn {
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.wa-state.is-bad {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.wa-state-icon {
+    font-size: 1.15rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.wa-state.is-ok .wa-state-icon { color: #16a34a; }
+.wa-state.is-warn .wa-state-icon { color: #d97706; }
+.wa-state.is-bad .wa-state-icon { color: #dc2626; }
+
+.wa-state-label {
+    font-size: 0.92rem;
+    color: #0f172a;
+}
+
+.wa-phone {
+    margin-left: 9px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #15803d;
+}
+
+.wa-state-help {
+    margin: 5px 0 0;
+    font-size: 0.82rem;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.wa-raw {
+    margin: 6px 0 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.wa-raw code {
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #475569;
+}
+
+/* --- Actions ------------------------------------------------------------- */
+
+.wa-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.wa-actions .gts-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.wa-field-label {
+    display: block;
+    margin-bottom: 7px;
+}
+
+.wa-field-label small {
+    font-weight: 400;
+    color: #94a3b8;
+}
+
+.wa-number-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.wa-number-row .custom-input {
+    flex: 1;
+    min-width: 180px;
+}
+
+.wa-number-row .gts-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* --- Pairing code -------------------------------------------------------- */
+
+.wa-pairing {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+    text-align: center;
+}
+
+.wa-pairing-lead {
+    margin: 0 0 12px;
+    font-size: 0.82rem;
+    color: #475569;
+    line-height: 1.55;
+}
+
+/* Big and monospaced — it gets typed into a phone, character by character,
+   often by someone reading it off a second screen. */
+.wa-code {
+    font-family: 'Courier New', monospace;
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: 0.35em;
+    color: #215D7B;
+    padding: 10px 0 10px 0.35em;
+    user-select: all;
+}
+
+.wa-pairing-note {
+    margin: 8px 0 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+@media (max-width: 560px) {
+    .wa-number-row .gts-btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+/* --- Sections, tabs, stats (dedicated page) ------------------------------ */
+
+.wa-section {
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.wa-section-title {
+    margin: 0 0 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+}
+
+.wa-hint {
+    margin: 0 0 12px;
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.55;
+}
+
+.wa-tabs {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: #f1f5f9;
+    border-radius: 9px;
+    margin-bottom: 14px;
+}
+
+.wa-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wa-tab.is-on {
+    background: #fff;
+    color: #215D7B;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* The QR is scanned off the screen, so it needs to be big enough to read at
+   arm's length and sit on white regardless of the card behind it. */
+.wa-qr {
+    width: 240px;
+    height: 240px;
+    display: block;
+    margin: 4px auto;
+    background: #fff;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.wa-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.wa-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 12px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    background: #fbfcfd;
+}
+
+.wa-stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.wa-stat-value.is-bad {
+    color: #dc2626;
+}
+
+.wa-stat-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+}
+
+@media (max-width: 560px) {
+    .wa-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
