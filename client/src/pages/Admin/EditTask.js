@@ -13,6 +13,7 @@ import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
 import TaskTimeWindow from '../../components/TaskTimeWindow';
+import AttachmentRequirement from '../../components/AttachmentRequirement';
 import ScheduleProjection from '../../components/ScheduleProjection';
 import { resolveMediaUrl } from '../../utils/taskHelpers';
 import { datesBetween, prettyDate, todayYmd } from '../../utils/scheduleDates';
@@ -46,7 +47,7 @@ const EditTask = () => {
     const [formData, setFormData] = useState({
         title: '', description: '', taskType: 'Project Task',
         projectId: '', priority: 'Medium', startDate: '', dueDate: '',
-        startTime: '', dueTime: '', timeAllottedMinutes: ''
+        startTime: '', dueTime: '', timeAllottedMinutes: '', requiresAttachment: false
     });
 
     const [selectedAssignees, setSelectedAssignees] = useState([]);
@@ -85,7 +86,8 @@ const EditTask = () => {
                     dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
                     startTime: task.startTime || '',
                     dueTime: task.dueTime || '',
-                    timeAllottedMinutes: task.timeAllottedMinutes || ''
+                    timeAllottedMinutes: task.timeAllottedMinutes || '',
+                    requiresAttachment: Boolean(task.requiresAttachment)
                 });
                 setSelectedAssignees(task.assignees.map(a => a._id));
                 setExistingAssignees(task.assignees);
@@ -474,6 +476,15 @@ const EditTask = () => {
                                         dueTime={formData.dueTime}
                                         timeAllottedMinutes={formData.timeAllottedMinutes}
                                         onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                                    />
+                                </div>
+                            )}
+
+                            {!convert && !isRecurringTask && (
+                                <div className="form-group task-field">
+                                    <AttachmentRequirement
+                                        value={formData.requiresAttachment}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, requiresAttachment: v }))}
                                     />
                                 </div>
                             )}

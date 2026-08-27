@@ -13,6 +13,7 @@ import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
 import TaskTimeWindow from '../../components/TaskTimeWindow';
+import AttachmentRequirement from '../../components/AttachmentRequirement';
 import ScheduleProjection from '../../components/ScheduleProjection';
 import { datesBetween, prettyDate } from '../../utils/scheduleDates';
 import '../../styles/App.css';
@@ -41,7 +42,8 @@ const AddTask = () => {
         dueDate: '',
         startTime: '',
         dueTime: '',
-        timeAllottedMinutes: ''
+        timeAllottedMinutes: '',
+        requiresAttachment: false
     });
 
     const [selectedAssignees, setSelectedAssignees] = useState([]);
@@ -239,7 +241,7 @@ const AddTask = () => {
                 // its own, on the day it lands. The time window travels with
                 // the brief though, same as title/priority: it's copied onto
                 // every day this schedule generates.
-                ['title', 'description', 'taskType', 'projectId', 'priority', 'startTime', 'dueTime', 'timeAllottedMinutes']
+                ['title', 'description', 'taskType', 'projectId', 'priority', 'startTime', 'dueTime', 'timeAllottedMinutes', 'requiresAttachment']
                     .forEach(key => data.append(key, formData[key]));
                 data.append('plannedDates', JSON.stringify(plannedDates));
             } else {
@@ -454,6 +456,14 @@ const AddTask = () => {
                                     timeAllottedMinutes={formData.timeAllottedMinutes}
                                     onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
                                     {...(isRecurring ? { fallbackLabel: 'that day ends' } : {})}
+                                />
+                            </div>
+
+                            <div className="form-group task-field">
+                                <AttachmentRequirement
+                                    value={formData.requiresAttachment}
+                                    onChange={(v) => setFormData(prev => ({ ...prev, requiresAttachment: v }))}
+                                    noun={isRecurring ? 'each day of this task' : 'this task'}
                                 />
                             </div>
 

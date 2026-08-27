@@ -266,6 +266,9 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
             projectId: isOfficeTask ? null : projectId,
             priority: priority || 'Medium',
             ...timeWindow,
+            // Same opt-in shape as the one-off create route; multipart makes
+            // this a string, so anything but an explicit yes is a no.
+            requiresAttachment: req.body.requiresAttachment === 'true' || req.body.requiresAttachment === true,
             attachments: media,
             assignedBy: req.user.id,
             assignees: assigneeIds,
@@ -383,6 +386,9 @@ router.post('/from-task/:taskId', auth, async (req, res) => {
             taskType: task.taskType,
             projectId: task.taskType === 'Regular Office Task' ? null : (task.projectId?._id || task.projectId),
             priority: task.priority,
+            // The one-off already said whether it needs proof; turning it into
+            // a daily task shouldn't quietly drop that requirement.
+            requiresAttachment: task.requiresAttachment || false,
             // Carried over by value; the queue rows below are what keep a
             // still-compressing video pointing at the right document.
             attachments: task.attachments,
@@ -710,6 +716,9 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
             // edit pick it up, same as every other brief field above.
             if (req.body.startTime !== undefined || req.body.dueTime !== undefined || req.body.timeAllottedMinutes !== undefined) {
                 Object.assign(schedule, parseTimeWindow(req.body));
+            }
+            if (req.body.requiresAttachment !== undefined) {
+                schedule.requiresAttachment = req.body.requiresAttachment === 'true' || req.body.requiresAttachment === true;
             }
 
             // --- the brief's media ---

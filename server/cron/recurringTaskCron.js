@@ -150,6 +150,9 @@ const generateForSchedule = async (schedule, dateStr) => {
                 startTime: schedule.startTime || null,
                 dueTime: schedule.dueTime || null,
                 timeAllottedMinutes: schedule.timeAllottedMinutes || null,
+                // Inherited from the brief like the time window above, so
+                // every day of the run demands proof if the schedule does.
+                requiresAttachment: schedule.requiresAttachment || false,
                 // The brief is *referenced*, never copied — see TaskPlan.md
                 // §13.7. Copying a still-compressing video here would leave this
                 // task pointing at a staged file the midnight job later deletes.

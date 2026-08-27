@@ -4,8 +4,9 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faSpinner, faPaperclip, faUsers, faSave, faFolderOpen,
-    faCheckCircle, faCalendarAlt, faUserTie, faEdit, faPlus, faBuilding, faRepeat,
-    faHourglassHalf, faCircleXmark, faUserPen, faRotateLeft
+    faCheckCircle, faCalendarAlt, faUserTie, faEdit, faBuilding, faRepeat,
+    faHourglassHalf, faCircleXmark, faUserPen, faRotateLeft, faPen,
+    faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons';
 import api from '../utils/api';
 import TaskThreads from '../components/TaskThreads';
@@ -39,9 +40,14 @@ const TaskDetail = () => {
     const [proofFiles, setProofFiles] = useState([]);
     const [saving, setSaving] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [addingMedia, setAddingMedia] = useState(false);
     const [deletingMediaId, setDeletingMediaId] = useState(null);
     const [resubmitOpen, setResubmitOpen] = useState(false);
+
+    // The two optional halves of the submit panel. Both start folded so the
+    // common case is just "pick a pill and save"; each opens itself when the
+    // task gives it a reason to be open (see the load effect below).
+    const [proofOpen, setProofOpen] = useState(false);
+    const [noteOpen, setNoteOpen] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -49,6 +55,10 @@ const TaskDetail = () => {
             setTask(res.data);
             setStatus(res.data.status || 'Pending');
             setNote(res.data.statusNote || '');
+            // Proof is demanded, or already there to be seen; a note that
+            // already exists must not be hidden behind a link.
+            setProofOpen(Boolean(res.data.requiresAttachment) || (res.data.completionProof || []).length > 0);
+            setNoteOpen(Boolean(res.data.statusNote));
         } catch (err) {
             console.error('Could not load task', err);
             setNotFound(true);
@@ -75,61 +85,6 @@ const TaskDetail = () => {
         setProofFiles(prev => [...prev, file]);
     };
 
-    // Reference media can be topped up from here rather than only on the
-    // edit page — the brief often grows after the task is handed over.
-    const addReferenceMedia = async (e) => {
-        const files = Array.from(e.target.files);
-        e.target.value = '';
-        if (files.length === 0) return;
-
-        const tooBig = files.find(f => f.size > MAX_VIDEO_MB * 1024 * 1024);
-        if (tooBig) {
-            return Swal.fire('Too Large', `"${tooBig.name}" is over ${MAX_VIDEO_MB}MB.`, 'warning');
-        }
-
-        setAddingMedia(true);
-        try {
-            const data = new FormData();
-            files.forEach(f => data.append('attachments', f));
-            const res = await api.post(`/tasks/${id}/media`, data, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            setTask(res.data);
-            Swal.fire({
-                icon: 'success', title: 'Media added', toast: true,
-                position: 'top-end', timer: 1600, showConfirmButton: false
-            });
-        } catch (err) {
-            Swal.fire('Error', err.response?.data?.message || 'Could not add media.', 'error');
-        } finally {
-            setAddingMedia(false);
-        }
-    };
-
-    const addReferenceScreenRecording = async (file) => {
-        if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
-            return Swal.fire('Too Large', `"${file.name}" is over ${MAX_VIDEO_MB}MB.`, 'warning');
-        }
-
-        setAddingMedia(true);
-        try {
-            const data = new FormData();
-            data.append('attachments', file);
-            const res = await api.post(`/tasks/${id}/media`, data, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            setTask(res.data);
-            Swal.fire({
-                icon: 'success', title: 'Media added', toast: true,
-                position: 'top-end', timer: 1600, showConfirmButton: false
-            });
-        } catch (err) {
-            Swal.fire('Error', err.response?.data?.message || 'Could not add media.', 'error');
-        } finally {
-            setAddingMedia(false);
-        }
-    };
-
     const deleteMedia = async (item) => {
         const ok = await Swal.fire({
             title: 'Remove this file?',
@@ -149,6 +104,41 @@ const TaskDetail = () => {
             Swal.fire('Error', err.response?.data?.message || 'Could not remove the file.', 'error');
         } finally {
             setDeletingMediaId(null);
+        }
+    };
+
+    /**
+     * Send a completed task back, with a reason.
+     *
+     * The reason is required by the route as well as by this prompt — the
+     * assignee is told their work was not finished, so they have to be told
+     * what is missing along with it.
+     */
+    const openReopen = async () => {
+        const { value: reopenNote } = await Swal.fire({
+            title: 'Send this task back?',
+            input: 'textarea',
+            inputLabel: 'What still needs doing?',
+            inputPlaceholder: 'The assignee sees this, so be specific...',
+            inputAttributes: { 'aria-label': 'What still needs doing' },
+            showCancelButton: true,
+            confirmButtonText: 'Send back',
+            confirmButtonColor: '#b45309',
+            inputValidator: (v) => (v && v.trim() ? undefined : 'Please say what still needs doing.')
+        });
+        if (!reopenNote) return;
+
+        try {
+            const res = await api.post(`/tasks/${id}/reopen`, { note: reopenNote.trim() });
+            setTask(res.data);
+            setStatus(res.data.status);
+            setNote(res.data.statusNote || '');
+            Swal.fire({
+                icon: 'success', title: 'Sent back', toast: true,
+                position: 'top-end', timer: 1800, showConfirmButton: false
+            });
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not reopen the task.', 'error');
         }
     };
 
@@ -203,10 +193,26 @@ const TaskDetail = () => {
 
     const isAssignee = task.assignees.some(a => a && a._id === currentUserId);
     const isOwner = task.assignedBy?._id === currentUserId;
-    const canChangeStatus = isAssignee || isOwner || ['ADMIN', 'HR'].includes(currentUser?.role);
     const canEdit = isOwner || ['ADMIN', 'HR'].includes(currentUser?.role);
+
+    // Doing the work and owning the outcome are different jobs, and this page
+    // shows one or the other — never both stacked on top of each other.
+    // Only an assignee reports progress; assigning a task to yourself makes
+    // you an assignee, so your role never decides what you see here.
+    const canChangeStatus = isAssignee;
+    // The assigner's counterpart to the status pills: send finished work back
+    // with a reason. Redundant for an assignee, who can simply move the pill.
+    const canReopen = !isAssignee && canEdit && task.status === 'Completed';
     const due = dueLabel(task.dueDate, task.status === 'Completed', task.overdueAt);
     const dirty = status !== task.status || note !== (task.statusNote || '') || proofFiles.length > 0;
+
+    // Counts what is already on the task plus what is staged in this form —
+    // attaching and completing is one action, so the requirement is met the
+    // moment a file is picked, not only after a prior save.
+    const proofSatisfied = (task.completionProof?.length || 0) > 0 || proofFiles.length > 0;
+    // Mirrors the server's guard in PUT /:id/status so the button explains
+    // itself rather than letting the request bounce.
+    const blockedByProof = Boolean(task.requiresAttachment) && status === 'Completed' && !proofSatisfied;
 
     return (
         <div className="attendance-container fade-in td-page">
@@ -242,6 +248,17 @@ const TaskDetail = () => {
                         {task.isSelfAssigned && task.approvalStatus === 'Approved' && (
                             <span className="ap-badge self" title="Logged by the assignee themselves">
                                 <FontAwesomeIcon icon={faUserPen} /> Self Assigned
+                            </span>
+                        )}
+                        {task.requiresAttachment && (
+                            <span
+                                className={`atr-badge ${proofSatisfied ? 'is-met' : ''}`}
+                                title={proofSatisfied
+                                    ? 'Supporting material has been attached'
+                                    : 'Supporting material is required before this can be completed'}
+                            >
+                                <FontAwesomeIcon icon={proofSatisfied ? faCheckCircle : faPaperclip} />
+                                {proofSatisfied ? 'Proof attached' : 'Proof required'}
                             </span>
                         )}
                         {task.recurringTaskId && (
@@ -337,25 +354,41 @@ const TaskDetail = () => {
                                     ))}
                                 </div>
 
-                                <label className="td-label">Note</label>
-                                <textarea
-                                    className="custom-input" rows="2" value={note}
-                                    onChange={(e) => setNote(e.target.value)}
-                                    placeholder="Anything the team should know?"
-                                    disabled={saving}
-                                />
+                                {/* Attachments. Expanded and stated as a rule when the
+                                    assigner asked for proof; otherwise folded away behind
+                                    one line, because most tasks are finished by moving a
+                                    pill and nothing else. */}
+                                {proofOpen ? (
+                                    <>
+                                        {task.requiresAttachment ? (
+                                            <div className={`td-required-note ${proofSatisfied ? 'is-met' : ''}`}>
+                                                <FontAwesomeIcon icon={proofSatisfied ? faCheckCircle : faTriangleExclamation} />
+                                                <span>
+                                                    {proofSatisfied
+                                                        ? 'Supporting material attached.'
+                                                        : 'This task needs supporting material before it can be completed.'}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <label className="td-label">Attach supporting material</label>
+                                        )}
 
-                                <label className="td-label">Attach Supporting Documents/Materials</label>
-                                <ScreenRecorder onAttach={handleProofRecordingAttach} />
-                                <input
-                                    className="custom-file-input" type="file" multiple
-                                    accept="image/*,video/*,.html,.htm,text/html" onChange={handleProofChange} disabled={saving}
-                                    style={{ marginTop: '10px' }}
-                                />
-                                <p className="td-field-hint">
-                                    Anything that backs up the work — files, screenshots, recordings.
-                                    To add briefing material instead, use Reference media below.
-                                </p>
+                                        <ScreenRecorder onAttach={handleProofRecordingAttach} />
+                                        <input
+                                            className="custom-file-input" type="file" multiple
+                                            accept="image/*,video/*,.html,.htm,text/html" onChange={handleProofChange} disabled={saving}
+                                            style={{ marginTop: '10px' }}
+                                        />
+                                        <p className="td-field-hint">
+                                            Anything that backs up the work — files, screenshots, recordings.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <button type="button" className="td-disclose" onClick={() => setProofOpen(true)}>
+                                        <FontAwesomeIcon icon={faPaperclip} /> Attach supporting material
+                                    </button>
+                                )}
+
                                 {proofFiles.length > 0 && (
                                     <div className="file-chips-list">
                                         {proofFiles.map((f, i) => (
@@ -368,13 +401,39 @@ const TaskDetail = () => {
                                     </div>
                                 )}
 
+                                {/* The note is genuinely optional on every task, so it
+                                    stays folded until asked for — but opens by itself if
+                                    the task already carries one, which would otherwise be
+                                    invisible until you went looking. */}
+                                {noteOpen ? (
+                                    <>
+                                        <label className="td-label">Note</label>
+                                        <textarea
+                                            className="custom-input" rows="2" value={note}
+                                            onChange={(e) => setNote(e.target.value)}
+                                            placeholder="Anything the team should know?"
+                                            disabled={saving}
+                                        />
+                                    </>
+                                ) : (
+                                    <button type="button" className="td-disclose" onClick={() => setNoteOpen(true)}>
+                                        <FontAwesomeIcon icon={faPen} /> Add a note
+                                    </button>
+                                )}
+
+                                {blockedByProof && (
+                                    <p className="td-blocked-hint">
+                                        Attach a file to mark this completed.
+                                    </p>
+                                )}
+
                                 {saving && uploadProgress > 0 && (
                                     <div className="upload-progress-container" style={{ margin: '10px 0' }}>
                                         <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }}>{uploadProgress}%</div>
                                     </div>
                                 )}
 
-                                <button className="gts-btn primary td-full-btn" onClick={saveStatus} disabled={saving || !dirty}>
+                                <button className="gts-btn primary td-full-btn" onClick={saveStatus} disabled={saving || !dirty || blockedByProof}>
                                     {saving
                                         ? <><FontAwesomeIcon icon={faSpinner} spin /> Saving...</>
                                         : <><FontAwesomeIcon icon={faSave} /> Update Status</>}
@@ -389,8 +448,31 @@ const TaskDetail = () => {
                             </div>
                         ) : (
                             <div className="td-panel-body">
-                                <p className="td-muted-line">You are not working on this task, so you cannot change its status.</p>
-                                {task.statusNote && <p className="td-muted-line">“{task.statusNote}”</p>}
+                                <div className="status-pill-row is-readonly">
+                                    <span className={`status-pill ${slug(task.status)} selected`}>{task.status}</span>
+                                </div>
+
+                                <p className="td-muted-line">
+                                    Only the {task.assignees.length === 1 ? 'person' : 'people'} working on
+                                    this task can move it. {canEdit
+                                        ? 'You can change the brief from Edit, or send the work back once it is submitted.'
+                                        : ''}
+                                </p>
+
+                                {task.statusNote && <p className="td-status-note">“{task.statusNote}”</p>}
+
+                                {canReopen && (
+                                    <button className="gts-btn secondary td-full-btn" onClick={openReopen}>
+                                        <FontAwesomeIcon icon={faRotateLeft} /> Send back for more work
+                                    </button>
+                                )}
+
+                                {task.statusUpdatedBy && (
+                                    <p className="td-muted-line">
+                                        Last moved by <strong>{task.statusUpdatedBy.name}</strong>
+                                        {task.completedAt && ` · completed ${new Date(task.completedAt).toLocaleDateString('en-GB')}`}
+                                    </p>
+                                )}
                             </div>
                         )}
                     </section>
@@ -551,38 +633,25 @@ const TaskDetail = () => {
                         </section>
                     )}
 
-                    {/* Reference media */}
-                    {(task.attachments?.length > 0 || canEdit) && (
+                    {/* Reference media — the brief, so it is read-only on this
+                        page for everyone. The assigner changes it on the edit
+                        form, which is the one place the brief is authored;
+                        having a second half-editor here is what let an owner
+                        record a screen capture against a task they were only
+                        supposed to be reading. */}
+                    {task.attachments?.length > 0 && (
                         <section className="td-panel">
                             <header className="td-panel-head">
                                 <h2><FontAwesomeIcon icon={faPaperclip} /> Reference media</h2>
                                 <span className="td-count">{task.attachments.length}</span>
                             </header>
                             <div className="td-panel-body">
-                                {task.attachments.length > 0 ? (
-                                    <TaskMediaGrid
-                                        media={task.attachments}
-                                        onDelete={canEdit ? deleteMedia : undefined}
-                                        deletingId={deletingMediaId}
-                                    />
-                                ) : (
-                                    <p className="td-muted-line" style={{ margin: 0 }}>
-                                        No reference material yet.
-                                    </p>
-                                )}
-
+                                <TaskMediaGrid media={task.attachments} />
                                 {canEdit && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        <ScreenRecorder onAttach={addReferenceScreenRecording} />
-                                        <label className={`td-add-media ${addingMedia ? 'busy' : ''}`}>
-                                            <FontAwesomeIcon icon={addingMedia ? faSpinner : faPlus} spin={addingMedia} />
-                                            {addingMedia ? 'Uploading...' : 'Add reference media'}
-                                            <input
-                                                type="file" multiple accept="image/*,video/*,.html,.htm,text/html" hidden
-                                                onChange={addReferenceMedia} disabled={addingMedia}
-                                            />
-                                        </label>
-                                    </div>
+                                    <p className="td-field-hint">
+                                        Add or remove reference material from{' '}
+                                        <Link to={`/edit-task/${task._id}`}>Edit</Link>.
+                                    </p>
                                 )}
                             </div>
                         </section>
@@ -598,7 +667,7 @@ const TaskDetail = () => {
                             <div className="td-panel-body">
                                 <TaskMediaGrid
                                     media={task.completionProof}
-                                    onDelete={canChangeStatus ? deleteMedia : undefined}
+                                    onDelete={isAssignee ? deleteMedia : undefined}
                                     deletingId={deletingMediaId}
                                 />
                             </div>

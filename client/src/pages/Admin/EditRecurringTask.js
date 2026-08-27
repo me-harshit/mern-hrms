@@ -12,6 +12,7 @@ import ScreenRecorder from '../../components/ScreenRecorder';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
 import TaskTimeWindow from '../../components/TaskTimeWindow';
+import AttachmentRequirement from '../../components/AttachmentRequirement';
 import ScheduleProjection from '../../components/ScheduleProjection';
 import { resolveMediaUrl } from '../../utils/taskHelpers';
 import { prettyDate, todayYmd } from '../../utils/scheduleDates';
@@ -42,7 +43,7 @@ const EditRecurringTask = () => {
 
     const [formData, setFormData] = useState({
         title: '', description: '', taskType: 'Project Task', projectId: '', priority: 'Medium',
-        startTime: '', dueTime: '', timeAllottedMinutes: ''
+        startTime: '', dueTime: '', timeAllottedMinutes: '', requiresAttachment: false
     });
 
     const [selectedAssignees, setSelectedAssignees] = useState([]);
@@ -78,7 +79,8 @@ const EditRecurringTask = () => {
                     priority: s.priority || 'Medium',
                     startTime: s.startTime || '',
                     dueTime: s.dueTime || '',
-                    timeAllottedMinutes: s.timeAllottedMinutes || ''
+                    timeAllottedMinutes: s.timeAllottedMinutes || '',
+                    requiresAttachment: Boolean(s.requiresAttachment)
                 });
                 setSelectedAssignees(s.assignees.map(a => a._id));
                 setExistingAssignees(s.assignees);
@@ -385,6 +387,14 @@ const EditRecurringTask = () => {
                                     timeAllottedMinutes={formData.timeAllottedMinutes}
                                     onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
                                     fallbackLabel="that day ends"
+                                />
+                            </div>
+
+                            <div className="form-group task-field">
+                                <AttachmentRequirement
+                                    value={formData.requiresAttachment}
+                                    onChange={(v) => setFormData(prev => ({ ...prev, requiresAttachment: v }))}
+                                    noun="each day of this task"
                                 />
                             </div>
 
