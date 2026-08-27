@@ -753,6 +753,21 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
 
         await schedule.save();
 
+        // An edit can hand someone a task that's owed *today* — a newly added
+        // assignee, a day just merged into the plan (full edit or 'extend'),
+        // or a run revived out of 'Completed' — none of which the 6am cron
+        // will see again until tomorrow. The create routes already generate
+        // immediately when today is in the plan; an edit needs the same
+        // catch-up, or that person simply never gets today's task. Safe to
+        // call unconditionally: it's a no-op unless something is actually due
+        // today, and the occurrence log makes it idempotent either way.
+        try {
+            const { generateForSchedule } = require('../cron/recurringTaskCron');
+            await generateForSchedule(schedule, todayIST());
+        } catch (err) {
+            console.error('[RECURRING] Immediate generation after edit failed:', err.message);
+        }
+
         const populated = await RecurringTask.findById(schedule._id)
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
