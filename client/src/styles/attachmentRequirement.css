@@ -1,0 +1,111 @@
+/* ==========================================================================
+   ATTACHMENT REQUIREMENT
+   The assigner's "proof needed to complete" switch on a task / schedule form.
+   Self-contained for the same reason taskTimeWindow.css is: this renders
+   inside AddTask and EditTask (which load tasks.css) and inside forms that
+   don't, so it can't lean on any of those grid classes.
+   ========================================================================== */
+
+.atr-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    border-radius: 9px;
+    padding: 11px 13px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.atr-toggle:hover:not(:disabled) {
+    border-color: #215D7B;
+    background: #f0f9ff;
+}
+
+.atr-toggle:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* On, it stops being an invitation and starts being a stated rule. */
+.atr-toggle.is-on {
+    border-style: solid;
+    border-color: #215D7B;
+    background: #f0f9ff;
+}
+
+.atr-icon {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: #e2e8f0;
+    color: #64748b;
+    font-size: 0.82rem;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.atr-toggle.is-on .atr-icon {
+    background: #215D7B;
+    color: #fff;
+}
+
+.atr-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.atr-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.atr-toggle.is-on .atr-label { color: #215D7B; }
+
+.atr-hint {
+    font-size: 0.74rem;
+    font-weight: 400;
+    color: #94a3b8;
+    line-height: 1.35;
+}
+
+/* --- the switch itself --- */
+.atr-switch {
+    flex-shrink: 0;
+    margin-left: auto;
+    width: 38px;
+    height: 21px;
+    border-radius: 999px;
+    background: #cbd5e1;
+    padding: 3px;
+    transition: background 0.18s ease;
+}
+
+.atr-toggle.is-on .atr-switch { background: #215D7B; }
+
+.atr-knob {
+    display: block;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+    transition: transform 0.18s ease;
+}
+
+.atr-toggle.is-on .atr-knob { transform: translateX(17px); }
+
+@media (max-width: 460px) {
+    /* The hint is the first thing to go — the label and the switch state
+       already carry the meaning. */
+    .atr-hint { display: none; }
+}

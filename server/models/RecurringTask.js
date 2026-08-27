@@ -90,6 +90,11 @@ const recurringTaskSchema = new mongoose.Schema({
     dueTime: { type: String, default: null },
     timeAllottedMinutes: { type: Number, default: null },
 
+    // Part of the brief, so every day this schedule generates inherits it —
+    // the same way the title, priority and time window are inherited. Editing
+    // it only affects days generated after the edit, exactly like those.
+    requiresAttachment: { type: Boolean, default: false },
+
     /**
      * Reference media for the brief. Generated tasks *point back* at this array
      * rather than copying it (TaskPlan.md §13.7): a video here is staged on the

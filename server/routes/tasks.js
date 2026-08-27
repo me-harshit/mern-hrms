@@ -50,10 +50,19 @@ const TASK_TYPES = ['Project Task', 'Regular Office Task'];
 const folderForTask = (taskType, projectName) =>
     taskType === 'Regular Office Task' ? s3Folder('Office') : s3Folder(projectName);
 
-// Everyone on a task shares one status, so "who is allowed to move it" is
-// simply: anyone working on it, whoever assigned it, or Admin/HR.
-const canTouchTask = (task, reqUser) =>
-    task.assignees.some(id => id.toString() === reqUser.id) ||
+// Everyone on a task shares one status, and only the people actually doing
+// the work may move it. An assigner watching from the outside deliberately
+// cannot: reporting progress on someone else's behalf produces a timeline
+// that says the work happened when really only the manager's opinion of it
+// changed. What a manager gets instead is POST /:id/reopen below, which
+// sends finished work back with a reason attached.
+const isWorkingOnTask = (task, reqUser) =>
+    task.assignees.some(id => id.toString() === reqUser.id);
+
+// The other side of that split: whoever owns the task's outcome. They steer
+// the brief (title, dates, reference media) and can send work back, but they
+// never report progress themselves.
+const ownsTaskOutcome = (task, reqUser) =>
     task.assignedBy.toString() === reqUser.id ||
     IS_PRIVILEGED.includes(reqUser.role);
 
@@ -71,6 +80,12 @@ const parseIdList = (raw) => {
     }
     return [];
 };
+
+// Multipart sends every field as a string, so a checkbox arrives as 'true' /
+// 'false' rather than a boolean. Opt-in: anything that isn't an explicit yes
+// is a no, which is what keeps the default off for tasks created by older
+// clients that don't send the field at all.
+const parseBool = (raw) => raw === true || raw === 'true';
 
 const notify = async (recipientId, title, message, link) => {
     try {
@@ -166,6 +181,7 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
             startDate: startDate || null,
             dueDate,
             ...timeWindow,
+            requiresAttachment: parseBool(req.body.requiresAttachment),
             attachments: media,
             assignees: assigneeIds
         });
@@ -1382,6 +1398,11 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
         if (req.body.startTime !== undefined || req.body.dueTime !== undefined || req.body.timeAllottedMinutes !== undefined) {
             Object.assign(task, parseTimeWindow(req.body));
         }
+        // Only when the field is actually sent — an older client that omits
+        // it must not silently switch the requirement off on an existing task.
+        if (req.body.requiresAttachment !== undefined) {
+            task.requiresAttachment = parseBool(req.body.requiresAttachment);
+        }
 
         // Switching type clears or requires the project accordingly.
         if (req.body.taskType && TASK_TYPES.includes(req.body.taskType)) {
@@ -1496,16 +1517,34 @@ router.put('/:id/status', auth, taskUpload.array('completionProof', 10), async (
             return res.status(404).json({ message: 'Task not found' });
         }
 
-        // One shared status, so anyone working on the task can move it.
-        if (!canTouchTask(task, req.user)) {
+        // Only the people doing the work report on it — see isWorkingOnTask.
+        if (!isWorkingOnTask(task, req.user)) {
             discardStagedFiles(req.files);
-            return res.status(403).json({ message: 'You are not working on this task' });
+            return res.status(403).json({
+                message: 'Only the people assigned to this task can update its status.'
+            });
         }
 
         const { status, statusNote } = req.body;
         if (!TASK_STATUSES.includes(status)) {
             discardStagedFiles(req.files);
             return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        // The assigner asked for proof, so "Completed" has to come with some.
+        // Checked here rather than only in the panel because the panel's
+        // control can be bypassed, and counted across what is already on the
+        // task *plus* what is arriving in this request — attaching the file
+        // and ticking Completed is one action for the user, and splitting it
+        // into two round-trips would be the wrong lesson to teach them.
+        if (status === 'Completed' &&
+            task.requiresAttachment &&
+            task.completionProof.length === 0 &&
+            (req.files || []).length === 0) {
+            discardStagedFiles(req.files);
+            return res.status(400).json({
+                message: 'This task needs supporting material before it can be marked completed. Attach a file and try again.'
+            });
         }
 
         const previousStatus = task.status;
@@ -1624,6 +1663,116 @@ router.put('/:id/status', auth, taskUpload.array('completionProof', 10), async (
         discardStagedFiles(req.files);
         console.error('Task Status Error:', err);
         res.status(500).json({ message: 'Server Error while updating status' });
+    }
+});
+
+// ==========================================
+// 7b. REOPEN — send finished work back
+// ==========================================
+/**
+ * The assigner's half of the status split (TaskPlan.md §20).
+ *
+ * A manager cannot move a task's status — see isWorkingOnTask — but they do
+ * own the judgement of whether the work is actually done. This is that
+ * judgement: it sends a Completed task back to Pending with a reason the
+ * assignee has to read.
+ *
+ * The reason is mandatory on purpose. "Reopened" on its own tells the person
+ * their work was rejected without telling them what to fix, which is the
+ * failure mode this exists to prevent.
+ *
+ * firstCompletedAt is deliberately NOT cleared: it is first-write-wins so
+ * that rework stays visible. A task with firstCompletedAt set and a status of
+ * Pending is precisely the shape of "this was handed back", and the report
+ * layer reads it that way.
+ */
+router.post('/:id/reopen', auth, async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        if (!ownsTaskOutcome(task, req.user)) {
+            return res.status(403).json({
+                message: 'Only the person who assigned this task can send it back.'
+            });
+        }
+
+        if (task.status !== 'Completed') {
+            return res.status(400).json({
+                message: 'Only a completed task can be sent back.'
+            });
+        }
+
+        const note = (req.body.note || '').trim();
+        if (!note) {
+            return res.status(400).json({
+                message: 'Say what still needs doing — the assignee sees this note.'
+            });
+        }
+
+        const now = new Date();
+        const previousStatus = task.status;
+
+        task.status = 'Pending';
+        task.completedAt = null;
+        task.statusUpdatedBy = req.user.id;
+        // Replaces the assignee's "done" note, which is no longer the last
+        // word on this task.
+        task.statusNote = note;
+
+        task.statusHistory.push({
+            from: previousStatus,
+            to: 'Pending',
+            at: now,
+            by: req.user.id,
+            note
+        });
+
+        await task.save();
+
+        // The compliance calendar has to un-tick this day too, or the schedule
+        // still reads as satisfied. Mirrors the sync in PUT /:id/status.
+        if (task.recurringTaskId) {
+            try {
+                const RecurringTask = require('../models/RecurringTask');
+                const { todayIST } = require('../utils/recurringSchedule');
+
+                if (task.occurrenceDate >= todayIST()) {
+                    await RecurringTask.updateOne(
+                        {
+                            _id: task.recurringTaskId,
+                            occurrences: { $elemMatch: { date: task.occurrenceDate, taskId: task._id } }
+                        },
+                        { $set: { 'occurrences.$.outcome': 'pending' } }
+                    );
+                }
+            } catch (err) {
+                console.error('[TASK] Could not sync reopened occurrence:', err.message);
+            }
+        }
+
+        const actor = await User.findById(req.user.id).select('name');
+        await Promise.all(task.assignees
+            .map(a => a.toString())
+            .filter(id => id !== req.user.id)
+            .map(id => notify(
+                id,
+                'Task sent back',
+                `${actor?.name || 'Your manager'} reopened "${task.title}": ${note}`,
+                `/task/${task._id}`
+            )));
+
+        const populated = await Task.findById(task._id)
+            .populate('projectId', 'name')
+            .populate('assignedBy', 'name profilePic')
+            .populate('assignees', 'name email employeeId profilePic')
+            .populate('statusUpdatedBy', 'name profilePic');
+
+        res.json(populated);
+    } catch (err) {
+        console.error('Task Reopen Error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Task not found' });
+        res.status(500).json({ message: 'Server Error while reopening the task' });
     }
 });
 

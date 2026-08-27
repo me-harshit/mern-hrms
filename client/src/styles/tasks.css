@@ -2054,6 +2054,118 @@
     line-height: 1.45;
 }
 
+/* The assigner's read-only view of the status. The pill keeps the same shape
+   and colour it has for the assignee -- the status means the same thing to
+   both of them -- but nothing here is clickable. */
+.status-pill-row.is-readonly {
+    pointer-events: none;
+    margin-bottom: 4px;
+}
+
+/* The last word on the task, quoted. Distinct from .td-muted-line because a
+   note is content, not chrome, and a sent-back note especially needs to be
+   readable rather than greyed out. */
+.td-status-note {
+    margin: 10px 0 0;
+    padding: 9px 12px;
+    border-left: 3px solid #cbd5e1;
+    border-radius: 0 8px 8px 0;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.8rem;
+    font-style: italic;
+    line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   SUBMIT PANEL DISCLOSURES
+   The optional note / attachment halves of the status panel stay folded until
+   asked for, so finishing a task is "pick a pill, save" unless it genuinely
+   needs more. These are the folded affordances and the states that unfold
+   them.
+   -------------------------------------------------------------------------- */
+
+.td-disclose {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 9px 12px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 9px;
+    background: transparent;
+    color: #64748b;
+    font-family: inherit;
+    font-size: 0.79rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.td-disclose:hover {
+    border-color: #215D7B;
+    color: #215D7B;
+    background: #f0f9ff;
+}
+
+/* The assigner's requirement, restated where the work is submitted. Amber
+   while outstanding, green once met -- the same file can't be "required" and
+   "done" at once, so one element carries both states. */
+.td-required-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin: 12px 0 10px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid #fcd34d;
+    background: #fffbeb;
+    color: #92400e;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.td-required-note.is-met {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+/* Says why the disabled Update button is disabled. Without this the button
+   just looks broken. */
+.td-blocked-hint {
+    margin: 10px 0 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #b45309;
+    line-height: 1.45;
+}
+
+/* Header badge, so the requirement is visible on arrival rather than only
+   after scrolling to the submit panel. */
+.atr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #fcd34d;
+    background: #fffbeb;
+    color: #92400e;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.atr-badge.is-met {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+}
+
 /* Dashed "add" affordance, deliberately quieter than a primary button. */
 .td-add-media {
     display: flex;

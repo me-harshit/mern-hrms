@@ -150,6 +150,23 @@ const taskSchema = new mongoose.Schema({
     attachments: [mediaSchema],
     completionProof: [mediaSchema],
 
+    /**
+     * Whether finishing this task requires supporting material (TaskPlan.md
+     * §19).
+     *
+     * Off by default, which is what every task that already exists is: proof
+     * stays *possible* on those, just not demanded. When on, the assignee's
+     * panel opens with the upload section expanded and marked required, and
+     * PUT /:id/status refuses a move to Completed while completionProof is
+     * empty — enforced server-side because the client control can be
+     * bypassed, and this is a policy the assigner set, not a hint.
+     *
+     * Only ever set by whoever assigns the work. Self-assigned tasks leave it
+     * false: the author and the doer are the same person, so there is nobody
+     * for the requirement to be a requirement *from*.
+     */
+    requiresAttachment: { type: Boolean, default: false },
+
     // Simple membership list — everyone here shares the one status above.
     assignees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
