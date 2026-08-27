@@ -13,6 +13,7 @@ dotenv.config();
 require('./cron/attendanceCron')
 require('./cron/videoCompressionCron')
 require('./cron/recurringTaskCron')
+require('./cron/whatsappHealthCron')
 
 // --- 1. IMPORT ROUTES ---
 const authRoutes = require('./routes/auth');
@@ -33,6 +34,7 @@ const wfh = require('./routes/wfh');
 const documentRoutes = require('./routes/documents');
 const payrollRoutes = require('./routes/payroll');
 const notificationRoutes = require('./routes/notifications');
+const whatsappRoutes = require('./routes/whatsapp');
 const taskRoutes = require('./routes/tasks');
 const recurringTaskRoutes = require('./routes/recurringTasks');
 
@@ -66,6 +68,7 @@ app.use('/api/wfh', wfh);
 app.use('/api/documents', documentRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 // Must come before /api/tasks — that router's `/:id` route would otherwise
 // match 'recurring' as a task id.
 app.use('/api/tasks/recurring', recurringTaskRoutes);

@@ -17,6 +17,7 @@ import EmployeeRequests from './pages/Admin/EmployeeRequests';
 import WorkFromHome from './pages/User/WorkFromHome';
 import CalendarPage from './pages/CalendarPage';
 import AdminSettings from './pages/Admin/AdminSettings';
+import WhatsAppAdmin from './pages/Admin/WhatsAppAdmin';
 import AttendanceLogs from './pages/Admin/AttendanceLogs';
 import AbsentEmployees from './pages/Admin/AbsentEmployees';
 import EmployeeProfile from './pages/Admin/EmployeeProfile';
@@ -219,6 +220,7 @@ function App() {
 
             {/* LOCKED TO ADMIN ONLY */}
             <Route path="/admin-settings" element={userRole === 'ADMIN' ? <AdminSettings /> : <Navigate to="/dashboard" />} />
+            <Route path="/whatsapp" element={userRole === 'ADMIN' ? <WhatsAppAdmin /> : <Navigate to="/dashboard" />} />
 
             {/* LOCKED TO HR & ADMIN */}
             <Route path="/admin-chat" element={(userRole === 'HR' || userRole === 'ADMIN') ? <AdminChat /> : <Navigate to="/dashboard" />} />

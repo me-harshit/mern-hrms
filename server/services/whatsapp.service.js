@@ -176,9 +176,125 @@ const getSessionStatus = async () => {
     };
 };
 
+// ---------------------------------------------------------------------------
+// Session lifecycle — driven from the HRMS admin screen
+// ---------------------------------------------------------------------------
+
+/**
+ * These exist so nobody has to SSH into the VPS to restart a WhatsApp session.
+ *
+ * The gateway's own dashboard can do all of this, but it lives behind an SSH
+ * tunnel by design (it fronts a logged-in WhatsApp account, see Whatsapp.md),
+ * which makes "the nudges stopped" a sysadmin task at 6pm rather than something
+ * an admin can fix from the page they are already on.
+ *
+ * All of them follow the same contract as sendWhatsAppMessage: never throw,
+ * always return { ok, detail }.
+ */
+
+const startSession = async () => {
+    if (!isConfigured()) return { ok: false, detail: 'WhatsApp is not configured on this server' };
+
+    const res = await request(`/api/sessions/${process.env.OPENWA_SESSION_ID}/start`);
+    // 400 "already started" is success from the caller's point of view — the
+    // button exists to make the session run, and it is running.
+    if (!res.ok && /already started/i.test(res.detail || '')) {
+        return { ok: true, detail: 'Session was already running' };
+    }
+    return res.ok
+        ? { ok: true, detail: res.payload?.status || 'starting' }
+        : { ok: false, detail: res.detail };
+};
+
+const stopSession = async () => {
+    if (!isConfigured()) return { ok: false, detail: 'WhatsApp is not configured on this server' };
+
+    const res = await request(`/api/sessions/${process.env.OPENWA_SESSION_ID}/stop`);
+    return res.ok
+        ? { ok: true, detail: 'Session stopped' }
+        : { ok: false, detail: res.detail };
+};
+
+/**
+ * An 8-character code to type into WhatsApp → Linked Devices.
+ *
+ * Preferred over the QR: no image has to travel from the VPS to a browser, and
+ * it is the same flow whether the admin is at their desk or on a phone.
+ *
+ * Only valid while the session is `qr_ready`, which is why the route calls
+ * start() first and waits for that state.
+ */
+const requestPairingCode = async (phoneNumber) => {
+    if (!isConfigured()) return { ok: false, detail: 'WhatsApp is not configured on this server' };
+
+    const digits = normalisePhone(phoneNumber);
+    if (!digits) return { ok: false, detail: 'That does not look like a valid phone number' };
+
+    const res = await request(`/api/sessions/${process.env.OPENWA_SESSION_ID}/pairing-code`, {
+        body: { phoneNumber: digits }
+    });
+    return res.ok
+        ? { ok: true, detail: res.payload?.pairingCode, status: res.payload?.status }
+        : { ok: false, detail: res.detail };
+};
+
+/**
+ * The QR image, as a data URL, for linking by scan instead of by code.
+ *
+ * Both routes to the same place: some people find scanning easier, some are
+ * reading the screen over a call and would rather type eight characters. The
+ * gateway only produces either while the session is `qr_ready`.
+ */
+const getQrCode = async () => {
+    if (!isConfigured()) return { ok: false, detail: 'WhatsApp is not configured on this server' };
+
+    const res = await request(`/api/sessions/${process.env.OPENWA_SESSION_ID}/qr`, { method: 'GET' });
+    return res.ok
+        ? { ok: true, qr: res.payload?.qrCode, status: res.payload?.status }
+        : { ok: false, detail: res.detail };
+};
+
+/**
+ * Message counters, for the admin page.
+ *
+ * Purely informational — enough to answer "is anything actually going out"
+ * without opening the gateway's own dashboard.
+ */
+const getStats = async () => {
+    if (!isConfigured()) return { ok: false, detail: 'Not configured' };
+
+    const res = await request(`/api/stats/sessions/${process.env.OPENWA_SESSION_ID}`, { method: 'GET' });
+    return res.ok
+        ? { ok: true, messages: res.payload?.messages || null }
+        : { ok: false, detail: res.detail };
+};
+
+/**
+ * Is the gateway process itself up?
+ *
+ * Distinct from getSessionStatus: this answers "is OpenWA running at all",
+ * which is what separates "the service is down" from "the service is fine but
+ * the phone was unlinked". The admin screen shows them as two different
+ * problems because they have two different fixes.
+ */
+const getGatewayHealth = async () => {
+    if (!isConfigured()) return { ok: false, detail: 'Not configured' };
+
+    const res = await request('/api/health', { method: 'GET' });
+    return res.ok
+        ? { ok: true, detail: 'reachable' }
+        : { ok: false, detail: res.detail };
+};
+
 module.exports = {
     isConfigured,
     normalisePhone,
     sendWhatsAppMessage,
-    getSessionStatus
+    getSessionStatus,
+    startSession,
+    stopSession,
+    requestPairingCode,
+    getQrCode,
+    getStats,
+    getGatewayHealth
 };
