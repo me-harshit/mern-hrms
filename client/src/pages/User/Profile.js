@@ -8,6 +8,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import ChangePassword from '../../components/ChangePassword';
 import Avatar from '../../components/Avatar';
+import ImageEditor from '../../components/ImageEditor';
+import AssigneePopup from '../../components/AssigneePopup';
 import '../../styles/App.css';
 import '../../styles/profile.css';
 
@@ -56,9 +58,38 @@ const Profile = () => {
         }
     };
 
-    const handleFileChange = async (e) => {
+    // The picture the user chose, held while they crop it. Uploading only
+    // happens once they accept the result.
+    const [pendingPhoto, setPendingPhoto] = useState(null);
+    // Viewing your own picture at full size. Reuses the popup the task
+    // lists open, which already handles the no-photo case by showing
+    // large initials instead of an empty frame.
+    const [viewingPhoto, setViewingPhoto] = useState(false);
+
+    const handleFileChange = (e) => {
         const file = e.target.files[0];
+        // Cleared so choosing the same file again still fires a change event,
+        // which it otherwise would not after a cancel.
+        e.target.value = '';
         if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            return Swal.fire('Not an image', 'Please choose a picture file.', 'warning');
+        }
+
+        setPendingPhoto(file);
+    };
+
+    /**
+     * Upload the cropped result.
+     *
+     * What arrives here is already an 800px square JPEG produced by the editor
+     * -- a couple of hundred KB against an original that can be several
+     * megabytes -- so the slow part of this used to be sending pixels the
+     * server was about to throw away.
+     */
+    const uploadPhoto = async (file) => {
+        setPendingPhoto(null);
 
         const uploadData = new FormData();
         uploadData.append('avatar', file);
@@ -87,7 +118,7 @@ const Profile = () => {
             Swal.fire({ icon: 'success', title: 'Picture Updated', timer: 1000, showConfirmButton: false });
         } catch (err) {
             console.error(err);
-            Swal.fire('Error', 'Image upload failed', 'error');
+            Swal.fire('Error', err.response?.data?.message || 'Image upload failed', 'error');
         }
     };
 
@@ -159,7 +190,13 @@ const Profile = () => {
                     {/* ---------- hero ---------- */}
                     <div className="pf-hero">
                         <div className="pf-avatar-wrap">
-                            <Avatar name={user.name} profilePic={user.profilePic} className={user.profilePic ? "pf-avatar-img" : "pf-avatar"} />
+                            <Avatar
+                                name={user.name}
+                                profilePic={user.profilePic}
+                                className={`${user.profilePic ? 'pf-avatar-img' : 'pf-avatar'} pf-avatar-view`}
+                                title="View your photo"
+                                onClick={() => setViewingPhoto(true)}
+                            />
                             <label htmlFor="avatar-upload" className="pf-avatar-edit" title="Change photo">
                                 <FontAwesomeIcon icon={faCamera} />
                                 <input type="file" id="avatar-upload" hidden onChange={handleFileChange} accept="image/*" />
@@ -311,6 +348,24 @@ const Profile = () => {
                     )}
                 </div>
             </div>
+            {/* Shown between choosing a file and uploading it, so the
+                picture that reaches S3 is the one the user framed. */}
+            {pendingPhoto && (
+                <ImageEditor
+                    file={pendingPhoto}
+                    onCancel={() => setPendingPhoto(null)}
+                    onConfirm={uploadPhoto}
+                />
+            )}
+
+            <AssigneePopup
+                open={viewingPhoto}
+                onClose={() => setViewingPhoto(false)}
+                title="Your photo"
+                subtitle={user.jobTitle || user.role}
+                people={[user]}
+            />
+
         </div>
     );
 };

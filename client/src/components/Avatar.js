@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { SERVER_URL } from '../utils/api';
 
-const Avatar = ({ name, profilePic, className, style = {}, title }) => {
+// `onClick` is passed through so an avatar can open something (the assignee
+// popup, in the task tables) without every caller having to wrap it in a
+// span just to catch the event.
+const Avatar = ({ name, profilePic, className, style = {}, title, onClick }) => {
     const [imgError, setImgError] = useState(false);
 
     const initials = name
@@ -17,13 +20,14 @@ const Avatar = ({ name, profilePic, className, style = {}, title }) => {
                 title={title || name}
                 className={className} 
                 style={{ objectFit: 'cover', ...style }}
+                onClick={onClick}
                 onError={() => setImgError(true)}
             />
         );
     }
 
     return (
-        <div className={className} style={style} title={title || name}>
+        <div className={className} style={style} title={title || name} onClick={onClick}>
             {initials}
         </div>
     );

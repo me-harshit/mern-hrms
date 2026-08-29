@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import CopyLinkButton from './CopyLinkButton';
+import AssigneePopup from './AssigneePopup';
 import {
     faSearch, faTimes, faCheck, faBan, faInbox, faTrash, faEdit,
     faFolderOpen, faBuilding, faUserPen
@@ -29,6 +31,10 @@ const SelfAssignedList = () => {
     const navigate = useNavigate();
 
     const [tasks, setTasks] = useState([]);
+    // Which row's people are on screen, or null. Holds the whole record so
+    // the popup can title itself from it.
+    const [peopleOf, setPeopleOf] = useState(null);
+
     const [loading, setLoading] = useState(true);
     const [approvalStatus, setApprovalStatus] = useState('Pending');
     // The work status (Pending / In Progress / On Hold / Completed), which is a
@@ -242,7 +248,9 @@ const SelfAssignedList = () => {
                                                 <Avatar
                                                     name={emp?.name}
                                                     profilePic={emp?.profilePic}
-                                                    className="sa-employee-avatar"
+                                                    className="sa-employee-avatar is-clickable"
+                                                    onClick={(e) => { e.stopPropagation(); setPeopleOf(task); }}
+                                                    title="See who is working on this"
                                                 />
                                                 <div>
                                                     <div className="sa-employee-name">{emp?.name || 'Unknown'}</div>
@@ -312,6 +320,10 @@ const SelfAssignedList = () => {
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="task-actions-inner">
+                                                <CopyLinkButton
+                                                    path={`/task/${task._id}`}
+                                                    label="Copy link to this task"
+                                                />
                                                 <button
                                                     className="icon-btn" title="Edit task" aria-label="Edit task"
                                                     disabled={busy} onClick={() => navigate(`/edit-task/${task._id}`)}
@@ -360,6 +372,17 @@ const SelfAssignedList = () => {
                     onLimitChange={(v) => { setItemsPerPage(v); setCurrentPage(1); }}
                 />
             )}
+
+            {/* A self-assigned task has one worker, but it also has the person
+                they named as asking for it — both are "who is behind this",
+                and the second is the one a manager usually wants. */}
+            <AssigneePopup
+                open={Boolean(peopleOf)}
+                onClose={() => setPeopleOf(null)}
+                title="Working on this"
+                subtitle={peopleOf?.title}
+                people={peopleOf?.assignees || []}
+            />
         </div>
     );
 };

@@ -41,9 +41,22 @@ const uploadToS3 = async (file, subFolder = 'Default') => {
     let s3Key = `HRMS/${subFolder}/${uniqueSuffix}${originalExt}`;
 
     if (mimeType.startsWith('image/')) {
+        /*
+         * A profile picture is re-encoded twice -- once by the browser's crop
+         * editor and again here -- and is then shown as a face at up to 300px,
+         * where the compounded loss of two passes at quality 80 reads as
+         * softness. It gets a higher quality for that reason.
+         *
+         * Everything else (task attachments, proof screenshots) stays at 80:
+         * those are read as thumbnails or in a lightbox where slight softness
+         * costs nothing, and there are far more of them, so storage matters
+         * more there than fidelity.
+         */
+        const quality = subFolder === 'ProfilePic' ? 92 : 80;
+
         fileBuffer = await sharp(file.buffer)
             .resize({ width: 800, withoutEnlargement: true })
-            .jpeg({ quality: 80 })
+            .jpeg({ quality })
             .toBuffer();
         
         s3Key = `HRMS/${subFolder}/${uniqueSuffix}.jpg`;

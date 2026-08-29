@@ -1,0 +1,213 @@
+/* ==========================================================================
+   ASSIGNEE POPUP
+   "Who is working on this", opened from an avatar stack in the task tables.
+   Self-contained: it is mounted from three different lists, only some of
+   which load tasks.css.
+
+   The photo is the content and the name is the caption, not the other way
+   round — this exists because a 26px avatar in a table cannot be recognised,
+   so anything that shrinks the picture to fit more text defeats it.
+   ========================================================================== */
+
+.ap-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.55);
+    animation: apFade 0.14s ease;
+}
+
+@keyframes apFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.ap-modal {
+    width: 100%;
+    max-width: 560px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.28);
+    overflow: hidden;
+    animation: apRise 0.16s ease;
+}
+
+/* One person has no grid to fill, so the picture takes the width instead of
+   sitting in a half-empty row. */
+.ap-modal.is-single { max-width: 380px; }
+
+@keyframes apRise {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+}
+
+.ap-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+.ap-head-text { min-width: 0; }
+
+.ap-head h3 {
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ap-head h3 svg { color: #215D7B; font-size: 0.85em; }
+
+.ap-count {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.ap-sub {
+    margin: 3px 0 0;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    /* A long task title must not push the close button off the header. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ap-close {
+    margin-left: auto;
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ap-close:hover { border-color: #cbd5e1; background: #f8fafc; color: #334155; }
+
+/* --- the pictures ---------------------------------------------------- */
+
+.ap-grid {
+    display: grid;
+    /* Two per row at the default width, one on a narrow phone. The minmax
+       floor is what stops a third column appearing and shrinking the photos
+       back to thumbnail size. */
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 16px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.ap-modal.is-single .ap-grid {
+    grid-template-columns: 1fr;
+}
+
+.ap-person {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+}
+
+/*
+ * The photo. Square rather than a circle on purpose: a circle crops the
+ * corners off a portrait, and at this size that is the difference between
+ * seeing someone's face and seeing the middle of it.
+ *
+ * aspect-ratio keeps the box square whether the element is an <img> (a real
+ * photo, cropped to fill by Avatar's own objectFit) or a <div> (the initials
+ * fallback), so a mixed group stays on one grid.
+ */
+.ap-person-avatar {
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 220px;
+    border-radius: 12px;
+    background: #215D7B;
+    color: #fff;
+    /* Only affects the initials fallback; scales with the box rather than
+       being a fixed size that looks lost inside it. */
+    font-size: 3.2rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1);
+}
+
+.ap-modal.is-single .ap-person-avatar { max-width: 300px; }
+
+/* --- the caption ----------------------------------------------------- */
+
+.ap-person-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+}
+
+.ap-person-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #1e293b;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ap-person-meta {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ap-empty {
+    margin: 0;
+    padding: 26px 16px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+/* The avatar stacks become obviously interactive now that they open this. */
+.avatar-stack.is-clickable,
+.sa-employee-avatar.is-clickable {
+    cursor: pointer;
+}
+
+.avatar-stack.is-clickable:hover .assignee-avatar,
+.sa-employee-avatar.is-clickable:hover {
+    border-color: #215D7B;
+}

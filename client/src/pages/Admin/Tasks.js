@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import CopyLinkButton from '../../components/CopyLinkButton';
+import AssigneePopup from '../../components/AssigneePopup';
 import {
     faClipboardList, faPlus, faSearch, faEdit, faTrash,
     faPaperclip, faClipboardCheck, faTimes, faFolderOpen, faBuilding, faRepeat, faUserPen, faBell
@@ -48,6 +50,9 @@ const Tasks = () => {
     // The task a quick nudge is being composed for, straight from the row —
     // chasing someone should not require opening the task first.
     const [nudgeTarget, setNudgeTarget] = useState(null);
+    // Which task's people are being looked at, or null. Holds the task
+    // rather than the list so the popup can title itself.
+    const [peopleOf, setPeopleOf] = useState(null);
 
     // Drives the amber count on the Self-Assigned tab, so a manager can see
     // there is something waiting without opening it.
@@ -342,7 +347,21 @@ const Tasks = () => {
                                         </td>
 
                                         <td data-label="Assignees" className="col-assignees">
-                                            <div className="avatar-stack" title={task.assignees.map(a => a?.name).join(', ')}>
+                                            <div
+                                                className="avatar-stack is-clickable"
+                                                title="See who is working on this"
+                                                role="button"
+                                                tabIndex={0}
+                                                /* The row navigates to the task, so this must not
+                                                   bubble or the popup would open behind a page
+                                                   change. */
+                                                onClick={(e) => { e.stopPropagation(); setPeopleOf(task); }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault(); e.stopPropagation(); setPeopleOf(task);
+                                                    }
+                                                }}
+                                            >
                                                 {task.assignees.slice(0, 4).map(a => (
                                                     <Avatar key={a._id} name={a?.name} profilePic={a?.profilePic} className="assignee-avatar" />
                                                 ))}
@@ -397,6 +416,10 @@ const Tasks = () => {
                                                             <FontAwesomeIcon icon={faBell} />
                                                         </button>
                                                     )}
+                                                <CopyLinkButton
+                                                    path={`/task/${task._id}`}
+                                                    label="Copy link to this task"
+                                                />
                                                 <button
                                                     className="icon-btn" title="Edit task" aria-label="Edit task"
                                                     onClick={() => navigate(`/edit-task/${task._id}`)}
@@ -440,6 +463,14 @@ const Tasks = () => {
                     onClose={() => setNudgeTarget(null)}
                 />
             )}
+
+            <AssigneePopup
+                open={Boolean(peopleOf)}
+                onClose={() => setPeopleOf(null)}
+                title="Working on this"
+                subtitle={peopleOf?.title}
+                people={peopleOf?.assignees || []}
+            />
 
         </div>
     );
