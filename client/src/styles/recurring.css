@@ -878,9 +878,11 @@
    these two tables carry more, so they get their own widths.
    ------------------------------------------ */
 
-/* Recurring: Edit + Pause/Resume + End + Delete = four 32px buttons + gaps. */
+/* Recurring: Copy + Edit + Pause/Resume + End + Delete = five 32px buttons
+   plus gaps = 184px. Held at 208px so the column still fits its contents
+   after a fixed-layout table has scaled it down on a narrow screen. */
 .rt-table .col-actions {
-    width: 186px;
+    width: 132px;
 }
 
 .rt-table .col-priority {
@@ -890,8 +892,8 @@
 /* Self-Assigned: Approve + Reject + Delete, and the status cell also carries
    the "by <name>" line underneath. */
 .sa-table .col-actions {
-    /* Edit + Approve + Reject + Delete. */
-    width: 186px;
+    /* Copy + Edit + Approve + Reject + Delete, laid out 3 over 2. */
+    width: 132px;
 }
 
 .sa-table .col-priority {
@@ -899,10 +901,14 @@
     width: 168px;
 }
 
-/* Nothing in either actions cell may wrap onto a second line. */
+/* These two carry five buttons, the most anywhere in the app. 108px is exactly
+   three 32px buttons and two gaps, so they always lay out 3 over 2 with the
+   pair centred beneath the trio -- deterministic at every width, rather than
+   the 4 + 1 you get from letting the row use whatever space is left. */
 .rt-table .task-actions-inner,
 .sa-table .task-actions-inner {
-    flex-wrap: nowrap;
+    width: 108px;
+    row-gap: 6px;
 }
 
 /* The columns beside them were cramped once Status and Actions took their

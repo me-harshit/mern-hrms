@@ -1,0 +1,201 @@
+/* ==========================================================================
+   IMAGE EDITOR
+   Crop / rotate / flip a profile photo before it is uploaded.
+   Self-contained, like the other task-adjacent modals.
+   ========================================================================== */
+
+.ie-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.6);
+    animation: ieFade 0.14s ease;
+}
+
+@keyframes ieFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.ie-modal {
+    width: 100%;
+    max-width: 360px;
+    max-height: 94vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 0 0 16px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.3);
+}
+
+.ie-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.ie-head h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.ie-close {
+    margin-left: auto;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ie-close:hover { border-color: #cbd5e1; background: #f8fafc; color: #334155; }
+
+/* --- the crop window --- */
+
+.ie-stage {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #0f172a;
+    cursor: grab;
+    /* The gesture is a drag, so the browser must not claim it for panning or
+       text selection first. */
+    touch-action: none;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.ie-stage:active { cursor: grabbing; }
+
+.ie-img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-origin: center;
+    /* Margins do the centring so the transform chain carries only the user's
+       own adjustments -- which is what lets the canvas replay it exactly. */
+    will-change: transform;
+    pointer-events: none;
+}
+
+/* Shows the circle the avatar will be seen through, without clipping the
+   export -- the file itself stays square, and the UI rounds it. */
+.ie-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.ie-mask-circle {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.45);
+}
+
+.ie-hint {
+    margin: 0;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    text-align: center;
+    padding: 0 16px;
+}
+
+/* --- zoom --- */
+
+.ie-zoom {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 20px;
+    color: #64748b;
+    font-size: 0.8rem;
+}
+
+.ie-zoom input[type="range"] {
+    flex: 1;
+    accent-color: #215D7B;
+    cursor: pointer;
+}
+
+/* --- tools --- */
+
+.ie-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 12px;
+}
+
+.ie-tool {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 56px;
+    padding: 7px 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    background: #fff;
+    color: #475569;
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ie-tool svg { font-size: 0.9rem; }
+
+.ie-tool:hover { border-color: #215D7B; color: #215D7B; background: #f0f9ff; }
+
+.ie-tool.is-on {
+    border-color: #215D7B;
+    background: #215D7B;
+    color: #fff;
+}
+
+/* --- footer --- */
+
+.ie-foot {
+    width: 100%;
+    display: flex;
+    gap: 10px;
+    padding: 4px 16px 0;
+}
+
+.ie-foot .gts-btn {
+    flex: 1;
+    justify-content: center;
+}
+
+/* The profile hero avatar opens a full-size view, so it has to look like it
+   does something. The camera badge beside it still handles replacing it. */
+.pf-avatar-view {
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+.pf-avatar-view:hover {
+    filter: brightness(0.94);
+}

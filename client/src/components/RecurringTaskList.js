@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import api from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import CopyLinkButton from './CopyLinkButton';
+import AssigneePopup from './AssigneePopup';
 import {
     faPlus, faSearch, faTimes, faPause, faPlay, faBan, faTrash, faEdit,
     faFolderOpen, faBuilding, faCalendarCheck
@@ -27,6 +29,10 @@ const RecurringTaskList = () => {
     const navigate = useNavigate();
 
     const [schedules, setSchedules] = useState([]);
+    // Which row's people are on screen, or null. Holds the whole record so
+    // the popup can title itself from it.
+    const [peopleOf, setPeopleOf] = useState(null);
+
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
@@ -215,7 +221,18 @@ const RecurringTaskList = () => {
                                         </td>
 
                                         <td data-label="Assignees" className="col-assignees">
-                                            <div className="avatar-stack" title={s.assignees.map(a => a?.name).join(', ')}>
+                                            <div
+                                                className="avatar-stack is-clickable"
+                                                title="See who is on this schedule"
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => { e.stopPropagation(); setPeopleOf(s); }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault(); e.stopPropagation(); setPeopleOf(s);
+                                                    }
+                                                }}
+                                            >
                                                 {s.assignees.slice(0, 4).map(a => (
                                                     <Avatar key={a._id} name={a?.name} profilePic={a?.profilePic} className="assignee-avatar" />
                                                 ))}
@@ -250,6 +267,13 @@ const RecurringTaskList = () => {
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="task-actions-inner">
+                                                {/* The schedule, not one generated day — this row
+                                                    is the schedule, and each day it generates has its
+                                                    own link from the Regular list. */}
+                                                <CopyLinkButton
+                                                    path={`/tasks/recurring/${s._id}`}
+                                                    label="Copy link to this schedule"
+                                                />
                                                 <button className="icon-btn" title="Edit schedule" aria-label="Edit schedule"
                                                     onClick={() => navigate(`/tasks/recurring/${s._id}/edit`)}>
                                                     <FontAwesomeIcon icon={faEdit} />
@@ -296,6 +320,14 @@ const RecurringTaskList = () => {
                     onLimitChange={(val) => { setItemsPerPage(val); setCurrentPage(1); }}
                 />
             )}
+
+            <AssigneePopup
+                open={Boolean(peopleOf)}
+                onClose={() => setPeopleOf(null)}
+                title="On this schedule"
+                subtitle={peopleOf?.title}
+                people={peopleOf?.assignees || []}
+            />
         </div>
     );
 };

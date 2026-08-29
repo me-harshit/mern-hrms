@@ -491,17 +491,21 @@
 }
 
 /* Fixed widths keep the actions column from drifting as content changes.
-   `col-actions` must fit its buttons exactly: each is 32px wide with a 6px gap,
-   so three of them need 108px plus the cell's own 12px horizontal padding.
-   It was 104px — sized for two — which is why the third button overflowed and
-   sat on top of the progress bar. */
+   Each button is 32px with a 6px gap, so four need 146px and five need 184px.
+   These are sized with real slack on top of that, because table-layout: fixed
+   scales declared widths *down* proportionally once they exceed the table:
+   a column sized to fit its contents exactly is already overflowing on a
+   narrower screen. Measured at 1024px the previous 132px/186px left between
+   0 and 0.3px of room, which is what put the copy button on top of the
+   neighbouring column. The wrap rule below is the real guarantee; this is
+   what keeps it from having to fire. */
 .col-task { width: auto; min-width: 240px; }
 .col-project { width: 14%; }
 .col-assignees { width: 120px; }
 .col-priority { width: 100px; }
 .col-due { width: 115px; }
 .col-progress { width: 130px; }
-.col-actions { width: 132px; }
+.col-actions { width: 168px; }   /* nudge + copy + edit + delete = 146px */
 
 .task-title-cell {
     display: block;
@@ -528,17 +532,35 @@
 
 .task-actions-cell {
     text-align: right;
-    white-space: nowrap;
-    /* Belt and braces: if a fourth action is ever added, it wraps or clips
-       inside its own cell rather than spilling over the neighbouring column. */
+    /* Deliberately NOT nowrap: that is what forced the buttons onto one line
+       and let them slide over the column to the left when the cell was a
+       pixel too narrow. */
     overflow: hidden;
 }
 
+/*
+ * The action row is given an explicit width rather than being left to fill the
+ * cell, which is what makes the wrap deterministic instead of a side effect of
+ * how much room happens to be left.
+ *
+ * 146px is exactly four 32px buttons and three 6px gaps, so the Regular table
+ * (which never has more than four) stays on one line. The five-button tables
+ * override this to 108px below, which is exactly three -- giving a 3 + 2 split
+ * every time, at every screen width, rather than the 4 + 1 that falling back
+ * on available space produced.
+ *
+ * `margin-left: auto` keeps the block itself right-aligned in the cell, while
+ * `justify-content: center` centres the buttons within it -- so a short second
+ * row sits under the middle of the row above instead of hanging off one end.
+ */
 .task-actions-inner {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
+    flex-wrap: wrap;
     gap: 6px;
+    width: 146px;
+    margin-left: auto;
 }
 
 .icon-btn {
@@ -2113,6 +2135,33 @@
     font-size: 0.8rem;
     font-style: italic;
     line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   COPY LINK
+   -------------------------------------------------------------------------- */
+
+/* The tick that replaces the chain icon on a successful copy. Colour is the
+   only feedback, so it has to be unmistakable against the icon-btn ground. */
+.icon-btn.is-copied,
+.gts-btn.is-copied {
+    color: #15803d;
+    border-color: #86efac;
+    background: #f0fdf4;
+}
+
+.td-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Icon-only next to a labelled Edit button, so it needs its own square-ish
+   footprint rather than the wide default a gts-btn assumes. */
+.td-copy-btn {
+    padding-left: 12px;
+    padding-right: 12px;
 }
 
 /* --------------------------------------------------------------------------

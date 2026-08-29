@@ -21,6 +21,7 @@ import '../styles/tasks.css';
 import '../styles/recurring.css';
 import '../styles/selftask.css';
 import SelfTaskForm from '../components/SelfTaskForm';
+import CopyLinkButton from '../components/CopyLinkButton';
 
 const MAX_VIDEO_MB = 300;
 
@@ -275,11 +276,21 @@ const TaskDetail = () => {
                     </div>
                 </div>
 
-                {canEdit && (
-                    <button className="gts-btn secondary" onClick={() => navigate(`/edit-task/${task._id}`)}>
-                        <FontAwesomeIcon icon={faEdit} /> Edit
-                    </button>
-                )}
+                <div className="td-header-actions">
+                    {/* Everyone who can see the task can share it: the link
+                        grants nothing on its own, so whoever receives it is
+                        checked exactly as they would be navigating here. */}
+                    <CopyLinkButton
+                        path={`/task/${task._id}`}
+                        label="Copy link to this task"
+                        className="gts-btn secondary td-copy-btn"
+                    />
+                    {canEdit && (
+                        <button className="gts-btn secondary" onClick={() => navigate(`/edit-task/${task._id}`)}>
+                            <FontAwesomeIcon icon={faEdit} /> Edit
+                        </button>
+                    )}
+                </div>
             </header>
 
             {/* ---------- Two columns: discussion left, details right ---------- */}
