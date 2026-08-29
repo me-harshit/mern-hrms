@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserTimes, faSearch, faArrowLeft, faSun, faMoon } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/App.css';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 
 // Colour the reason chip by how much it needs chasing: an approved absence is
 // expected, a missing punch is not.
@@ -142,15 +143,20 @@ const AbsentEmployees = () => {
                                 visible.map(record => (
                                     <tr key={record._id}>
                                         <td data-label="Employee Details">
-                                            <div
-                                                className="fw-bold text-primary fs-15"
-                                                style={{ cursor: 'pointer' }}
-                                                onClick={() => navigate(`/employee/${record._id}`)}
-                                                title="View Profile"
-                                            >
-                                                {record.name || 'Unknown'}
+                                            <div className="flex-row gap-10">
+                                                <EmployeeAvatar person={record} />
+                                                <div>
+                                                    <div
+                                                        className="fw-bold text-primary fs-15"
+                                                        style={{ cursor: 'pointer' }}
+                                                        onClick={() => navigate(`/employee/${record._id}`)}
+                                                        title="View Profile"
+                                                    >
+                                                        {record.name || 'Unknown'}
+                                                    </div>
+                                                    <div className="text-small text-muted">ID: {record.employeeId || 'N/A'}</div>
+                                                </div>
                                             </div>
-                                            <div className="text-small text-muted">ID: {record.employeeId || 'N/A'}</div>
                                         </td>
 
                                         <td data-label="Assigned Shift">

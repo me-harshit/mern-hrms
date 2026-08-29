@@ -6,6 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faFilter, faArrowLeft, faFingerprint } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination'; // 👇 NEW: Modular Pagination
 import '../../styles/App.css';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 
 const RawPunches = () => {
     const navigate = useNavigate();
@@ -180,8 +181,13 @@ const RawPunches = () => {
                         ) : (
                             rawLogs.map(log => (
                                 <tr key={log._id}>
-                                    <td data-label="Employee" className="fw-bold text-primary">
-                                        {log.userId?.name || 'Unknown'}
+                                    <td data-label="Employee">
+                                        <div className="flex-row gap-10">
+                                            <EmployeeAvatar person={log.userId} />
+                                            <span className="fw-bold text-primary">
+                                                {log.userId?.name || 'Unknown'}
+                                            </span>
+                                        </div>
                                     </td>
                                     
                                     <td data-label="Biometric ID" className="fw-600 text-dark-gray text-small">

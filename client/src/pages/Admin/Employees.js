@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faEdit, faCalendarAlt, faSearch, faSun, faMoon, faEye } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination'; 
-import Avatar from '../../components/Avatar';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 import '../../styles/App.css';
 
 const Employees = () => {
@@ -121,11 +121,7 @@ const Employees = () => {
                                 <tr key={emp._id}>
                                     <td data-label="Employee">
                                         <div className="flex-row gap-10">
-                                            <Avatar
-                                                name={emp.name}
-                                                profilePic={emp.profilePic}
-                                                className="table-avatar"
-                                            />
+                                            <EmployeeAvatar person={emp} />
                                             <div>
                                                 <div 
                                                     className="fw-600 text-dark-blue" 

@@ -203,11 +203,26 @@
 
 /* The avatar stacks become obviously interactive now that they open this. */
 .avatar-stack.is-clickable,
+.tk-avatars.is-clickable,
 .sa-employee-avatar.is-clickable {
     cursor: pointer;
 }
 
 .avatar-stack.is-clickable:hover .assignee-avatar,
+.tk-avatars.is-clickable:hover .assignee-avatar,
 .sa-employee-avatar.is-clickable:hover {
     border-color: #215D7B;
+}
+
+/* Any employee picture that opens itself full size. Applied by
+   EmployeeAvatar, so it reaches every page the rollout touches without each
+   one needing its own rule. */
+.emp-avatar-clickable {
+    cursor: pointer;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.emp-avatar-clickable:hover {
+    filter: brightness(0.93);
+    box-shadow: 0 0 0 2px rgba(33, 93, 123, 0.35);
 }

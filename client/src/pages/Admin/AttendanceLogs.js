@@ -6,6 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faEdit, faUserTimes, faFilter, faFingerprint, faFileExcel, faSpinner, faCheck, faXmark, faHourglassHalf } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 
 const AttendanceLogs = () => {
     const navigate = useNavigate();
@@ -299,13 +300,16 @@ const AttendanceLogs = () => {
                             logs.map(log => (
                                 <tr key={log._id}>
                                     <td data-label="Employee">
-                                        <div
-                                            className="fw-bold text-primary"
-                                            style={{ cursor: 'pointer' }}
-                                            onClick={() => log.userId?._id && navigate(`/employee/${log.userId._id}`)}
-                                            title="View Profile"
-                                        >
-                                            {log.userId?.name || 'Unknown'}
+                                        <div className="flex-row gap-10">
+                                            <EmployeeAvatar person={log.userId} />
+                                            <div
+                                                className="fw-bold text-primary"
+                                                style={{ cursor: 'pointer' }}
+                                                onClick={() => log.userId?._id && navigate(`/employee/${log.userId._id}`)}
+                                                title="View Profile"
+                                            >
+                                                {log.userId?.name || 'Unknown'}
+                                            </div>
                                         </div>
                                     </td>
                                     <td data-label="Date">{log.date}</td>

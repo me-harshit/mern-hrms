@@ -12,7 +12,7 @@ import api from '../utils/api';
 import TaskThreads from '../components/TaskThreads';
 import TaskMediaGrid from '../components/TaskMediaGrid';
 import ScreenRecorder from '../components/ScreenRecorder';
-import Avatar from '../components/Avatar';
+import EmployeeAvatar from '../components/EmployeeAvatar';
 import TaskCountdown, { hasTimeWindow } from '../components/TaskCountdown';
 import TaskNudges from '../components/TaskNudges';
 import { STATUS_OPTIONS, slug, dueLabel, taskContextLabel } from '../utils/taskHelpers';
@@ -505,18 +505,16 @@ const TaskDetail = () => {
                             <div className="td-panel-body">
                                 <ul className="sa-prov">
                                     <li>
-                                        <Avatar
-                                            name={task.assignees[0]?.name}
-                                            profilePic={task.assignees[0]?.profilePic}
+                                        <EmployeeAvatar
+                                            person={task.assignees[0]}
                                             className="sa-prov-avatar"
                                         />
                                         <span className="sa-prov-name">{task.assignees[0]?.name || 'Unknown'}</span>
                                         <span className="sa-prov-role">logged this</span>
                                     </li>
                                     <li>
-                                        <Avatar
-                                            name={task.assignedBy?.name}
-                                            profilePic={task.assignedBy?.profilePic}
+                                        <EmployeeAvatar
+                                            person={task.assignedBy}
                                             className="sa-prov-avatar"
                                         />
                                         <span className="sa-prov-name">{task.assignedBy?.name || 'Unknown'}</span>
@@ -525,9 +523,8 @@ const TaskDetail = () => {
                                     <li>
                                         {task.approvedBy ? (
                                             <>
-                                                <Avatar
-                                                    name={task.approvedBy.name}
-                                                    profilePic={task.approvedBy.profilePic}
+                                                <EmployeeAvatar
+                                                    person={task.approvedBy}
                                                     className="sa-prov-avatar"
                                                 />
                                                 <span className="sa-prov-name">{task.approvedBy.name}</span>
@@ -615,7 +612,7 @@ const TaskDetail = () => {
                             <div className="assignee-chip-list">
                                 {task.assignees.map(a => (
                                     <div key={a._id} className={`assignee-chip ${a._id === currentUserId ? 'is-me' : ''}`}>
-                                        <Avatar name={a.name} profilePic={a.profilePic} className="assignee-avatar" />
+                                        <EmployeeAvatar person={a} className="assignee-avatar" />
                                         <span className="assignee-name">
                                             {a.name || 'Unknown'}
                                             {a._id === currentUserId && <span className="you-tag">You</span>}

@@ -11,7 +11,7 @@ import {
     faFolderOpen
 } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
-import Avatar from '../../components/Avatar';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 import TaskCountdown, { hasTimeWindow } from '../../components/TaskCountdown';
 import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
@@ -490,11 +490,7 @@ const EmployeeProfile = () => {
 
             {/* SUMMARY CARD */}
             <div className="control-card p-20 mb-20" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: '#f8fafc' }}>
-                <Avatar
-                    name={user.name}
-                    profilePic={user.profilePic}
-                    className="emp-summary-avatar"
-                />
+                <EmployeeAvatar person={user} className="emp-summary-avatar" />
                 <div style={{ flex: 1 }}>
                     <h2 style={{ margin: '0 0 5px 0', fontSize: '22px' }}>{user.name}</h2>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>

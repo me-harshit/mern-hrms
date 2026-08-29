@@ -13,6 +13,7 @@ import {
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
 import '../../styles/expenses.css';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 
 const AllExpenses = () => {
     const navigate = useNavigate();
@@ -676,16 +677,26 @@ const AllExpenses = () => {
                                         </td>
 
                                         <td data-label="Submitter / Payer">
+                                            {/* The avatar belongs to whoever this cell leads with:
+                                                the submitter when they are also the payer, the payer
+                                                otherwise -- so the face always matches the name
+                                                directly beside it. */}
                                             {isCompanyPayment || isSamePerson ? (
-                                                <div className="fw-bold text-primary" style={{ cursor: 'pointer' }} onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)} title="View Profile">
-                                                    {item.submittedBy?.name || 'Unknown'}
-                                                    {isCompanyPayment && <div className="text-small text-success fw-600 mt-5">Company Paid</div>}
+                                                <div className="flex-row gap-10">
+                                                    <EmployeeAvatar person={item.submittedBy} />
+                                                    <div className="fw-bold text-primary" style={{ cursor: 'pointer' }} onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)} title="View Profile">
+                                                        {item.submittedBy?.name || 'Unknown'}
+                                                        {isCompanyPayment && <div className="text-small text-success fw-600 mt-5">Company Paid</div>}
+                                                    </div>
                                                 </div>
                                             ) : (
-                                                <>
-                                                    <div className="fw-bold text-primary" style={{ cursor: 'pointer', fontSize: '14px' }} onClick={() => item.paymentSourceId?._id && handleViewProfile(item.paymentSourceId._id)} title="Paid By (View Profile)">{item.paymentSourceId?.name || 'Unknown Payer'}</div>
-                                                    <div className="text-muted mt-5" style={{ fontSize: '11px', cursor: 'pointer' }} onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)} title="Submitted By"><span style={{ fontWeight: '600' }}>Logged by:</span> {item.submittedBy?.name || 'Unknown'}</div>
-                                                </>
+                                                <div className="flex-row gap-10">
+                                                    <EmployeeAvatar person={item.paymentSourceId} />
+                                                    <div>
+                                                        <div className="fw-bold text-primary" style={{ cursor: 'pointer', fontSize: '14px' }} onClick={() => item.paymentSourceId?._id && handleViewProfile(item.paymentSourceId._id)} title="Paid By (View Profile)">{item.paymentSourceId?.name || 'Unknown Payer'}</div>
+                                                        <div className="text-muted mt-5" style={{ fontSize: '11px', cursor: 'pointer' }} onClick={() => item.submittedBy?._id && handleViewProfile(item.submittedBy._id)} title="Submitted By"><span style={{ fontWeight: '600' }}>Logged by:</span> {item.submittedBy?.name || 'Unknown'}</div>
+                                                    </div>
+                                                </div>
                                             )}
                                         </td>
 

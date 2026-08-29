@@ -18,7 +18,7 @@ router.get('/negative-balances', auth, async (req, res) => {
 
         // Find wallets where balance is less than 0 (Company owes employee)
         const negativeWallets = await Wallet.find({ balance: { $lt: 0 } })
-            .populate('userId', 'name email employeeId')
+            .populate('userId', 'name email employeeId profilePic')
             .sort({ balance: 1 }); // Sort by most owed first
 
         res.json(negativeWallets);
@@ -39,7 +39,7 @@ router.get('/history', auth, async (req, res) => {
             type: 'Credit',
             linkedExpenseIds: { $exists: true, $not: { $size: 0 } }
         })
-        .populate('userId', 'name employeeId')
+        .populate('userId', 'name employeeId profilePic')
         .populate('performedBy', 'name')
         .populate('linkedExpenseIds', 'category projectName amount expenseDate descriptionTags') // Fetch the exact receipts!
         .sort({ createdAt: -1 });

@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFolderOpen, faPlus, faEdit, faSearch, faCalendarAlt, faUserTie } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
-import Avatar from '../../components/Avatar'; // 👇 NEW: Modular Pagination
+import EmployeeAvatar from '../../components/EmployeeAvatar'; // 👇 NEW: Modular Pagination
 import '../../styles/App.css';
 
 const Projects = () => {
@@ -303,9 +303,8 @@ const Projects = () => {
                                         <div className="proj-lead">
                                             {proj.projectLead ? (
                                                 <>
-                                                    <Avatar
-                                                        name={proj.projectLead.name}
-                                                        profilePic={proj.projectLead.profilePic}
+                                                    <EmployeeAvatar
+                                                        person={proj.projectLead}
                                                         className="proj-lead-avatar"
                                                     />
                                                     <span>{proj.projectLead.name}</span>

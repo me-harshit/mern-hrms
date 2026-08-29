@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCalculator, faCheck, faFileInvoiceDollar, faSearch, faEye, faEnvelope, faTimes, faInbox } from '@fortawesome/free-solid-svg-icons';
 import '../../styles/App.css';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 
 const Payroll = () => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -627,8 +628,13 @@ const Payroll = () => {
                                     {payslipRequests.map(slip => (
                                         <tr key={slip._id}>
                                             <td data-label="Employee" className="fw-600">
-                                                {slip.userId?.name || 'Unknown'}
-                                                <div className="text-small text-muted">{slip.userId?.employeeId || '—'}</div>
+                                                <div className="flex-row gap-10">
+                                                    <EmployeeAvatar person={slip.userId} />
+                                                    <div>
+                                                        {slip.userId?.name || 'Unknown'}
+                                                        <div className="text-small text-muted">{slip.userId?.employeeId || '—'}</div>
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td data-label="Pay Period" className="fw-bold text-primary">
                                                 {new Date(slip.year, slip.month - 1).toLocaleString('en', { month: 'long', year: 'numeric' })}

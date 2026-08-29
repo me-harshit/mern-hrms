@@ -243,7 +243,8 @@ router.get('/absent', auth, async (req, res) => {
         }
 
         const employees = await User.find(userQuery)
-            .select('_id name employeeId shiftType joiningDate')
+            // profilePic so the absent list can show faces, not just names.
+            .select('_id name employeeId shiftType joiningDate profilePic')
             .sort({ name: 1 });
 
         if (!shiftStarted) {
@@ -313,6 +314,10 @@ router.get('/absent', auth, async (req, res) => {
                 _id: emp._id,
                 name: emp.name,
                 employeeId: emp.employeeId,
+                // The response is an explicit whitelist, so widening the
+                // select() above is not enough on its own -- the field has to
+                // be copied across here too or the list shows only initials.
+                profilePic: emp.profilePic,
                 shiftType: emp.shiftType || 'DAY',
                 date: shiftDateStr,
                 reason,
@@ -573,7 +578,7 @@ router.get('/all-logs', auth, async (req, res) => {
         const totalPages = Math.ceil(totalRecords / limit);
 
         const logs = await Attendance.find(query)
-            .populate('userId', 'name email shiftType')
+            .populate('userId', 'name email shiftType employeeId profilePic')
             .sort({ checkIn: -1 })
             .skip(skip)
             .limit(limit);
@@ -645,7 +650,7 @@ router.get('/raw-logs', auth, async (req, res) => {
         const totalPages = Math.ceil(totalRecords / limit);
 
         const logs = await AttendanceLog.find(query)
-            .populate('userId', 'name email shiftType')
+            .populate('userId', 'name email shiftType employeeId profilePic')
             .sort({ timestamp: -1 })
             .skip(skip)
             .limit(limit);
