@@ -12,8 +12,11 @@ const attendanceSchema = new mongoose.Schema({
     },
     checkIn: {
         type: Date,
+        // Only the statuses that imply someone actually turned up need a punch.
+        // 'WFH' belongs with the others: the morning cron pre-creates a WFH row
+        // from an approved request long before any remote punch arrives.
         required: function () {
-            return !['Absent', 'On Leave', 'Pending'].includes(this.status);
+            return !['Absent', 'On Leave', 'Pending', 'WFH'].includes(this.status);
         }
     },
     checkOut: {

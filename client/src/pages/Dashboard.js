@@ -38,11 +38,13 @@ const Dashboard = () => {
                 const res = await api.get(url);
                 let dashboardData = res.data;
 
-                // If Admin/HR, fetch the live absent count to show on the dashboard
+                // If Admin/HR, fetch the live day-shift absence count — everyone
+                // who has not checked in, on leave or otherwise. Night shift is
+                // behind a toggle on the absence page, not counted here.
                 if (!isEmployee) {
                     try {
-                        const absentRes = await api.get('/attendance/absent');
-                        dashboardData = { ...dashboardData, absentToday: absentRes.data.length };
+                        const absentRes = await api.get('/attendance/absent', { params: { shift: 'DAY' } });
+                        dashboardData = { ...dashboardData, absentToday: absentRes.data.count || 0 };
                     } catch (absentErr) {
                         console.error("Could not fetch absent count", absentErr);
                         dashboardData = { ...dashboardData, absentToday: 0 };
@@ -115,9 +117,11 @@ const Dashboard = () => {
                         <div className="stat-info"><p>Present Today</p><h3>{stats.presentToday}</h3></div>
                     </div>
 
-                    <div className="stat-card theme-red clickable-card" onClick={() => navigate('/absent-employees')} title="View Live Absence Dashboard">
+                    {/* Everyone on the day shift without a check-in: on leave,
+                        WFH but never logged on, or simply never turned up. */}
+                    <div className="stat-card theme-red clickable-card" onClick={() => navigate('/absent-employees')} title="View everyone not present today">
                         <div className="stat-icon"><FontAwesomeIcon icon={faUserTimes} /></div>
-                        <div className="stat-info"><p>Live Absence</p><h3 className="text-danger">{stats.absentToday}</h3></div>
+                        <div className="stat-info"><p>Absent Today</p><h3 className="text-danger">{stats.absentToday}</h3></div>
                     </div>
 
                     {/* 👇 FIXED: Pointing to /Employee-requests */}
@@ -125,7 +129,7 @@ const Dashboard = () => {
                         <div className="stat-icon"><FontAwesomeIcon icon={faClipboardList} /></div>
                         <div className="stat-info"><p>Pending Actions</p><h3>{stats.pendingLeaves}</h3></div>
                     </div>
-                    
+
                     {/* 👇 FIXED: Pointing to /Employee-requests */}
                     <div className="stat-card theme-purple clickable-card" onClick={() => navigate('/Employee-requests')} title="View Approved Leaves">
                         <div className="stat-icon"><FontAwesomeIcon icon={faPlaneDeparture} /></div>

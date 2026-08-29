@@ -17,6 +17,13 @@ try {
     console.log("Note: Leave model not found in attendance route, 'On Leave' status fallback disabled.");
 }
 
+let Wfh = null;
+try {
+    Wfh = require('../models/Wfh');
+} catch (e) {
+    console.log("Note: Wfh model not found in attendance route, WFH absence reasons disabled.");
+}
+
 // --- HELPER: Format Lateness ---
 const formatLateTime = (mins) => {
     const h = Math.floor(mins / 60);
@@ -188,14 +195,44 @@ router.post('/upload', upload.any(), async (req, res) => {
 // ==========================================
 // 🚀 2. LIVE ABSENCE CALCULATOR
 // ==========================================
+// Anyone who has not checked in for their shift is absent — whether they are on
+// approved leave, approved WFH without a remote punch, or simply never showed.
+//
+// This works off the employee roster, NOT off attendance rows. Rows are created
+// by a cron that can miss people; starting from the roster means an employee
+// with no row at all still gets counted instead of vanishing from the numbers.
+//
+// Query: ?shift=DAY (default) | NIGHT — the two are never mixed.
 router.get('/absent', auth, async (req, res) => {
     try {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ message: 'Access Denied' });
 
         const now = new Date();
+        const shift = req.query.shift === 'NIGHT' ? 'NIGHT' : 'DAY';
+        const isNight = shift === 'NIGHT';
+        const shiftDateStr = getShiftDate(now, shift);
 
-        // 👇 FIXED: Includes HR/Managers/Accounts, excludes Admin
+        // --- Has the shift actually started? -------------------------------
+        // Nobody is "absent" before their shift begins; they are simply not due
+        // in yet. This is what keeps night staff off the list during the day.
+        const settings = await Settings.findOne() || {};
+        const shiftStartStr = isNight
+            ? (settings.nightShiftStartTime || '19:30')
+            : (settings.dayShiftStartTime || '09:30');
+
+        const [startHour, startMin] = shiftStartStr.split(':').map(Number);
+        const [dd, mm, yyyy] = shiftDateStr.split('/').map(Number);
+        const shiftStartAt = new Date(yyyy, mm - 1, dd, startHour, startMin, 0, 0);
+        const shiftStarted = now >= shiftStartAt;
+
+        // --- Who works this shift ------------------------------------------
         let userQuery = { role: { $ne: 'ADMIN' }, status: 'ACTIVE' };
+
+        if (isNight) {
+            userQuery.shiftType = 'NIGHT';
+        } else {
+            userQuery.shiftType = { $in: ['DAY', null] };
+        }
 
         if (req.user.role === 'MANAGER' || req.user.role === 'TEAM LEAD') {
             const manager = await User.findById(req.user.id);
@@ -205,28 +242,93 @@ router.get('/absent', auth, async (req, res) => {
             ];
         }
 
-        const employees = await User.find(userQuery).select('_id');
-        const employeeIds = employees.map(emp => emp._id);
+        const employees = await User.find(userQuery)
+            .select('_id name employeeId shiftType joiningDate')
+            .sort({ name: 1 });
 
-        const todayDayStr = getShiftDate(now, 'DAY');
-        const todayNightStr = getShiftDate(now, 'NIGHT');
+        if (!shiftStarted) {
+            return res.json({
+                shift, date: shiftDateStr, shiftStarted: false,
+                shiftStartTime: shiftStartStr, totalOnShift: employees.length,
+                count: 0, employees: []
+            });
+        }
 
-        const liveAbsences = await Attendance.find({
+        const employeeIds = employees.map(e => e._id);
+
+        // --- Their attendance rows for this shift's date --------------------
+        const records = await Attendance.find({
             userId: { $in: employeeIds },
-            date: { $in: [todayDayStr, todayNightStr] },
-            status: 'Pending'
-        }).populate('userId', 'name email employeeId shiftType');
+            date: shiftDateStr
+        }).select('userId status checkIn note');
 
-        const formattedMissing = liveAbsences.map(record => ({
-            _id: record.userId._id,
-            name: record.userId.name,
-            employeeId: record.userId.employeeId,
-            shiftType: record.userId.shiftType || 'DAY',
-            targetDate: record.date,
-            status: 'Pending Punch'
-        }));
+        const recordByUser = new Map(records.map(r => [r.userId.toString(), r]));
 
-        res.json(formattedMissing);
+        // --- Approved leave / WFH, read straight from their own collections --
+        // The attendance row is not trustworthy for this: if the setup cron
+        // never wrote a row, someone on approved leave would otherwise be
+        // reported as a plain no-show.
+        const shiftDateObj = new Date(yyyy, mm - 1, dd);
+        const startOfDay = new Date(shiftDateObj); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(shiftDateObj); endOfDay.setHours(23, 59, 59, 999);
+        const overlapsDate = {
+            userId: { $in: employeeIds }, status: 'Approved',
+            fromDate: { $lte: endOfDay }, toDate: { $gte: startOfDay }
+        };
+
+        const [leaves, wfhs] = await Promise.all([
+            Leave ? Leave.find(overlapsDate).select('userId leaveType') : [],
+            Wfh ? Wfh.find(overlapsDate).select('userId') : []
+        ]);
+
+        const leaveByUser = new Map(leaves.map(l => [l.userId.toString(), l.leaveType]));
+        const wfhUsers = new Set(wfhs.map(w => w.userId.toString()));
+
+        // --- Bucket: present means checked in and not away on leave ----------
+        const absentees = [];
+
+        for (const emp of employees) {
+            // Not on the payroll yet on this date.
+            if (emp.joiningDate && shiftDateObj < new Date(new Date(emp.joiningDate).setHours(0, 0, 0, 0))) continue;
+
+            const uid = emp._id.toString();
+            const record = recordByUser.get(uid);
+
+            // A check-in is the whole test. Someone who punched in is present
+            // even if they also hold a half-day leave — they turned up.
+            if (record && record.checkIn) continue;
+
+            let reason;
+            if (leaveByUser.has(uid)) {
+                reason = `On Leave (${leaveByUser.get(uid)})`;
+            } else if (record?.status === 'On Leave') {
+                reason = 'On Leave';
+            } else if (wfhUsers.has(uid) || record?.status === 'WFH') {
+                reason = 'WFH - Not Checked In';
+            } else {
+                reason = 'Not Punched In';
+            }
+
+            absentees.push({
+                _id: emp._id,
+                name: emp.name,
+                employeeId: emp.employeeId,
+                shiftType: emp.shiftType || 'DAY',
+                date: shiftDateStr,
+                reason,
+                note: record ? record.note : ''
+            });
+        }
+
+        res.json({
+            shift,
+            date: shiftDateStr,
+            shiftStarted: true,
+            shiftStartTime: shiftStartStr,
+            totalOnShift: employees.length,
+            count: absentees.length,
+            employees: absentees
+        });
     } catch (err) {
         console.error("Live Absence Check Error:", err);
         res.status(500).send('Server Error');
