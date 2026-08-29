@@ -183,8 +183,8 @@ router.get('/', auth, async (req, res) => {
         sortObj[sortBy] = sortOrder;
 
         const expenses = await Expense.find(query)
-            .populate('submittedBy', 'name email')
-            .populate('paymentSourceId', 'name role')
+            .populate('submittedBy', 'name email profilePic')
+            .populate('paymentSourceId', 'name role profilePic')
             .populate('approvedBy', 'name')
             .populate('vendorId', 'name gstNumber')
             .sort(sortObj)
@@ -516,8 +516,8 @@ router.get('/all', auth, async (req, res) => {
         sortObj[sortBy] = sortOrder;
 
         const expenses = await Expense.find(query)
-            .populate('submittedBy', 'name email employeeId')
-            .populate('paymentSourceId', 'name role')
+            .populate('submittedBy', 'name email employeeId profilePic')
+            .populate('paymentSourceId', 'name role profilePic')
             .populate('approvedBy', 'name')
             .populate('vendorId', 'name gstNumber')
             .sort(sortObj)
@@ -756,7 +756,7 @@ router.delete('/:id', auth, async (req, res) => {
 router.put('/:id/status', auth, async (req, res) => {
     try {
         const { status, adminFeedback } = req.body;
-        const expense = await Expense.findById(req.params.id).populate('submittedBy', 'name email');
+        const expense = await Expense.findById(req.params.id).populate('submittedBy', 'name email profilePic');
 
         if (!expense) return res.status(404).json({ message: 'Expense not found' });
         if (expense.status !== 'Pending' && expense.status !== 'Returned') {

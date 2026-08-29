@@ -9,7 +9,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import TaskMediaGrid from '../../components/TaskMediaGrid';
 import TaskDiscussion from '../../components/TaskDiscussion';
-import Avatar from '../../components/Avatar';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 import { slug, taskContextLabel, confirmDeleteSchedule } from '../../utils/taskHelpers';
 import { prettyDate, todayYmd, parseYmd } from '../../utils/scheduleDates';
 import '../../styles/App.css';
@@ -217,9 +217,8 @@ const RecurringTaskDetail = () => {
                     <span className="task-media-count byline">
                         {schedule.assignedBy ? (
                             <>
-                                <Avatar
-                                    name={schedule.assignedBy.name}
-                                    profilePic={schedule.assignedBy.profilePic}
+                                <EmployeeAvatar
+                                    person={schedule.assignedBy}
                                     className="byline-avatar"
                                 />
                                 {schedule.assignedBy.name}
@@ -285,7 +284,7 @@ const RecurringTaskDetail = () => {
                 return (
                     <div className="rc-person" key={person.user._id}>
                         <div className="rc-person-head">
-                            <Avatar name={person.user.name} profilePic={person.user.profilePic} className="assignee-avatar" />
+                            <EmployeeAvatar person={person.user} className="assignee-avatar" />
                             <span className="rc-person-name">{person.user.name}</span>
 
                             {person.status === 'Stalled' && (

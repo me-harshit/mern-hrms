@@ -247,7 +247,7 @@ router.get('/history', auth, async (req, res) => {
         }
 
         const payslips = await Payslip.find(query)
-            .populate('userId', 'name email employeeId')
+            .populate('userId', 'name email employeeId profilePic')
             .sort({ year: -1, month: -1 });
 
         res.json({ data: payslips });
@@ -325,7 +325,7 @@ router.get('/requests', auth, async (req, res) => {
             : { 'request.status': status || 'Pending' };
 
         const requests = await Payslip.find(query)
-            .populate('userId', 'name email workEmail employeeId')
+            .populate('userId', 'name email workEmail employeeId profilePic')
             .populate('request.actionedBy', 'name')
             .sort({ 'request.requestedAt': 1 });
 

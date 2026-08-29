@@ -10,6 +10,7 @@ import {
     faPlus, faHourglassHalf, faCircleXmark, faUserPen
 } from '@fortawesome/free-solid-svg-icons';
 import Avatar from '../../components/Avatar';
+import AssigneePopup from '../../components/AssigneePopup';
 import TaskCountdown, { hasTimeWindow } from '../../components/TaskCountdown';
 import { slug, dueLabel, taskContextLabel } from '../../utils/taskHelpers';
 import '../../styles/App.css';
@@ -27,6 +28,7 @@ const TaskCard = ({
 }) => {
     const due = dueLabel(task.dueDate, task.status === 'Completed', task.overdueAt);
     const others = task.assignees.filter(a => a._id !== currentUserId);
+    const [showPeople, setShowPeople] = useState(false);
 
     return (
         <article
@@ -91,7 +93,19 @@ const TaskCard = ({
             {hasTimeWindow(task, { requireExplicit: false }) && <TaskCountdown task={task} compact />}
 
             <div className="tk-card-foot">
-                <div className="tk-avatars">
+                <div
+                    className="tk-avatars is-clickable"
+                    role="button"
+                    tabIndex={0}
+                    title="See who is working on this"
+                    /* The card navigates to the task, so this must not bubble. */
+                    onClick={(e) => { e.stopPropagation(); setShowPeople(true); }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault(); e.stopPropagation(); setShowPeople(true);
+                        }
+                    }}
+                >
                     <Avatar name={currentUser?.name} profilePic={currentUser?.profilePic} className="assignee-avatar me" title={`${currentUser?.name} (you)`} />
                     {others.slice(0, 2).map(a => (
                         <Avatar key={a._id} name={a.name} profilePic={a.profilePic} className="assignee-avatar" title={a.name} />
@@ -115,6 +129,16 @@ const TaskCard = ({
                     <span title="Open discussion"><FontAwesomeIcon icon={faComment} /></span>
                 </div>
             </div>
+
+            {/* The card's own roster. `currentUser` is listed first because the
+                stack shows it first, so the popup reads in the same order. */}
+            <AssigneePopup
+                open={showPeople}
+                onClose={() => setShowPeople(false)}
+                title="Working on this"
+                subtitle={task.title}
+                people={[currentUser, ...others]}
+            />
         </article>
     );
 };

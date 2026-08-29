@@ -20,7 +20,7 @@ import '../styles/assigneePopup.css';
  * photo fails to load, so someone without a picture gets large initials in the
  * same box rather than a blank square.
  */
-const AssigneePopup = ({ open, onClose, title, people = [], subtitle }) => {
+const AssigneePopup = ({ open, onClose, title, people = [], subtitle, captions = true }) => {
     const closeRef = useRef(null);
 
     // Escape closes it, and focus starts on the close button so the dialog is
@@ -84,16 +84,18 @@ const AssigneePopup = ({ open, onClose, title, people = [], subtitle }) => {
                                     profilePic={p.profilePic}
                                     className="ap-person-avatar"
                                 />
-                                <figcaption className="ap-person-text">
-                                    <span className="ap-person-name" title={p.name}>
-                                        {p.name || 'Unknown'}
-                                    </span>
-                                    {[p.employeeId, p.jobTitle || p.role, p.email].filter(Boolean)[0] && (
-                                        <span className="ap-person-meta">
-                                            {[p.employeeId, p.jobTitle || p.role, p.email].filter(Boolean)[0]}
+                                {captions && (
+                                    <figcaption className="ap-person-text">
+                                        <span className="ap-person-name" title={p.name}>
+                                            {p.name || 'Unknown'}
                                         </span>
-                                    )}
-                                </figcaption>
+                                        {[p.employeeId, p.jobTitle || p.role, p.email].filter(Boolean)[0] && (
+                                            <span className="ap-person-meta">
+                                                {[p.employeeId, p.jobTitle || p.role, p.email].filter(Boolean)[0]}
+                                            </span>
+                                        )}
+                                    </figcaption>
+                                )}
                             </figure>
                         ))}
                     </div>

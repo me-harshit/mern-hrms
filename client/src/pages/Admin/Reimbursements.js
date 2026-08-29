@@ -5,6 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWallet, faRupeeSign, faSpinner, faCheckCircle, faTimes, faListCheck, faHistory, faEye, faFileInvoice } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
 import '../../styles/App.css';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 
 const Reimbursements = () => {
     // 👇 NEW: Tab State
@@ -311,7 +312,12 @@ const Reimbursements = () => {
                                 ) : (
                                     wallets.map(wallet => (
                                         <tr key={wallet._id} style={{ background: selectedEmployee?.userId?._id === wallet.userId?._id ? '#eff6ff' : 'transparent' }}>
-                                            <td data-label="Employee Name" className="fw-600 text-primary">{wallet.userId?.name}</td>
+                                            <td data-label="Employee Name" className="fw-600 text-primary">
+                                                <div className="flex-row gap-10">
+                                                    <EmployeeAvatar person={wallet.userId} />
+                                                    <span>{wallet.userId?.name}</span>
+                                                </div>
+                                            </td>
                                             <td data-label="Employee ID">{wallet.userId?.employeeId || 'N/A'}</td>
                                             <td data-label="Current Balance" style={{ color: '#dc2626', fontWeight: 'bold' }}>
                                                 - ₹{Math.abs(wallet.balance).toLocaleString('en-IN')}
@@ -358,8 +364,13 @@ const Reimbursements = () => {
                                             <div className="text-small text-muted">{new Date(txn.createdAt).toLocaleTimeString()}</div>
                                         </td>
                                         <td data-label="Paid To">
-                                            <div className="fw-bold text-primary">{txn.userId?.name}</div>
-                                            <div className="text-small text-muted">{txn.userId?.employeeId || 'N/A'}</div>
+                                            <div className="flex-row gap-10">
+                                                <EmployeeAvatar person={txn.userId} />
+                                                <div>
+                                                    <div className="fw-bold text-primary">{txn.userId?.name}</div>
+                                                    <div className="text-small text-muted">{txn.userId?.employeeId || 'N/A'}</div>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td data-label="Amount Paid" style={{ color: '#16a34a', fontWeight: 'bold', fontSize: '15px' }}>
                                             ₹{txn.amount.toLocaleString('en-IN')}
