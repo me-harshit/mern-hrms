@@ -145,6 +145,44 @@
 .task-status-badge.blocked { background: #fee2e2; color: #b91c1c; }
 /* Used for "nothing due today", not a task status either. */
 .task-status-badge.today { background: #ede9fe; color: #6d28d9; }
+/* "Nothing today" is a statement of fact, not a warning — it must not
+   compete with the overdue and due-today badges beside it. */
+.task-status-badge.muted { background: #f1f5f9; color: #94a3b8; }
+/* Work that counts toward today but still owes a decision. Amber
+   because it is an action for the viewer, not a state of the work. */
+.task-status-badge.awaiting { background: #fef3c7; color: #b45309; }
+.task-status-badge.awaiting svg { margin-right: 4px; font-size: 0.68em; }
+
+/* Same meaning one level down, on a single task inside a card. */
+.emp-task-awaiting {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #fef3c7;
+    color: #b45309;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Inline marker on the tasks that put someone in the "today" bucket. Small
+   and ahead of the title, so a scan down an expanded card finds today's work
+   without reading dates. */
+.emp-task-today {
+    display: inline-block;
+    margin-right: 7px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #ede9fe;
+    color: #6d28d9;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: 1px;
+}
 
 .task-due-date.overdue {
     color: #dc2626;
@@ -3167,6 +3205,27 @@
 .emp-stat-icon.idle { background: #fef3c7; color: #b45309; }
 .emp-stat-icon.late { background: #fee2e2; color: #b91c1c; }
 .emp-stat-icon.today { background: #ede9fe; color: #6d28d9; }
+.emp-stat-icon.done { background: #dbeafe; color: #1d4ed8; }
+
+/* The overdue tile is a toggle, not a fourth choice in the breakdown, so it
+   is set apart: a leading divider on wide screens and a distinctly warmer
+   active state than the exclusive buckets get. */
+.emp-stat.is-toggle {
+    border-style: dashed;
+}
+
+.emp-stat.is-toggle.active {
+    border-style: solid;
+    border-color: #b91c1c;
+    box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.12);
+}
+
+@media (min-width: 900px) {
+    .emp-stat.is-toggle {
+        margin-left: 6px;
+        border-left-width: 3px;
+    }
+}
 
 .emp-stat-text {
     display: flex;
