@@ -6,15 +6,15 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faSearch, faTimes, faChevronDown, faUsers, faUserCheck, faUserClock,
     faTriangleExclamation, faPlus, faFolderOpen, faBuilding, faPaperclip,
-    faUserGroup, faCalendarMinus
+    faUserGroup, faCalendarMinus, faListCheck, faCircleCheck, faHourglassHalf
 } from '@fortawesome/free-solid-svg-icons';
 import { slug, taskContextLabel, dueLabel, shortDate } from '../utils/taskHelpers';
 import Avatar from './Avatar';
 import TaskCountdown, { hasTimeWindow } from './TaskCountdown';
 
-// Opens on the people who are carrying work — that's the question this view
-// gets asked most. The "No tasks at all" tile is one click away.
-const DEFAULT_WORKLOAD = 'with';
+// Opens on the people with work outstanding today — this board answers "what
+// about today", and anything else is one click away on the tile row.
+const DEFAULT_WORKLOAD = 'today-open';
 const UNASSIGNED_DEPT = 'Unassigned';
 
 // department is free text with no validation, so real data carries case and
@@ -23,13 +23,20 @@ const UNASSIGNED_DEPT = 'Unassigned';
 // migration; blank/null goes in its own named bucket rather than vanishing.
 const normDept = (d) => (d || '').trim() || UNASSIGNED_DEPT;
 
+/**
+ * The four buckets are mutually exclusive and cover the whole roster, so the
+ * tiles read as a breakdown rather than a set of overlapping flags.
+ *
+ * What they replaced counted *records*: "Has tasks" was `total > 0`, which
+ * included people whose every task was finished — 13 of the 48 it reported.
+ * Nothing here counts a completed task as work outstanding.
+ */
 const WORKLOAD_OPTIONS = [
     { value: 'All', label: 'Everyone' },
-    { value: 'with', label: 'Has tasks' },
-    { value: 'without', label: 'No tasks at all' },
-    { value: 'idle', label: 'Nothing open' },
-    { value: 'overdue', label: 'Has overdue' },
-    { value: 'today-empty', label: 'No task due today' }
+    { value: 'today-open', label: 'Task today — outstanding' },
+    { value: 'today-done', label: 'Task today — all done' },
+    { value: 'today-none', label: 'No task today' },
+    { value: 'none-ever', label: 'No task at all' }
 ];
 
 // One badge of colour down a card's side, so a scan of the grid finds the
@@ -37,8 +44,11 @@ const WORKLOAD_OPTIONS = [
 const loadClassOf = (row) => {
     if (row.counts.total === 0) return 'empty';
     if (row.counts.overdue > 0) return 'heavy';
-    if (row.openCount >= 3) return 'loaded';
-    return 'light';
+    // Today's outstanding work drives the accent, not the lifetime pile —
+    // three tasks finished last week is not a loaded day.
+    if (row.counts.openToday >= 3) return 'loaded';
+    if (row.counts.openToday > 0) return 'light';
+    return 'empty';
 };
 
 /**
@@ -65,6 +75,7 @@ const EmployeeTaskBoard = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [department, setDepartment] = useState('All');
     const [workload, setWorkload] = useState(DEFAULT_WORKLOAD);
+    const [overdueOnly, setOverdueOnly] = useState(false);
 
     useEffect(() => {
         setLoading(true);
@@ -103,16 +114,15 @@ const EmployeeTaskBoard = () => {
                     .filter(Boolean).join(' ').toLowerCase();
                 if (!hay.includes(q)) return false;
             }
-            switch (workload) {
-                case 'with': return r.counts.total > 0;
-                case 'without': return r.counts.total === 0;
-                case 'idle': return r.openCount === 0;
-                case 'overdue': return r.counts.overdue > 0;
-                case 'today-empty': return r.counts.dueToday === 0;
-                default: return true;
-            }
+            // Overdue is a state of today's work rather than an alternative
+            // to it, so it narrows whichever bucket is selected instead of
+            // replacing it.
+            if (overdueOnly && r.counts.overdue === 0) return false;
+
+            if (workload === 'All') return true;
+            return r.bucket === workload;
         });
-    }, [rows, searchTerm, department, workload]);
+    }, [rows, searchTerm, department, workload, overdueOnly]);
 
     const grouped = useMemo(() => {
         const map = new Map();
@@ -127,16 +137,17 @@ const EmployeeTaskBoard = () => {
     // Changing any filter remounts the sections below, which both re-runs
     // their entrance animation and drops any open card — a card must never
     // stay expanded over somebody else's data.
-    const viewKey = `${searchTerm}|${department}|${workload}`;
+    const viewKey = `${searchTerm}|${department}|${workload}|${overdueOnly}`;
     useEffect(() => { setExpanded(new Set()); }, [viewKey]);
 
     const activeFilterCount = (workload !== DEFAULT_WORKLOAD ? 1 : 0) +
-        (searchTerm ? 1 : 0) + (department !== 'All' ? 1 : 0);
+        (searchTerm ? 1 : 0) + (department !== 'All' ? 1 : 0) + (overdueOnly ? 1 : 0);
 
     const clearFilters = () => {
         setWorkload(DEFAULT_WORKLOAD);
         setSearchTerm('');
         setDepartment('All');
+        setOverdueOnly(false);
     };
 
     const rosterIsEmpty = !searchTerm && (summary?.totalEmployees ?? 0) === 0;
@@ -167,14 +178,24 @@ const EmployeeTaskBoard = () => {
                         <span className={`emp-task-bar ${slug(task.status)}`} />
 
                         <div className="emp-task-main">
-                            <span className="emp-task-title">{task.title}</span>
+                            <span className="emp-task-title">
+                                {task.isToday && <span className="emp-task-today" title="On this person's plate today">Today</span>}
+                                {task.title}
+                            </span>
                             <span className="emp-task-meta">
                                 <span className={`task-context ${task.taskType === 'Regular Office Task' ? 'is-office' : ''}`}>
                                     <FontAwesomeIcon icon={task.taskType === 'Regular Office Task' ? faBuilding : faFolderOpen} />
                                     <span className="task-context-label">{taskContextLabel(task)}</span>
                                 </span>
+                                {task.awaitingApproval && (
+                                    <span className="emp-task-awaiting" title="Waiting on an approval decision">
+                                        <FontAwesomeIcon icon={faHourglassHalf} /> Awaiting approval
+                                    </span>
+                                )}
                                 {task.assignedBy?.name && (
-                                    <span className="emp-task-by">by {task.assignedBy.name}</span>
+                                    <span className="emp-task-by">
+                                        {task.isSelfAssigned ? 'self-assigned, via ' : 'by '}{task.assignedBy.name}
+                                    </span>
                                 )}
                                 {task.shareCount > 1 && (
                                     <span className="emp-task-by" title="Shared task">
@@ -219,32 +240,45 @@ const EmployeeTaskBoard = () => {
     return (
         <>
             {summary && (
-                <div className="emp-stat-row">
-                    <button type="button" className={`emp-stat ${workload === 'All' ? 'active' : ''}`} onClick={() => setWorkload('All')}>
-                        <span className="emp-stat-icon all"><FontAwesomeIcon icon={faUsers} /></span>
-                        <span className="emp-stat-text"><strong>{summary.totalEmployees}</strong><small>In your scope</small></span>
-                    </button>
-                    <button type="button" className={`emp-stat ${workload === 'with' ? 'active' : ''}`} onClick={() => setWorkload('with')}>
-                        <span className="emp-stat-icon busy"><FontAwesomeIcon icon={faUserCheck} /></span>
-                        <span className="emp-stat-text"><strong>{summary.withTasks}</strong><small>Has tasks</small></span>
-                    </button>
-                    <button type="button" className={`emp-stat ${workload === 'without' ? 'active' : ''}`} onClick={() => setWorkload('without')}>
-                        <span className="emp-stat-icon free"><FontAwesomeIcon icon={faUserClock} /></span>
-                        <span className="emp-stat-text"><strong>{summary.withoutTasks}</strong><small>No tasks at all</small></span>
-                    </button>
-                    <button type="button" className={`emp-stat ${workload === 'idle' ? 'active' : ''}`} onClick={() => setWorkload('idle')}>
-                        <span className="emp-stat-icon idle"><FontAwesomeIcon icon={faUserClock} /></span>
-                        <span className="emp-stat-text"><strong>{summary.idle}</strong><small>Nothing open</small></span>
-                    </button>
-                    <button type="button" className={`emp-stat ${workload === 'overdue' ? 'active' : ''}`} onClick={() => setWorkload('overdue')}>
-                        <span className="emp-stat-icon late"><FontAwesomeIcon icon={faTriangleExclamation} /></span>
-                        <span className="emp-stat-text"><strong>{summary.overloaded}</strong><small>Has overdue</small></span>
-                    </button>
-                    <button type="button" className={`emp-stat ${workload === 'today-empty' ? 'active' : ''}`} onClick={() => setWorkload('today-empty')}>
-                        <span className="emp-stat-icon today"><FontAwesomeIcon icon={faCalendarMinus} /></span>
-                        <span className="emp-stat-text"><strong>{summary.noTaskToday}</strong><small>No task due today</small></span>
-                    </button>
-                </div>
+                <>
+                    {/* A breakdown, not a set of flags: the four buckets are
+                        exclusive and add up to the roster, so the row can be
+                        read left to right as "where did today go". */}
+                    <div className="emp-stat-row">
+                        <button type="button" className={`emp-stat ${workload === 'All' ? 'active' : ''}`} onClick={() => setWorkload('All')}>
+                            <span className="emp-stat-icon all"><FontAwesomeIcon icon={faUsers} /></span>
+                            <span className="emp-stat-text"><strong>{summary.totalEmployees}</strong><small>In your scope</small></span>
+                        </button>
+                        <button type="button" className={`emp-stat ${workload === 'today-open' ? 'active' : ''}`} onClick={() => setWorkload('today-open')}>
+                            <span className="emp-stat-icon busy"><FontAwesomeIcon icon={faListCheck} /></span>
+                            <span className="emp-stat-text"><strong>{summary.outstandingToday}</strong><small>Task today — outstanding</small></span>
+                        </button>
+                        <button type="button" className={`emp-stat ${workload === 'today-done' ? 'active' : ''}`} onClick={() => setWorkload('today-done')}>
+                            <span className="emp-stat-icon done"><FontAwesomeIcon icon={faCircleCheck} /></span>
+                            <span className="emp-stat-text"><strong>{summary.doneToday}</strong><small>Task today — all done</small></span>
+                        </button>
+                        <button type="button" className={`emp-stat ${workload === 'today-none' ? 'active' : ''}`} onClick={() => setWorkload('today-none')}>
+                            <span className="emp-stat-icon today"><FontAwesomeIcon icon={faCalendarMinus} /></span>
+                            <span className="emp-stat-text"><strong>{summary.noTaskToday}</strong><small>No task today</small></span>
+                        </button>
+                        <button type="button" className={`emp-stat ${workload === 'none-ever' ? 'active' : ''}`} onClick={() => setWorkload('none-ever')}>
+                            <span className="emp-stat-icon free"><FontAwesomeIcon icon={faUserClock} /></span>
+                            <span className="emp-stat-text"><strong>{summary.noTaskAtAll}</strong><small>No task at all</small></span>
+                        </button>
+                        {/* Deliberately outside the breakdown: overdue cuts
+                            across every bucket, so it toggles rather than
+                            selects. */}
+                        <button
+                            type="button"
+                            className={`emp-stat is-toggle ${overdueOnly ? 'active' : ''}`}
+                            onClick={() => setOverdueOnly(v => !v)}
+                            title="Narrow whichever group is selected to just the people running late"
+                        >
+                            <span className="emp-stat-icon late"><FontAwesomeIcon icon={faTriangleExclamation} /></span>
+                            <span className="emp-stat-text"><strong>{summary.overdue}</strong><small>Overdue now</small></span>
+                        </button>
+                    </div>
+                </>
             )}
 
             <div className="task-toolbar">
@@ -375,19 +409,34 @@ const EmployeeTaskBoard = () => {
                                                 <span className="emp-none-pill">No tasks assigned</span>
                                             ) : (
                                                 <>
+                                                    {/* Today first and stated plainly. The lifetime
+                                                        "N Done" pill used to dominate this row, which
+                                                        is what made a card with one open task read as
+                                                        finished. */}
                                                     {c.overdue > 0 && <span className="task-status-badge blocked">{c.overdue} Overdue</span>}
+                                                    {c.openToday > 0
+                                                        ? <span className="task-status-badge today">{c.openToday} due today</span>
+                                                        : c.doneToday > 0
+                                                            ? <span className="task-status-badge completed">Today’s work done</span>
+                                                            : <span className="task-status-badge muted">Nothing today</span>}
                                                     {c.pending > 0 && <span className="task-status-badge pending">{c.pending} Pending</span>}
                                                     {c.inProgress > 0 && <span className="task-status-badge inprogress">{c.inProgress} In Progress</span>}
                                                     {c.onHold > 0 && <span className="task-status-badge onhold">{c.onHold} On Hold</span>}
-                                                    {c.completed > 0 && <span className="task-status-badge completed">{c.completed} Done</span>}
-                                                    {c.dueToday === 0 && <span className="task-status-badge today">Nothing due today</span>}
+                                                    {/* Just another state the work can be in, sitting
+                                                        with the rest — it counts toward today either
+                                                        way, so it needs no filter of its own. */}
+                                                    {c.awaitingApproval > 0 && (
+                                                        <span className="task-status-badge awaiting" title="Self-assigned work waiting on an approval decision">
+                                                            {c.awaitingApproval} Awaiting approval
+                                                        </span>
+                                                    )}
                                                 </>
                                             )}
                                         </div>
 
                                         <div className="wl-foot">
-                                            <span>{c.total} total assigned</span>
-                                            <span className="wl-open">{emp.openCount} open</span>
+                                            <span>{emp.openCount} open</span>
+                                            <span className="wl-open">{c.completed} done all-time</span>
                                             {!hasNone && (
                                                 <FontAwesomeIcon
                                                     icon={faChevronDown}

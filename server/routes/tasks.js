@@ -41,7 +41,7 @@ const {
 } = require('../utils/taskScoping');
 const { todayIST, addDays } = require('../utils/recurringSchedule');
 const { buildTaskSearchFilter, escapeRegex } = require('../utils/taskSearch');
-const { parseTimeWindow } = require('../utils/taskOverdue');
+const { parseTimeWindow, istWallClockToUTC } = require('../utils/taskOverdue');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
@@ -774,7 +774,12 @@ router.get('/by-employee', auth, async (req, res) => {
         const emptyResult = {
             data: [],
             pagination: { totalRecords: 0, totalPages: 1, currentPage: page, limit },
-            summary: { totalEmployees: 0, withTasks: 0, withoutTasks: 0, idle: 0, overloaded: 0, noTaskToday: 0 }
+            // Same shape the populated response returns, so an empty scope
+            // renders zeroed tiles rather than blank ones.
+            summary: {
+                totalEmployees: 0, outstandingToday: 0, doneToday: 0,
+                noTaskToday: 0, noTaskAtAll: 0, overdue: 0
+            }
         };
 
         const scopeFilter = await getScopedEmployeeFilter(req.user);
@@ -810,6 +815,13 @@ router.get('/by-employee', auth, async (req, res) => {
         const todayStart = new Date(`${todayStr}T00:00:00.000Z`);
         const tomorrowStart = new Date(`${addDays(todayStr, 1)}T00:00:00.000Z`);
 
+        // completedAt is a real instant, not a date-only value, so "finished
+        // today" needs the actual IST midnight boundaries rather than the
+        // UTC-midnight bracket dueDate lives in. Mixing the two would count
+        // work finished between 00:00 and 05:30 IST against yesterday.
+        const istDayStart = istWallClockToUTC(todayStr, 0, 0);
+        const istDayEnd = istWallClockToUTC(addDays(todayStr, 1), 0, 0);
+
         // One pass over the team's live tasks. A task shared by three people
         // counts once against each of them — that is the workload they feel.
         // A self-assigned task nobody has approved yet isn't real work yet
@@ -821,7 +833,17 @@ router.get('/by-employee', auth, async (req, res) => {
                 $match: {
                     isArchived: false,
                     assignees: { $in: empIds },
-                    approvalStatus: { $nin: ['Pending', 'Rejected'] }
+                    // Only Rejected work is excluded here, not Pending.
+                    //
+                    // This board answers "is this person occupied today", and
+                    // approval decides whether self-assigned work is
+                    // *credited*, not whether it is being *done* — somebody
+                    // who has moved an unapproved task to In Progress is
+                    // demonstrably working, and reporting them idle was wrong.
+                    // The awaitingApproval counter below keeps the backlog
+                    // visible instead of hiding it, which is what excluding
+                    // these was really achieving.
+                    approvalStatus: { $ne: 'Rejected' }
                 }
             },
             { $unwind: '$assignees' },
@@ -849,43 +871,154 @@ router.get('/by-employee', auth, async (req, res) => {
                                 1, 0
                             ]
                         }
+                    },
+
+                    /**
+                     * The two halves of "has work today".
+                     *
+                     * Open work counts as today's in exactly three cases:
+                     *
+                     *   1. it is due today;
+                     *   2. it is already overdue, so it is still owed;
+                     *   3. it is mid-flight — explicitly started on or before
+                     *      today, and due later.
+                     *
+                     * Case 3 is why this is not a due-date-only rule: somebody
+                     * three days into a five-day task is working today, and a
+                     * due-date test alone reports them as idle.
+                     *
+                     * It requires an *explicit* startDate rather than treating
+                     * a missing one as "already started". Without that guard a
+                     * task assigned today and due next month counts as today's
+                     * work, which would put half the company in the busy
+                     * bucket for work nobody expects this week.
+                     */
+                    openToday: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$status', 'Completed'] },
+                                        {
+                                            $or: [
+                                                // due today, or overdue and still owed
+                                                { $lt: ['$dueDate', tomorrowStart] },
+                                                // started, not yet due
+                                                {
+                                                    $and: [
+                                                        { $ne: [{ $ifNull: ['$startDate', null] }, null] },
+                                                        { $lt: ['$startDate', tomorrowStart] }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                1, 0
+                            ]
+                        }
+                    },
+
+                    // Self-assigned work nobody has ruled on yet. Counted as
+                    // real work above, and surfaced separately so a manager
+                    // can see there is something waiting on them.
+                    awaitingApproval: {
+                        $sum: { $cond: [{ $eq: ['$approvalStatus', 'Pending'] }, 1, 0] }
+                    },
+
+                    // Finished today. Kept separate from openToday so someone
+                    // who cleared their plate early reads as "done today"
+                    // rather than being hidden among people who never had
+                    // anything.
+                    doneToday: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$status', 'Completed'] },
+                                        { $gte: ['$completedAt', istDayStart] },
+                                        { $lt: ['$completedAt', istDayEnd] }
+                                    ]
+                                },
+                                1, 0
+                            ]
+                        }
                     }
                 }
             }
         ]);
 
         const countsById = new Map(counts.map(c => [c._id.toString(), c]));
-        const NO_TASKS = { total: 0, pending: 0, inProgress: 0, onHold: 0, completed: 0, overdue: 0, dueToday: 0 };
+        const NO_TASKS = {
+            total: 0, pending: 0, inProgress: 0, onHold: 0, completed: 0,
+            overdue: 0, dueToday: 0, openToday: 0, doneToday: 0,
+            awaitingApproval: 0
+        };
+
+        /**
+         * Which of the four buckets this person is in today.
+         *
+         * Ordered, and every employee lands in exactly one, so the tiles are a
+         * breakdown that sums to the roster rather than a set of overlapping
+         * flags. The previous tiles counted *records* — a person whose tasks
+         * were all completed still read as "has tasks" — which is what made
+         * the numbers describe history instead of today.
+         */
+        const bucketOf = (c) => {
+            if (c.total === 0) return 'none-ever';
+            if (c.openToday > 0) return 'today-open';
+            if (c.doneToday > 0) return 'today-done';
+            return 'today-none';
+        };
 
         let rows = employees.map(emp => {
             const c = countsById.get(emp._id.toString());
             const counts = c ? {
                 total: c.total, pending: c.pending, inProgress: c.inProgress,
-                onHold: c.onHold, completed: c.completed, overdue: c.overdue, dueToday: c.dueToday
+                onHold: c.onHold, completed: c.completed, overdue: c.overdue,
+                dueToday: c.dueToday, openToday: c.openToday, doneToday: c.doneToday,
+                awaitingApproval: c.awaitingApproval
             } : { ...NO_TASKS };
 
-            return { ...emp, counts, openCount: counts.total - counts.completed };
+            return {
+                ...emp,
+                counts,
+                bucket: bucketOf(counts),
+                // Open work overall, which is what "how loaded is this person"
+                // means — completed tasks are history, not load.
+                openCount: counts.total - counts.completed
+            };
         });
 
         // Tiles describe the whole (searched) scope, so they don't shift as the
         // workload filter narrows the list below them.
         const summary = {
             totalEmployees: rows.length,
-            withTasks: rows.filter(r => r.counts.total > 0).length,
-            withoutTasks: rows.filter(r => r.counts.total === 0).length,
-            idle: rows.filter(r => r.openCount === 0).length,
-            overloaded: rows.filter(r => r.counts.overdue > 0).length,
-            noTaskToday: rows.filter(r => r.counts.dueToday === 0).length
+            outstandingToday: rows.filter(r => r.bucket === 'today-open').length,
+            doneToday: rows.filter(r => r.bucket === 'today-done').length,
+            noTaskToday: rows.filter(r => r.bucket === 'today-none').length,
+            noTaskAtAll: rows.filter(r => r.bucket === 'none-ever').length,
+            // Cross-cutting, so this deliberately overlaps the buckets above
+            // and is surfaced as a toggle rather than a further tile.
+            //
+            // Awaiting-approval work has no counterpart here on purpose: it is
+            // just another state the work can be in, shown as a badge on the
+            // card beside Pending and In Progress. It never changes which
+            // bucket somebody is in, so a tile for it would only be a second
+            // way to ask a question the badges already answer.
+            overdue: rows.filter(r => r.counts.overdue > 0).length
         };
 
-        switch (req.query.workload) {
-            case 'with': rows = rows.filter(r => r.counts.total > 0); break;
-            case 'without': rows = rows.filter(r => r.counts.total === 0); break;
-            case 'today-empty': rows = rows.filter(r => r.counts.dueToday === 0); break;
-            case 'idle': rows = rows.filter(r => r.openCount === 0); break;
-            case 'overdue': rows = rows.filter(r => r.counts.overdue > 0); break;
-            default: break;
+        if (['today-open', 'today-done', 'today-none', 'none-ever'].includes(req.query.workload)) {
+            rows = rows.filter(r => r.bucket === req.query.workload);
         }
+
+        // Independent of the bucket, so "who has work today AND is overdue" is
+        // answerable — the old flat filter list could not express it.
+        if (req.query.overdueOnly === 'true') {
+            rows = rows.filter(r => r.counts.overdue > 0);
+        }
+
 
         if (req.query.sort === 'busiest') rows.sort((a, b) => b.openCount - a.openCount);
         else if (req.query.sort === 'freest') rows.sort((a, b) => a.openCount - b.openCount);
@@ -899,9 +1032,11 @@ router.get('/by-employee', auth, async (req, res) => {
         const tasks = pageIds.length === 0 ? [] : await Task.find({
             isArchived: false,
             assignees: { $in: pageIds },
-            approvalStatus: { $nin: ['Pending', 'Rejected'] }
+            // Matches the aggregate above, or a card would disagree with the
+            // counts on its own header.
+            approvalStatus: { $ne: 'Rejected' }
         })
-            .select('title status priority startDate dueDate startTime dueTime expectedStartAt overdueAt createdAt taskType projectId assignedBy assignees attachments')
+            .select('title status priority startDate dueDate startTime dueTime expectedStartAt overdueAt completedAt createdAt taskType projectId assignedBy assignees attachments approvalStatus isSelfAssigned')
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
             .lean();
@@ -926,7 +1061,15 @@ router.get('/by-employee', auth, async (req, res) => {
                 projectId: task.projectId,
                 assignedBy: task.assignedBy,
                 shareCount: (task.assignees || []).length,
-                attachmentCount: (task.attachments || []).length
+                attachmentCount: (task.attachments || []).length,
+                isSelfAssigned: Boolean(task.isSelfAssigned),
+                awaitingApproval: task.approvalStatus === 'Pending',
+                // Same rule the openToday/doneToday counters use, so a card
+                // can never disagree with the tile that led you to it.
+                isToday: task.status === 'Completed'
+                    ? Boolean(task.completedAt && task.completedAt >= istDayStart && task.completedAt < istDayEnd)
+                    : task.dueDate < tomorrowStart ||
+                      Boolean(task.startDate && task.startDate < tomorrowStart)
             };
             (task.assignees || []).forEach(a => {
                 const bucket = tasksByEmp.get(a.toString());
@@ -934,8 +1077,10 @@ router.get('/by-employee', auth, async (req, res) => {
             });
         });
 
-        // Live work first, soonest due at the top — the order you triage in.
+        // Today first, then live work, then soonest due — the order you
+        // triage in, on a board whose whole question is "what about today".
         const byUrgency = (a, b) => {
+            if (a.isToday !== b.isToday) return a.isToday ? -1 : 1;
             const aDone = a.status === 'Completed' ? 1 : 0;
             const bDone = b.status === 'Completed' ? 1 : 0;
             if (aDone !== bDone) return aDone - bDone;
@@ -996,14 +1141,17 @@ router.get('/calendar', auth, async (req, res) => {
         if (employees.length === 0) return res.json(emptyResult);
         const empIds = employees.map(e => e._id);
 
-        // A pending self-assigned task isn't real work yet — excluded the same
-        // way the Regular Tasks list and /by-employee already exclude it.
-        const notPendingOrRejected = { approvalStatus: { $nin: ['Pending', 'Rejected'] } };
+        // Rejected work is not work; work awaiting a decision still is. This
+        // matches /by-employee deliberately — the two halves of the Task
+        // Report must not disagree about whether the same person is busy
+        // today, which they would if one counted pending self-assigned work
+        // and the other did not.
+        const notRejected = { approvalStatus: { $ne: 'Rejected' } };
 
         const tasks = await Task.find({
             isArchived: false,
             assignees: { $in: empIds },
-            ...notPendingOrRejected,
+            ...notRejected,
             dueDate: { $gte: monthStart, $lt: nextMonthStart }
         })
             .select('title status priority dueDate overdueAt taskType isSelfAssigned recurringTaskId assignees')
@@ -1018,7 +1166,7 @@ router.get('/calendar', auth, async (req, res) => {
         const dueTodayTasks = await Task.find({
             isArchived: false,
             assignees: { $in: empIds },
-            ...notPendingOrRejected,
+            ...notRejected,
             dueDate: { $gte: todayStart, $lt: tomorrowStart }
         }).select('assignees').lean();
         const busyTodayIds = new Set(dueTodayTasks.flatMap(t => t.assignees.map(String)));
