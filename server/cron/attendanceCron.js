@@ -65,13 +65,14 @@ const setupMorningRecords = async (shiftType) => {
         if (Wfh) todayWfh = await Wfh.find({ userId: { $in: userIds }, status: 'Approved', fromDate: { $lte: endOfDay }, toDate: { $gte: startOfDay } });
 
         let createdCount = 0;
+        const failures = [];
 
         // 5. Generate Records
         for (const user of users) {
             if (user.joiningDate && shiftDateObj < new Date(new Date(user.joiningDate).setHours(0,0,0,0))) continue;
 
             const recordExists = existingAttendances.some(a => a.userId.toString() === user._id.toString());
-            
+
             if (!recordExists) {
                 const isOnLeave = todayLeaves.some(l => l.userId.toString() === user._id.toString());
                 const isOnWfh = todayWfh.some(w => w.userId.toString() === user._id.toString());
@@ -79,20 +80,31 @@ const setupMorningRecords = async (shiftType) => {
                 let finalStatus = 'Pending';
                 let finalNote = 'Shift Scheduled';
 
-                if (isOnLeave) { finalStatus = 'On Leave'; finalNote = 'Approved Leave'; } 
+                if (isOnLeave) { finalStatus = 'On Leave'; finalNote = 'Approved Leave'; }
                 else if (isOnWfh) { finalStatus = 'WFH'; finalNote = 'Approved WFH'; }
 
-                await Attendance.create({
-                    userId: user._id,
-                    date: targetDateStr,
-                    status: finalStatus,
-                    note: finalNote,
-                    totalHours: 0
-                });
-                createdCount++;
+                // Isolate each employee. A single bad row (validation error, a
+                // duplicate racing with a punch) used to throw out of this loop
+                // and leave everyone after it with no attendance record at all.
+                try {
+                    await Attendance.create({
+                        userId: user._id,
+                        date: targetDateStr,
+                        status: finalStatus,
+                        note: finalNote,
+                        totalHours: 0
+                    });
+                    createdCount++;
+                } catch (rowErr) {
+                    failures.push(`${user.name}: ${rowErr.message}`);
+                }
             }
         }
         console.log(`[CRON - MORNING] ${shiftType} Complete. Created ${createdCount} skeleton records.`);
+        if (failures.length) {
+            console.error(`[CRON - MORNING] ${shiftType} skipped ${failures.length} employee(s):`);
+            failures.forEach(f => console.error(`   - ${f}`));
+        }
     } catch (err) {
         console.error('[CRON - MORNING] Error:', err);
     }
