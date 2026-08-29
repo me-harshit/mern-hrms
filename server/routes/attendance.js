@@ -1311,7 +1311,7 @@ router.get('/short-leaves/all-requests', auth, async (req, res) => {
         const totalPages = Math.ceil(totalRecords / limit);
 
         const records = await Attendance.find(query)
-            .populate('userId', 'name email')
+            .populate('userId', 'name email employeeId profilePic')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);

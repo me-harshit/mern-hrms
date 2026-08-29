@@ -6,6 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faTimes, faSearch, faFilter, faFileAlt, faLaptopHouse, faEye, faTrash } from '@fortawesome/free-solid-svg-icons';
 import Pagination from '../../components/Pagination';
 import '../../styles/App.css';
+import EmployeeAvatar from '../../components/EmployeeAvatar';
 
 const EmployeeRequests = () => {
     const navigate = useNavigate(); // 👇 NEW: Initialized navigate
@@ -248,13 +249,21 @@ const EmployeeRequests = () => {
                                 <tr key={req._id}>
                                     {/* 👇 UPDATED: Clickable Name */}
                                     <td data-label="Employee">
-                                        <div 
-                                            className="fw-bold text-primary"
-                                            style={{ cursor: 'pointer' }}
-                                            onClick={() => req.userId?._id && navigate(`/employee/${req.userId._id}`)}
-                                            title="View Profile"
-                                        >
-                                            {req.userId?.name || 'Unknown'}
+                                        <div className="flex-row gap-10">
+                                            <EmployeeAvatar person={req.userId} />
+                                            <div>
+                                                <div
+                                                    className="fw-bold text-primary"
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => req.userId?._id && navigate(`/employee/${req.userId._id}`)}
+                                                    title="View Profile"
+                                                >
+                                                    {req.userId?.name || 'Unknown'}
+                                                </div>
+                                                {req.userId?.employeeId && (
+                                                    <div className="text-small text-muted">{req.userId.employeeId}</div>
+                                                )}
+                                            </div>
                                         </div>
                                     </td>
 
