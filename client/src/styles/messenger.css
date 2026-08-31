@@ -1,0 +1,1356 @@
+/*
+ * Internal messenger — feature draft Module 3.
+ *
+ * Deliberately WhatsApp-shaped, because that is what it is replacing: a list of
+ * conversations on the left, the open one on the right, your own messages green
+ * and right-aligned. People already know how to use this, and every difference
+ * from the app they came from is something they have to learn for no benefit.
+ *
+ * Scoped under .msgr so nothing here leaks into the rest of the HRMS.
+ */
+
+.msgr {
+    --msgr-green: #128c7e;
+    --msgr-green-dark: #075e54;
+    --msgr-bubble-out: #d9fdd3;
+    --msgr-bubble-in: #ffffff;
+    --msgr-panel: #f0f2f5;
+    --msgr-border: #e4e6eb;
+    --msgr-text: #111b21;
+    --msgr-muted: #667781;
+    --msgr-hover: #f5f6f6;
+    --msgr-active: #e9edef;
+    --msgr-tick: #53bdeb;
+
+    display: flex;
+
+    /*
+     * Fill the layout's scroll pane exactly — no page scroll.
+     *
+     * `calc(100vh - 90px)` was a guess at the topbar height, and it was wrong
+     * whenever the impersonation banner was showing, which pushed the composer
+     * below the fold and made the whole page scroll under a chat that was
+     * already scrolling internally.
+     *
+     * `.main-content` is a flex item with a definite height and 30px of bottom
+     * padding, so 100% here resolves against its content box and the padding
+     * still fits: the two add up to exactly the pane. min-height:0 is what lets
+     * the inner thread shrink and scroll instead of forcing the parent taller —
+     * a flex item defaults to min-height:auto, which refuses to go below its
+     * content.
+     */
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overscroll-behavior: contain;
+
+    background: #fff;
+    border: 1px solid var(--msgr-border);
+    border-radius: 12px;
+    overflow: hidden;
+    color: var(--msgr-text);
+    font-size: 14px;
+}
+
+/* ============================== LEFT PANE ============================== */
+
+.msgr-sidebar {
+    width: 350px;
+    min-width: 300px;
+    min-height: 0;
+    border-right: 1px solid var(--msgr-border);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+}
+
+.msgr-sidebar-head {
+    padding: 12px 14px;
+    background: var(--msgr-panel);
+    border-bottom: 1px solid var(--msgr-border);
+}
+
+.msgr-sidebar-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.msgr-sidebar-title h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.msgr-head-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.msgr-icon-btn {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--msgr-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s, color .15s;
+}
+
+.msgr-icon-btn:hover {
+    background: var(--msgr-active);
+    color: var(--msgr-text);
+}
+
+.msgr-icon-btn.is-on {
+    background: var(--msgr-green);
+    color: #fff;
+}
+
+.msgr-search {
+    position: relative;
+}
+
+.msgr-search input {
+    width: 100%;
+    padding: 8px 12px 8px 34px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 13px;
+    outline: none;
+}
+
+.msgr-search input:focus {
+    border-color: var(--msgr-green);
+}
+
+.msgr-search .msgr-search-icon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--msgr-muted);
+    font-size: 13px;
+    pointer-events: none;
+}
+
+/* Filter chips: All / Groups / Direct / Unread */
+.msgr-filters {
+    display: flex;
+    gap: 6px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--msgr-border);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.msgr-filters::-webkit-scrollbar {
+    display: none;
+}
+
+.msgr-chip {
+    border: none;
+    background: var(--msgr-active);
+    color: var(--msgr-muted);
+    border-radius: 14px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, color .15s;
+}
+
+.msgr-chip.active {
+    background: #d9fdd3;
+    color: var(--msgr-green-dark);
+    font-weight: 600;
+}
+
+.msgr-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.msgr-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f2f2f2;
+    transition: background .12s;
+}
+
+.msgr-row:hover {
+    background: var(--msgr-hover);
+}
+
+.msgr-row.active {
+    background: var(--msgr-active);
+}
+
+.msgr-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--msgr-green);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.msgr-avatar.group {
+    background: #6b7280;
+}
+
+.msgr-avatar.project {
+    background: #2563eb;
+}
+
+.msgr-row-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.msgr-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.msgr-row-name {
+    font-weight: 500;
+    font-size: 14.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-row-time {
+    font-size: 11.5px;
+    color: var(--msgr-muted);
+    flex-shrink: 0;
+}
+
+.msgr-row.unread .msgr-row-time {
+    color: var(--msgr-green);
+    font-weight: 600;
+}
+
+.msgr-row-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 3px;
+}
+
+.msgr-row-preview {
+    font-size: 13px;
+    color: var(--msgr-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-row.unread .msgr-row-preview {
+    color: var(--msgr-text);
+    font-weight: 500;
+}
+
+.msgr-badge {
+    background: var(--msgr-green);
+    color: #fff;
+    border-radius: 11px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.msgr-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.msgr-tag.custom {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.msgr-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--msgr-muted);
+    font-size: 13px;
+}
+
+/* ============================== RIGHT PANE ============================== */
+
+.msgr-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    /* The faint doodle ground WhatsApp uses; a flat panel makes the bubbles
+       read as a form rather than a conversation. */
+    background-color: #efeae2;
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(0, 0, 0, .014) 1px, transparent 1px),
+        radial-gradient(circle at 70% 65%, rgba(0, 0, 0, .014) 1px, transparent 1px);
+    background-size: 44px 44px, 62px 62px;
+}
+
+.msgr-main-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+    background: var(--msgr-panel);
+    border-bottom: 1px solid var(--msgr-border);
+    flex-shrink: 0;
+}
+
+.msgr-main-head .msgr-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+}
+
+.msgr-main-title {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.msgr-main-title strong {
+    display: block;
+    font-size: 15.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-main-sub {
+    font-size: 12.5px;
+    color: var(--msgr-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-typing {
+    color: var(--msgr-green);
+    font-style: italic;
+}
+
+/* Banner shown to an admin reading a thread they are not an open member of. */
+.msgr-oversight-bar {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 7px 16px;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #fde68a;
+}
+
+.msgr-oversight-bar button {
+    margin-left: auto;
+    border: 1px solid #d97706;
+    background: transparent;
+    color: #92400e;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.msgr-oversight-bar button:hover {
+    background: #fde68a;
+}
+
+/* ---------------------------- MESSAGE THREAD ---------------------------- */
+
+.msgr-thread {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 6%;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.msgr-load-more {
+    align-self: center;
+    margin-bottom: 10px;
+    border: none;
+    background: rgba(255, 255, 255, .85);
+    color: var(--msgr-muted);
+    border-radius: 14px;
+    padding: 5px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .1);
+}
+
+.msgr-daysep {
+    align-self: center;
+    background: rgba(255, 255, 255, .9);
+    color: var(--msgr-muted);
+    font-size: 11.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    padding: 4px 12px;
+    border-radius: 8px;
+    margin: 12px 0 6px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .07);
+}
+
+.msgr-system {
+    align-self: center;
+    background: rgba(255, 255, 255, .9);
+    color: var(--msgr-muted);
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    margin: 5px 0;
+    text-align: center;
+    max-width: 80%;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .07);
+}
+
+.msgr-msg {
+    display: flex;
+    max-width: 72%;
+    position: relative;
+}
+
+.msgr-msg.out {
+    align-self: flex-end;
+}
+
+.msgr-msg.in {
+    align-self: flex-start;
+}
+
+/* Extra breathing room where the speaker changes, so runs of messages from
+   one person read as one turn. */
+.msgr-msg.first-of-run {
+    margin-top: 9px;
+}
+
+.msgr-bubble {
+    background: var(--msgr-bubble-in);
+    border-radius: 8px;
+    padding: 6px 9px 5px;
+    box-shadow: 0 1px .5px rgba(11, 20, 26, .13);
+    position: relative;
+    min-width: 92px;
+    word-break: break-word;
+}
+
+.msgr-msg.out .msgr-bubble {
+    background: var(--msgr-bubble-out);
+}
+
+.msgr-bubble-author {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--msgr-green);
+    margin-bottom: 2px;
+}
+
+.msgr-bubble-text {
+    font-size: 14.2px;
+    line-height: 19px;
+    white-space: pre-wrap;
+}
+
+.msgr-bubble-text.deleted {
+    font-style: italic;
+    color: var(--msgr-muted);
+}
+
+.msgr-mention {
+    color: var(--msgr-green);
+    font-weight: 600;
+    background: rgba(18, 140, 126, .1);
+    border-radius: 3px;
+    padding: 0 2px;
+}
+
+.msgr-quote {
+    border-left: 3px solid var(--msgr-green);
+    background: rgba(0, 0, 0, .045);
+    border-radius: 5px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.msgr-quote strong {
+    display: block;
+    color: var(--msgr-green);
+    font-size: 12px;
+}
+
+.msgr-quote span {
+    color: var(--msgr-muted);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--msgr-muted);
+    margin-top: 2px;
+    /* Sits on the same line the text ends on, WhatsApp-style, rather than
+       claiming a row of its own. */
+    float: right;
+    margin-left: 10px;
+    position: relative;
+    top: 4px;
+}
+
+.msgr-ticks {
+    font-size: 12px;
+}
+
+.msgr-ticks.read {
+    color: var(--msgr-tick);
+}
+
+.msgr-msg-actions {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    display: none;
+    gap: 2px;
+    background: rgba(255, 255, 255, .96);
+    border-radius: 6px;
+    padding: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .16);
+    z-index: 2;
+}
+
+.msgr-msg:hover .msgr-msg-actions {
+    display: flex;
+}
+
+.msgr-msg-actions button {
+    border: none;
+    background: transparent;
+    color: var(--msgr-muted);
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.msgr-msg-actions button:hover {
+    background: var(--msgr-active);
+    color: var(--msgr-text);
+}
+
+.msgr-msg-actions button.danger:hover {
+    color: #dc2626;
+}
+
+/* Attachments inside a bubble */
+.msgr-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 3px;
+}
+
+.msgr-media-img,
+.msgr-media-video {
+    max-width: 300px;
+    max-height: 320px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: block;
+    background: #000;
+}
+
+.msgr-media-processing {
+    font-size: 11px;
+    color: #92400e;
+    background: #fef3c7;
+    border-radius: 4px;
+    padding: 2px 6px;
+    display: inline-block;
+    margin-top: 3px;
+}
+
+.msgr-file {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: rgba(0, 0, 0, .05);
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 200px;
+}
+
+.msgr-file:hover {
+    background: rgba(0, 0, 0, .09);
+}
+
+.msgr-file-icon {
+    font-size: 20px;
+    color: var(--msgr-green);
+    flex-shrink: 0;
+}
+
+.msgr-file-name {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-file-kind {
+    font-size: 11px;
+    color: var(--msgr-muted);
+    text-transform: uppercase;
+}
+
+/* ------------------------------ COMPOSER ------------------------------ */
+
+.msgr-composer {
+    background: var(--msgr-panel);
+    border-top: 1px solid var(--msgr-border);
+    padding: 8px 14px;
+    flex-shrink: 0;
+}
+
+.msgr-reply-strip,
+.msgr-staged {
+    background: #fff;
+    border-radius: 8px;
+    padding: 7px 10px;
+    margin-bottom: 7px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+}
+
+.msgr-reply-strip {
+    border-left: 4px solid var(--msgr-green);
+}
+
+.msgr-reply-strip div {
+    flex: 1;
+    min-width: 0;
+}
+
+.msgr-reply-strip strong {
+    display: block;
+    color: var(--msgr-green);
+    font-size: 12px;
+}
+
+.msgr-reply-strip span {
+    color: var(--msgr-muted);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-staged {
+    flex-wrap: wrap;
+}
+
+.msgr-staged-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--msgr-active);
+    border-radius: 6px;
+    padding: 5px 9px;
+    max-width: 220px;
+}
+
+.msgr-staged-item img {
+    width: 34px;
+    height: 34px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.msgr-staged-item span {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-staged-item button {
+    border: none;
+    background: transparent;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 2px;
+}
+
+.msgr-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.msgr-input-row textarea {
+    flex: 1;
+    border: none;
+    border-radius: 9px;
+    padding: 10px 13px;
+    font-size: 14.2px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    max-height: 130px;
+    line-height: 20px;
+}
+
+.msgr-send {
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 50%;
+    background: var(--msgr-green);
+    color: #fff;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 15px;
+    transition: background .15s, opacity .15s;
+}
+
+.msgr-send:hover:not(:disabled) {
+    background: var(--msgr-green-dark);
+}
+
+.msgr-send:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+/* Attach menu */
+.msgr-attach {
+    position: relative;
+}
+
+.msgr-attach-menu {
+    position: absolute;
+    bottom: 48px;
+    left: 0;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+    padding: 6px;
+    min-width: 210px;
+    z-index: 20;
+}
+
+.msgr-attach-menu button {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 9px 11px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 13.5px;
+    text-align: left;
+    color: var(--msgr-text);
+}
+
+.msgr-attach-menu button:hover {
+    background: var(--msgr-hover);
+}
+
+.msgr-attach-menu .ico {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+/* @mention autocomplete */
+.msgr-mention-pop {
+    position: absolute;
+    bottom: 52px;
+    left: 52px;
+    right: 60px;
+    max-height: 210px;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 9px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+    z-index: 25;
+}
+
+.msgr-mention-pop button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 8px 12px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 13.5px;
+}
+
+.msgr-mention-pop button:hover,
+.msgr-mention-pop button.active {
+    background: var(--msgr-hover);
+}
+
+.msgr-mention-pop .msgr-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+}
+
+/* Recorders take over the composer row while active. */
+.msgr-recorder-slot {
+    background: #fff;
+    border-radius: 10px;
+    padding: 8px;
+}
+
+/* ---------------------------- INFO / MODALS ---------------------------- */
+
+.msgr-info {
+    width: 330px;
+    border-left: 1px solid var(--msgr-border);
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.msgr-info-head {
+    padding: 22px 18px;
+    text-align: center;
+    border-bottom: 1px solid var(--msgr-border);
+}
+
+.msgr-info-head .msgr-avatar {
+    width: 88px;
+    height: 88px;
+    font-size: 30px;
+    margin: 0 auto 12px;
+}
+
+.msgr-info-head h4 {
+    margin: 0 0 4px;
+    font-size: 17px;
+}
+
+.msgr-info-head p {
+    margin: 0;
+    color: var(--msgr-muted);
+    font-size: 13px;
+}
+
+.msgr-info-section {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--msgr-border);
+}
+
+.msgr-info-section h5 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--msgr-muted);
+}
+
+.msgr-member {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+}
+
+.msgr-member .msgr-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+}
+
+.msgr-member-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.msgr-member-name {
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+.msgr-member-role {
+    font-size: 11.5px;
+    color: var(--msgr-muted);
+}
+
+.msgr-pill {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #d9fdd3;
+    color: var(--msgr-green-dark);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.msgr-pill.hidden-pill {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.msgr-btn {
+    border: 1px solid var(--msgr-border);
+    background: #fff;
+    border-radius: 7px;
+    padding: 8px 13px;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--msgr-text);
+}
+
+.msgr-btn:hover {
+    background: var(--msgr-hover);
+}
+
+.msgr-btn.primary {
+    background: var(--msgr-green);
+    border-color: var(--msgr-green);
+    color: #fff;
+}
+
+.msgr-btn.primary:hover {
+    background: var(--msgr-green-dark);
+}
+
+.msgr-btn.danger {
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.msgr-btn.danger:hover {
+    background: #fef2f2;
+}
+
+.msgr-btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.msgr-btn.block {
+    width: 100%;
+    justify-content: center;
+}
+
+/* Modal */
+.msgr-modal-back {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+    padding: 20px;
+}
+
+.msgr-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 470px;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.msgr-modal-head {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--msgr-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.msgr-modal-head h4 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.msgr-modal-body {
+    padding: 16px 18px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.msgr-modal-foot {
+    padding: 13px 18px;
+    border-top: 1px solid var(--msgr-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+}
+
+.msgr-field {
+    margin-bottom: 14px;
+}
+
+.msgr-field label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--msgr-muted);
+    margin-bottom: 5px;
+}
+
+.msgr-field input,
+.msgr-field textarea,
+.msgr-field select {
+    width: 100%;
+    border: 1px solid var(--msgr-border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 13.5px;
+    font-family: inherit;
+    outline: none;
+}
+
+.msgr-field input:focus,
+.msgr-field textarea:focus,
+.msgr-field select:focus {
+    border-color: var(--msgr-green);
+}
+
+.msgr-picklist {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--msgr-border);
+    border-radius: 8px;
+}
+
+.msgr-pick {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 11px;
+    cursor: pointer;
+    border-bottom: 1px solid #f2f2f2;
+}
+
+.msgr-pick:hover {
+    background: var(--msgr-hover);
+}
+
+.msgr-pick.selected {
+    background: #eafaf1;
+}
+
+.msgr-pick .msgr-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 12px;
+}
+
+/* Search results overlay in the left pane */
+.msgr-result {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f2f2f2;
+    cursor: pointer;
+}
+
+.msgr-result:hover {
+    background: var(--msgr-hover);
+}
+
+.msgr-result-top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--msgr-muted);
+    margin-bottom: 3px;
+}
+
+.msgr-result-top strong {
+    color: var(--msgr-green);
+}
+
+.msgr-result-text {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.msgr-result-text mark {
+    background: #fff3b0;
+    padding: 0 1px;
+}
+
+/* Placeholder shown before a conversation is chosen */
+.msgr-placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--msgr-muted);
+    text-align: center;
+    padding: 30px;
+}
+
+.msgr-placeholder svg {
+    font-size: 54px;
+    margin-bottom: 16px;
+    opacity: .35;
+}
+
+.msgr-placeholder h3 {
+    margin: 0 0 6px;
+    color: var(--msgr-text);
+    font-weight: 500;
+}
+
+.msgr-placeholder p {
+    margin: 0;
+    font-size: 13px;
+    max-width: 340px;
+}
+
+/* ------------------------------ RESPONSIVE ------------------------------ */
+
+@media (max-width: 900px) {
+    .msgr-info {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 30;
+        box-shadow: -4px 0 18px rgba(0, 0, 0, .16);
+    }
+
+    .msgr {
+        position: relative;
+    }
+}
+
+@media (max-width: 720px) {
+
+    /* One pane at a time on a phone: the list, or the open chat. */
+    .msgr-sidebar {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .msgr.has-open .msgr-sidebar {
+        display: none;
+    }
+
+    .msgr:not(.has-open) .msgr-main {
+        display: none;
+    }
+
+    .msgr-thread {
+        padding: 12px 10px;
+    }
+
+    .msgr-msg {
+        max-width: 88%;
+    }
+
+    .msgr-info {
+        width: 100%;
+    }
+}
+
+.msgr-back-btn {
+    display: none;
+}
+
+@media (max-width: 720px) {
+    .msgr-back-btn {
+        display: inline-flex;
+    }
+}
+
+/* ---------------------------- CONTEXT MENU ---------------------------- */
+
+/*
+ * Fixed-position and portalled to the page rather than nested in the row: the
+ * chat list has overflow-y:auto, and a menu drawn inside it would be clipped
+ * at the pane edge for the bottom-most rows — exactly where a right-click is
+ * most likely to need it.
+ */
+.msgr-ctx {
+    position: fixed;
+    z-index: 1400;
+    min-width: 200px;
+    background: #fff;
+    border-radius: 9px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .2);
+    padding: 5px;
+    overflow: hidden;
+}
+
+.msgr-ctx-head {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--msgr-muted, #667781);
+    padding: 6px 11px 7px;
+    border-bottom: 1px solid #e4e6eb;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 230px;
+}
+
+.msgr-ctx button {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 9px 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13.5px;
+    text-align: left;
+    color: #111b21;
+    font-family: inherit;
+}
+
+.msgr-ctx button:hover {
+    background: #f5f6f6;
+}
+
+.msgr-ctx button.danger {
+    color: #dc2626;
+}
+
+.msgr-ctx button.danger:hover {
+    background: #fef2f2;
+}
+
+.msgr-ctx button svg {
+    width: 14px;
+    color: var(--msgr-muted, #667781);
+}
+
+.msgr-ctx button.danger svg {
+    color: #dc2626;
+}
+
+/* The avatar is clickable now (it opens the photo), so say so on hover. */
+.msgr-avatar.emp-avatar-clickable {
+    cursor: pointer;
+}
+
+/* -------------------------- GROUP ICON EDITING -------------------------- */
+
+.msgr-icon-edit {
+    position: relative;
+    display: inline-block;
+    margin: 0 auto 12px;
+}
+
+/* The info panel draws its avatar at 88px; keep the wrapper matched to it so
+   the camera button sits on the picture's edge rather than floating. */
+.msgr-icon-edit .msgr-avatar {
+    width: 88px;
+    height: 88px;
+    font-size: 30px;
+    margin: 0;
+}
+
+.msgr-icon-camera {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--msgr-green);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    border: 2px solid #fff;
+    transition: background .15s;
+}
+
+.msgr-icon-camera:hover {
+    background: var(--msgr-green-dark);
+}

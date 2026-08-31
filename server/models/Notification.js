@@ -16,7 +16,7 @@ const NotificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['LEAVE', 'SALARY', 'BIRTHDAY', 'SYSTEM', 'WFH', 'SHORT_LEAVE', 'TASK'],
+        enum: ['LEAVE', 'SALARY', 'BIRTHDAY', 'SYSTEM', 'WFH', 'SHORT_LEAVE', 'TASK', 'CHAT'],
         default: 'SYSTEM'
     },
     // In-app route to open when the notification is clicked. Topbar.js and

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import api from '../utils/api';
+import { onSocket } from '../utils/socket';
 import {
     faCommentDots,
+    faComments,
     faThLarge,
     faCalendarCheck,
     faUser,
@@ -36,6 +38,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     const [pendingDocs, setPendingDocs] = useState(0);
     // Count of tasks assigned to this user that aren't finished yet
     const [openTasks, setOpenTasks] = useState(0);
+    // Unread chat messages across every conversation this user is in
+    const [unreadChats, setUnreadChats] = useState(0);
 
     useEffect(() => {
         if (userRole === 'EMPLOYEE' || userRole === 'MANAGER') {
@@ -54,6 +58,22 @@ const Sidebar = ({ isOpen, onClose }) => {
             .then(res => setPendingDocs(res.data.pending || 0))
             .catch(() => setPendingDocs(0));
     }, []);
+
+    // Unread chat total. Refreshed on every incoming message rather than
+    // polled — the socket already tells us the moment one lands, and a timer
+    // would either lag behind it or hammer the endpoint for nothing.
+    useEffect(() => {
+        const refresh = () => api.get('/conversations')
+            .then(res => setUnreadChats(
+                (res.data || []).reduce((sum, c) => sum + (c.unread || 0), 0)
+            ))
+            .catch(() => { });
+
+        refresh();
+        const offActivity = onSocket('conversation:activity', refresh);
+        const offRead = onSocket('message:read', refresh);
+        return () => { offActivity(); offRead(); };
+    }, [location.pathname]);
 
     useEffect(() => {
         api.get('/tasks/my/open-count')
@@ -105,6 +125,16 @@ const Sidebar = ({ isOpen, onClose }) => {
                     {openTasks > 0 && (
                         <span style={{ marginLeft: 'auto', background: '#215D7B', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 700 }}>
                             {openTasks}
+                        </span>
+                    )}
+                </Link>
+
+                {/* Groups & internal chat. Every role: anyone can message anyone. */}
+                <Link to="/chats" onClick={handleLinkClick} className={`nav-link ${location.pathname.startsWith('/chats') ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faComments} className="nav-icon" /> <span>Chats</span>
+                    {unreadChats > 0 && (
+                        <span style={{ marginLeft: 'auto', background: '#128c7e', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 700 }}>
+                            {unreadChats > 99 ? '99+' : unreadChats}
                         </span>
                     )}
                 </Link>
