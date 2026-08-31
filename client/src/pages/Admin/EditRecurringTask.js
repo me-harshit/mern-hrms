@@ -8,7 +8,8 @@ import {
     faRepeat, faFilm, faFolderOpen, faBuilding, faCalendarDay, faLock, faFileCode
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
-import ScreenRecorder from '../../components/ScreenRecorder';
+import AttachMenu from '../../components/AttachMenu';
+import StagedFiles from '../../components/StagedFiles';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
 import TaskTimeWindow from '../../components/TaskTimeWindow';
@@ -157,44 +158,8 @@ const EditRecurringTask = () => {
         return bits.join(' · ');
     };
 
-    const handleFileChange = async (e) => {
-        const selectedFiles = Array.from(e.target.files);
-        const processed = [];
-        setIsCompressing(true);
-
-        for (let file of selectedFiles) {
-            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif|webp)$/i);
-            const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|mov|avi|mkv)$/i);
-            const isDocument = file.type === 'text/html' || file.name.match(/\.(html|htm)$/i);
-
-            if (isImage) {
-                try {
-                    const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: false, fileType: 'image/jpeg' };
-                    const compressedBlob = await imageCompression(file, options);
-                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
-                    processed.push(new File([compressedBlob], safeName, { type: 'image/jpeg', lastModified: Date.now() }));
-                } catch (error) {
-                    processed.push(file);
-                }
-            } else if (isVideo) {
-                if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
-                    Swal.fire('Video Too Large', `"${file.name}" is over ${MAX_VIDEO_MB}MB.`, 'warning');
-                } else {
-                    processed.push(file);
-                }
-            } else if (isDocument) {
-                processed.push(file);
-            } else {
-                Swal.fire('Unsupported File', `"${file.name}" is not an image, video, or HTML document.`, 'warning');
-            }
-        }
-
-        setNewFiles(prev => [...prev, ...processed]);
-        setIsCompressing(false);
-        e.target.value = '';
-    };
-
-    const handleScreenRecordingAttach = (file) => setNewFiles(prev => [...prev, file]);
+    // AttachMenu filters, caps and compresses before handing them over.
+    const addNewFiles = (picked) => setNewFiles(prev => [...prev, ...picked]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -469,14 +434,10 @@ const EditRecurringTask = () => {
                                 </div>
                             )}
 
-                            <ScreenRecorder onAttach={handleScreenRecordingAttach} />
-
-                            <div className="task-file-drop">
-                                <input
-                                    className="custom-file-input" type="file" multiple
-                                    accept="image/*,video/*,.html,.htm,text/html" onChange={handleFileChange}
-                                />
-                            </div>
+                            <AttachMenu
+                                label="Add attachment"
+                                onFiles={addNewFiles}
+                            />
 
                             {isCompressing && (
                                 <p className="file-success-text" style={{ color: '#d97706', marginTop: '8px', fontWeight: '600' }}>

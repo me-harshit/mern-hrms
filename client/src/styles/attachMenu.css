@@ -1,0 +1,220 @@
+/*
+ * The shared attach control (components/AttachMenu.js).
+ *
+ * Standalone rather than folded into tasks.css or messenger.css, because the
+ * component is used by both and a style that lives in one feature's sheet is a
+ * style the other feature loses the day someone tidies it up.
+ */
+
+.attach-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.attach-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    border-radius: 9px;
+    padding: 10px 16px;
+    font-size: 13.5px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+}
+
+.attach-trigger:hover:not(:disabled),
+.attach-trigger.is-open {
+    border-color: #215D7B;
+    background: #eef6fa;
+    color: #215D7B;
+}
+
+.attach-trigger:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+/* In the chat composer the trigger is a bare round icon, not a labelled
+   dashed box — the composer already reads as an input surface. */
+.attach-wrap.compact .attach-trigger {
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+    color: #667781;
+}
+
+.attach-wrap.compact .attach-trigger:hover:not(:disabled),
+.attach-wrap.compact .attach-trigger.is-open {
+    background: #e9edef;
+    color: #111b21;
+}
+
+.attach-menu {
+    /* Fixed, not absolute: the task cards and the chat pane both clip their
+       overflow, which was cutting the first option off the top of the menu.
+       Placement is computed in the component against the viewport. */
+    position: fixed;
+    z-index: 1500;
+    min-width: 240px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 6px 26px rgba(0, 0, 0, .18);
+    padding: 5px;
+}
+
+.attach-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 7px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    font-size: 13px;
+    color: #111b21;
+}
+
+.attach-menu button:hover {
+    background: #f5f6f6;
+}
+
+.attach-menu button > span:last-child {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.35;
+}
+
+.attach-menu small {
+    color: #667781;
+    font-size: 11px;
+}
+
+.attach-menu .ico {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+/* While a recorder is running it owns the whole row. */
+.attach-recorder {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+/* ------------------------- STAGED FILE PREVIEW ------------------------- */
+
+.attach-staged {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.attach-chip {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 10px;
+    max-width: 260px;
+}
+
+.attach-chip img {
+    width: 34px;
+    height: 34px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.attach-chip-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 5px;
+    background: #e2e8f0;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.attach-chip-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.attach-chip-name {
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #1e293b;
+}
+
+.attach-chip-size {
+    font-size: 11px;
+    color: #64748b;
+}
+
+.attach-chip button {
+    border: none;
+    background: transparent;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.attach-chip button:hover {
+    color: #b91c1c;
+}
+
+/* A small square trigger for a form row, where the attach control sits beside
+   a text field rather than standing alone as a call to action. */
+.attach-wrap.icon-only .attach-trigger {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+    border-style: solid;
+    border-color: #d7dde5;
+    background: #fff;
+    color: #475569;
+    flex-shrink: 0;
+}
+
+.attach-wrap.icon-only .attach-trigger:hover:not(:disabled),
+.attach-wrap.icon-only .attach-trigger.is-open {
+    border-color: #215D7B;
+    background: #eef6fa;
+    color: #215D7B;
+}

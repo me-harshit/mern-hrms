@@ -43,6 +43,38 @@ const initRealtime = (httpServer) => {
         socket.on('task:leave', (taskId) => {
             if (taskId) socket.leave(`task:${taskId}`);
         });
+
+        /*
+         * Chat rooms.
+         *
+         * Membership is NOT checked here, and deliberately so: joining a room
+         * only decides where an event is delivered, and every event this
+         * server emits into a conversation room was already authorised by the
+         * route that produced it. The room a client asks for cannot make the
+         * server send it a conversation it was never going to send.
+         *
+         * The unread badge is a separate path — it goes to `user:<id>` rooms,
+         * which are joined from the verified token above and cannot be spoofed.
+         */
+        socket.on('conversation:join', (conversationId) => {
+            if (conversationId) socket.join(`conv:${conversationId}`);
+        });
+        socket.on('conversation:leave', (conversationId) => {
+            if (conversationId) socket.leave(`conv:${conversationId}`);
+        });
+
+        // "Riya is typing…". Relayed straight to the other people in the room
+        // and never stored — a typing indicator that outlives the keystroke is
+        // worse than none.
+        socket.on('conversation:typing', ({ conversationId, name, typing }) => {
+            if (!conversationId) return;
+            socket.to(`conv:${conversationId}`).emit('conversation:typing', {
+                conversationId,
+                userId: socket.userId,
+                name,
+                typing: Boolean(typing)
+            });
+        });
     });
 
     console.log('✅ Realtime (socket.io) ready');
@@ -61,4 +93,22 @@ const emitToTask = (taskId, event, payload) => {
     io.to(`task:${taskId}`).emit(event, payload);
 };
 
-module.exports = { initRealtime, emitToUser, emitToTask };
+/** Send an event to everyone with a given conversation open. */
+const emitToConversation = (conversationId, event, payload) => {
+    if (!io || !conversationId) return;
+    io.to(`conv:${conversationId}`).emit(event, payload);
+};
+
+/**
+ * Send to a list of people at once — the chat list update that has to reach
+ * members who do *not* have the conversation open, so their sidebar reorders
+ * and their unread badge moves.
+ */
+const emitToUsers = (userIds, event, payload) => {
+    if (!io || !userIds) return;
+    for (const id of userIds) {
+        if (id) io.to(roomFor(id)).emit(event, payload);
+    }
+};
+
+module.exports = { initRealtime, emitToUser, emitToUsers, emitToTask, emitToConversation };

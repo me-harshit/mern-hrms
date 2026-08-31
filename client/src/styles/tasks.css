@@ -3739,3 +3739,60 @@
         color: #b0bccb;
     }
 }
+
+/* -------- Attach + note, one row (TaskDetail status panel) -------- */
+
+/*
+ * align-items:flex-start so the square attach button stays put while the note
+ * grows: centring it would make the button drift down the row as someone types
+ * a third line.
+ */
+.td-attach-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/*
+ * The wrapper is inline-block by default, which puts its button on a line box
+ * and adds the strut's descender underneath — a few stray pixels of height that
+ * serve nothing here. Flex removes the line box entirely, so the wrapper is
+ * exactly as tall as the button.
+ */
+.td-attach-row .attach-wrap {
+    display: flex;
+    flex: 0 0 auto;
+}
+
+/*
+ * Pinned to the same 44px as the attach button.
+ *
+ * The margin reset is the one that actually matters: App.css gives every
+ * .custom-input `margin: 5px 0 0 0 !important`, so the note sat exactly five
+ * pixels below the button no matter what heights the two were given. Matching
+ * !important is the only way past it short of editing a base style the whole
+ * app depends on.
+ */
+.td-note-input.custom-input {
+    flex: 1;
+    min-width: 0;
+    width: auto !important;
+    margin: 0 !important;
+    height: 44px;
+    min-height: 44px;
+    line-height: 22px;
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+/* On a phone the two side by side leaves the note too narrow to type in. */
+@media (max-width: 480px) {
+    .td-attach-row {
+        flex-wrap: wrap;
+    }
+
+    .td-note-input.custom-input {
+        flex: 1 1 100%;
+    }
+}

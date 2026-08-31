@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const taskUpload = require('../middleware/taskUploadMiddleware');
 const { processTaskFiles, discardStagedFiles, s3Folder, isVideo } = require('../utils/taskMedia');
+const { syncProjectGroupMembers } = require('../utils/conversationAccess');
 
 const Task = require('../models/Task');
 const User = require('../models/User');
@@ -187,6 +188,13 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
         });
 
         await task.save();
+
+        // Being given work on a project is what puts you in its conversation
+        // (feature draft F3.3) — Project itself has no member list, so
+        // assignment is the signal. Office tasks have no project and no group.
+        if (!isOfficeTask && projectId) {
+            syncProjectGroupMembers(projectId, assigneeIds, req.user.id);
+        }
 
         // Videos staged on disk now get their queue rows, pointing at the task
         // that finally exists.
@@ -1618,6 +1626,12 @@ router.put('/:id', auth, taskUpload.array('attachments', 10), async (req, res) =
                 originalName: v.originalName,
                 projectName: project?.name || 'Office'
             })));
+        }
+
+        // Newly added people join the project's group the same way they would
+        // have on creation.
+        if (addedIds.length > 0 && task.projectId) {
+            syncProjectGroupMembers(task.projectId, addedIds, req.user.id);
         }
 
         // Newly added people always get told; everyone gets told if the

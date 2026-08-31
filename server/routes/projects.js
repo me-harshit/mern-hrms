@@ -3,6 +3,8 @@ const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const Project = require('../models/Project');
 const Purchase = require('../models/Expense');
+const Conversation = require('../models/Conversation');
+const { ensureProjectGroup } = require('../utils/conversationAccess');
 
 // @route   GET /api/projects
 // @desc    Get all active projects (For Dropdowns)
@@ -102,6 +104,21 @@ router.post('/', auth, async (req, res) => {
         });
 
         await project.save();
+
+        /*
+         * Every project gets its conversation the moment it exists (F3.3).
+         *
+         * Seeded with the lead and the creator; everyone else joins as work is
+         * assigned to them on this project — see the hook in routes/tasks.js.
+         * Best-effort: a chat failure must never lose a project that has
+         * already been written.
+         */
+        try {
+            await ensureProjectGroup(project, req.user.id);
+        } catch (chatErr) {
+            console.error('[PROJECT] could not create project group:', chatErr.message);
+        }
+
         res.status(201).json(project);
     } catch (err) {
         res.status(500).send('Server Error');
@@ -120,6 +137,21 @@ router.put('/:id', auth, async (req, res) => {
             { name, description, status, projectLead, startDate, endDate, totalBudget }, 
             { new: true }
         );
+
+        // The project group is named after its project, so a rename that only
+        // moved one of the two would leave people talking in "Spectra" about a
+        // project no longer called that.
+        try {
+            if (project?.name) {
+                await Conversation.updateOne(
+                    { projectId: project._id, groupType: 'project' },
+                    { $set: { name: project.name } }
+                );
+            }
+        } catch (chatErr) {
+            console.error('[PROJECT] could not rename project group:', chatErr.message);
+        }
+
         res.json(project);
     } catch (err) {
         res.status(500).send('Server Error');

@@ -29,6 +29,7 @@ import RawPunches from './pages/Admin/RawPunches';
 import AddExpense from './pages/User/AddExpense';
 import EditExpense from './pages/User/EditExpense';
 import AdminChat from './pages/Admin/AdminChat'
+import Chats from './pages/Chats';
 import Projects from './pages/Admin/Projects';
 import Inventory from './pages/Admin/Inventory';
 import MyInventory from './pages/User/MyInventory';
@@ -189,6 +190,13 @@ function App() {
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/my-tasks" element={<MyTasks />} />
             <Route path="/task/:id" element={<TaskDetail />} />
+
+            {/* Groups & internal chat (feature draft Module 3). Every role —
+                management's rule is that anyone may message anyone. The
+                /join/:token route is the group invite link. */}
+            <Route path="/chats" element={<Chats />} />
+            <Route path="/chats/join/:token" element={<Chats />} />
+            <Route path="/chats/:id" element={<Chats />} />
 
             {/* 👇 Management Routes (Admin, HR, Manager, Accounts) */}
             <Route path="/employees" element={isManagement ? <Employees /> : <Navigate to="/dashboard" />} />

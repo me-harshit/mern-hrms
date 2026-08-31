@@ -9,7 +9,8 @@ import {
     faMicrophone
 } from '@fortawesome/free-solid-svg-icons';
 import imageCompression from 'browser-image-compression';
-import ScreenRecorder from '../../components/ScreenRecorder';
+import AttachMenu from '../../components/AttachMenu';
+import StagedFiles from '../../components/StagedFiles';
 import EmployeeMultiSelect from '../../components/EmployeeMultiSelect';
 import DatePickerField from '../../components/DatePickerField';
 import TaskTimeWindow from '../../components/TaskTimeWindow';
@@ -156,52 +157,9 @@ const AddTask = () => {
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    const handleFileChange = async (e) => {
-        const selectedFiles = Array.from(e.target.files);
-        const processed = [];
-
-        setIsCompressing(true);
-
-        for (let file of selectedFiles) {
-            const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|heic|heif|webp)$/i);
-            const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|mov|avi|mkv)$/i);
-            const isDocument = file.type === 'text/html' || file.name.match(/\.(html|htm)$/i);
-
-            if (isImage) {
-                // Images are shrunk here in the browser — they go straight to S3
-                // on the server, so there's no overnight step to lean on.
-                try {
-                    const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: false, fileType: 'image/jpeg' };
-                    const compressedBlob = await imageCompression(file, options);
-                    const safeName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
-                    processed.push(new File([compressedBlob], safeName, { type: 'image/jpeg', lastModified: Date.now() }));
-                } catch (error) {
-                    console.error('Error compressing image:', error);
-                    processed.push(file);
-                }
-            } else if (isVideo) {
-                // Videos upload raw and get compressed server-side overnight.
-                if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
-                    Swal.fire('Video Too Large', `"${file.name}" is over ${MAX_VIDEO_MB}MB and can't be uploaded.`, 'warning');
-                } else {
-                    processed.push(file);
-                }
-            } else if (isDocument) {
-                // Uploaded as-is — no browser-side processing needed for a document.
-                processed.push(file);
-            } else {
-                Swal.fire('Unsupported File', `"${file.name}" is not an image, video, or HTML document.`, 'warning');
-            }
-        }
-
-        setFiles(prev => [...prev, ...processed]);
-        setIsCompressing(false);
-        e.target.value = ''; // let the same file be picked again after removal
-    };
-
-    const handleScreenRecordingAttach = (file) => {
-        setFiles(prev => [...prev, file]);
-    };
+    // AttachMenu has already filtered by type, enforced the size cap and
+    // compressed any images, so this is only where they land.
+    const addFiles = (picked) => setFiles(prev => [...prev, ...picked]);
 
     const removeFile = (index) => setFiles(prev => prev.filter((_, i) => i !== index));
 
@@ -506,14 +464,12 @@ const AddTask = () => {
                                 <FontAwesomeIcon icon={faPaperclip} /> Reference Images, Videos &amp; Documents
                             </div>
 
-                            <ScreenRecorder onAttach={handleScreenRecordingAttach} />
-
-                            <div className="task-file-drop">
-                                <input
-                                    className="custom-file-input" type="file" multiple
-                                    accept="image/*,video/*,.html,.htm,text/html" onChange={handleFileChange}
-                                />
-                            </div>
+                            <AttachMenu
+                                label="Add attachment"
+                                onFiles={addFiles}
+                                onBusyChange={setIsCompressing}
+                                maxFileMB={MAX_VIDEO_MB}
+                            />
 
                             <div className="task-upload-note">
                                 <FontAwesomeIcon icon={faFilm} />
@@ -529,18 +485,7 @@ const AddTask = () => {
                                 </p>
                             )}
 
-                            {files.length > 0 && (
-                                <div className="file-chips-list task-file-chips">
-                                    {files.map((f, i) => (
-                                        <div key={i} className="file-chip">
-                                            <span className="file-chip-name">
-                                                {f.name} <em>({(f.size / 1048576).toFixed(1)}MB)</em>
-                                            </span>
-                                            <button type="button" className="file-chip-remove" onClick={() => removeFile(i)}>✕</button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            <StagedFiles files={files} onRemove={removeFile} />
                         </section>
                     </div>
                 </div>

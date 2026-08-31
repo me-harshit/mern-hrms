@@ -24,6 +24,7 @@ const leaveRoutes = require('./routes/leaves');
 const dashboardRoutes = require('./routes/dashboard');
 const holidays = require('./routes/holidays');
 const chatRoutes = require('./routes/chat');
+const conversationRoutes = require('./routes/conversations');
 const projectsRoutes = require('./routes/projects');
 const walletsRoute = require('./routes/wallets');
 const inventoryRoute = require('./routes/inventory');
@@ -59,6 +60,9 @@ app.use('/api/leaves', leaveRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/holidays', holidays);
 app.use('/api/chat', chatRoutes);
+// Internal messaging (feature draft Module 3). Distinct from /api/chat, which
+// is the Gemini assistant — two unrelated features must not share a namespace.
+app.use('/api/conversations', conversationRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/wallets', walletsRoute);
 app.use('/api/inventory', inventoryRoute);

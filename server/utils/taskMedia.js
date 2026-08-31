@@ -49,8 +49,13 @@ const isImage = (file) =>
  *
  * Returns { media, pendingVideos } where pendingVideos carries what the caller
  * needs to write into VideoCompressionQueue once the parent Task has an _id.
+ *
+ * `urlPrefix` is where a staged video is served from while it waits for the
+ * night job. It follows multer's destination — chat attachments stage in
+ * uploads/chat rather than uploads/tasks, and a url pointing at the wrong
+ * directory is a video that plays for nobody until the cron rescues it.
  */
-const processTaskFiles = async (files, subFolder = 'Tasks/General') => {
+const processTaskFiles = async (files, subFolder = 'Tasks/General', urlPrefix = '/uploads/tasks') => {
     const media = [];
     const pendingVideos = [];
 
@@ -82,7 +87,7 @@ const processTaskFiles = async (files, subFolder = 'Tasks/General') => {
         } else if (isVideo(file)) {
             media.push({
                 _id: mediaId,
-                url: `/uploads/tasks/${file.filename}`,
+                url: `${urlPrefix}/${file.filename}`,
                 fileName: file.originalname,
                 type: 'video',
                 status: 'processing_compression'

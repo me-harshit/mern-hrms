@@ -11,7 +11,8 @@ import {
 import api from '../utils/api';
 import TaskThreads from '../components/TaskThreads';
 import TaskMediaGrid from '../components/TaskMediaGrid';
-import ScreenRecorder from '../components/ScreenRecorder';
+import AttachMenu from '../components/AttachMenu';
+import StagedFiles from '../components/StagedFiles';
 import EmployeeAvatar from '../components/EmployeeAvatar';
 import TaskCountdown, { hasTimeWindow } from '../components/TaskCountdown';
 import TaskNudges from '../components/TaskNudges';
@@ -47,8 +48,6 @@ const TaskDetail = () => {
     // The two optional halves of the submit panel. Both start folded so the
     // common case is just "pick a pill and save"; each opens itself when the
     // task gives it a reason to be open (see the load effect below).
-    const [proofOpen, setProofOpen] = useState(false);
-    const [noteOpen, setNoteOpen] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -56,10 +55,6 @@ const TaskDetail = () => {
             setTask(res.data);
             setStatus(res.data.status || 'Pending');
             setNote(res.data.statusNote || '');
-            // Proof is demanded, or already there to be seen; a note that
-            // already exists must not be hidden behind a link.
-            setProofOpen(Boolean(res.data.requiresAttachment) || (res.data.completionProof || []).length > 0);
-            setNoteOpen(Boolean(res.data.statusNote));
         } catch (err) {
             console.error('Could not load task', err);
             setNotFound(true);
@@ -70,21 +65,8 @@ const TaskDetail = () => {
 
     useEffect(() => { load(); }, [load]);
 
-    const handleProofChange = (e) => {
-        const picked = Array.from(e.target.files).filter(f => {
-            if (f.size > MAX_VIDEO_MB * 1024 * 1024) {
-                Swal.fire('Too Large', `"${f.name}" is over ${MAX_VIDEO_MB}MB.`, 'warning');
-                return false;
-            }
-            return true;
-        });
-        setProofFiles(prev => [...prev, ...picked]);
-        e.target.value = '';
-    };
-
-    const handleProofRecordingAttach = (file) => {
-        setProofFiles(prev => [...prev, file]);
-    };
+    // AttachMenu filters, caps and compresses before handing them over.
+    const addProofFiles = (picked) => setProofFiles(prev => [...prev, ...picked]);
 
     const deleteMedia = async (item) => {
         const ok = await Swal.fire({
@@ -365,72 +347,44 @@ const TaskDetail = () => {
                                     ))}
                                 </div>
 
-                                {/* Attachments. Expanded and stated as a rule when the
-                                    assigner asked for proof; otherwise folded away behind
-                                    one line, because most tasks are finished by moving a
-                                    pill and nothing else. */}
-                                {proofOpen ? (
-                                    <>
-                                        {task.requiresAttachment ? (
-                                            <div className={`td-required-note ${proofSatisfied ? 'is-met' : ''}`}>
-                                                <FontAwesomeIcon icon={proofSatisfied ? faCheckCircle : faTriangleExclamation} />
-                                                <span>
-                                                    {proofSatisfied
-                                                        ? 'Supporting material attached.'
-                                                        : 'This task needs supporting material before it can be completed.'}
-                                                </span>
-                                            </div>
-                                        ) : (
-                                            <label className="td-label">Attach supporting material</label>
-                                        )}
-
-                                        <ScreenRecorder onAttach={handleProofRecordingAttach} />
-                                        <input
-                                            className="custom-file-input" type="file" multiple
-                                            accept="image/*,video/*,.html,.htm,text/html" onChange={handleProofChange} disabled={saving}
-                                            style={{ marginTop: '10px' }}
-                                        />
-                                        <p className="td-field-hint">
-                                            Anything that backs up the work — files, screenshots, recordings.
-                                        </p>
-                                    </>
-                                ) : (
-                                    <button type="button" className="td-disclose" onClick={() => setProofOpen(true)}>
-                                        <FontAwesomeIcon icon={faPaperclip} /> Attach supporting material
-                                    </button>
-                                )}
-
-                                {proofFiles.length > 0 && (
-                                    <div className="file-chips-list">
-                                        {proofFiles.map((f, i) => (
-                                            <div key={i} className="file-chip">
-                                                <span className="file-chip-name">{f.name}</span>
-                                                <button type="button" className="file-chip-remove"
-                                                    onClick={() => setProofFiles(prev => prev.filter((_, idx) => idx !== i))}>✕</button>
-                                            </div>
-                                        ))}
+                                {/* Attach and note sit on one row: a small control that
+                                    opens the attach popup, and the note beside it taking
+                                    the rest of the width. Both used to hide behind their
+                                    own "click to reveal" link, which meant finishing a
+                                    task with a file and a comment took two discovery
+                                    steps before any real work could be done. */}
+                                {task.requiresAttachment && (
+                                    <div className={`td-required-note ${proofSatisfied ? 'is-met' : ''}`}>
+                                        <FontAwesomeIcon icon={proofSatisfied ? faCheckCircle : faTriangleExclamation} />
+                                        <span>
+                                            {proofSatisfied
+                                                ? 'Supporting material attached.'
+                                                : 'This task needs supporting material before it can be completed.'}
+                                        </span>
                                     </div>
                                 )}
 
-                                {/* The note is genuinely optional on every task, so it
-                                    stays folded until asked for — but opens by itself if
-                                    the task already carries one, which would otherwise be
-                                    invisible until you went looking. */}
-                                {noteOpen ? (
-                                    <>
-                                        <label className="td-label">Note</label>
-                                        <textarea
-                                            className="custom-input" rows="2" value={note}
-                                            onChange={(e) => setNote(e.target.value)}
-                                            placeholder="Anything the team should know?"
-                                            disabled={saving}
-                                        />
-                                    </>
-                                ) : (
-                                    <button type="button" className="td-disclose" onClick={() => setNoteOpen(true)}>
-                                        <FontAwesomeIcon icon={faPen} /> Add a note
-                                    </button>
-                                )}
+                                <div className="td-attach-row">
+                                    <AttachMenu
+                                        className="icon-only"
+                                        onFiles={addProofFiles}
+                                        disabled={saving}
+                                    />
+                                    <textarea
+                                        className="custom-input td-note-input"
+                                        rows="1"
+                                        value={note}
+                                        onChange={(e) => setNote(e.target.value)}
+                                        placeholder="Add a note (optional)"
+                                        disabled={saving}
+                                    />
+                                </div>
+
+                                <StagedFiles
+                                    files={proofFiles}
+                                    disabled={saving}
+                                    onRemove={(i) => setProofFiles(prev => prev.filter((_, idx) => idx !== i))}
+                                />
 
                                 {blockedByProof && (
                                     <p className="td-blocked-hint">
