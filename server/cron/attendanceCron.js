@@ -16,6 +16,27 @@ const getShiftDate = (punchTime, shiftType) => {
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 };
 
+// Turns the D/M/YYYY shift date back into a Date at local midnight.
+const parseShiftDate = (dateStr) => {
+    const [d, m, y] = dateStr.split('/').map(Number);
+    return new Date(y, m - 1, d);
+};
+
+// Shared by the morning setup and the evening sweep. Returns why the day is a
+// non-working day, or null if it is a normal working day. Both ends have to ask:
+// a holiday entered in HRMS after the 7 AM setup would otherwise still get every
+// employee swept to Absent at 8 PM.
+const getNonWorkingReason = async (shiftDateObj) => {
+    if (shiftDateObj.getDay() === 0) return 'Sunday';
+    if (Holiday) {
+        const startOfDay = new Date(shiftDateObj); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(shiftDateObj); endOfDay.setHours(23, 59, 59, 999);
+        const holiday = await Holiday.findOne({ date: { $gte: startOfDay, $lte: endOfDay } });
+        if (holiday) return `Holiday (${holiday.name})`;
+    }
+    return null;
+};
+
 // ========================================================
 // 🌅 MORNING SETUP: Creates Pending/Leave/WFH records before shift
 // ========================================================
@@ -28,23 +49,15 @@ const setupMorningRecords = async (shiftType) => {
         const [d, m, y] = targetDateStr.split('/').map(Number);
         const shiftDateObj = new Date(y, m - 1, d);
 
-        // 1. Skip Sundays
-        if (shiftDateObj.getDay() === 0) {
-            console.log(`[CRON] Shift date ${targetDateStr} is Sunday. Skipping setup.`);
+        // 1. Skip Sundays and official holidays
+        const nonWorkingReason = await getNonWorkingReason(shiftDateObj);
+        if (nonWorkingReason) {
+            console.log(`[CRON] Shift date ${targetDateStr} is ${nonWorkingReason}. Skipping setup.`);
             return;
         }
 
         const startOfDay = new Date(shiftDateObj); startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(shiftDateObj); endOfDay.setHours(23, 59, 59, 999);
-
-        // 2. Skip Official Holidays
-        if (Holiday) {
-            const todayHoliday = await Holiday.findOne({ date: { $gte: startOfDay, $lte: endOfDay } });
-            if (todayHoliday) {
-                console.log(`[CRON] Shift date ${targetDateStr} is a Holiday. Skipping setup.`);
-                return;
-            }
-        }
 
         // 3. Find Users for this Shift
         const query = { status: 'ACTIVE', role: { $ne: 'ADMIN' } };
@@ -118,6 +131,17 @@ const sweepEveningAbsentees = async (shiftType) => {
         console.log(`[CRON - EVENING] Sweeping leftover Pending records for ${shiftType}...`);
         const now = new Date();
         const targetDateStr = getShiftDate(now, shiftType);
+
+        // Re-check the calendar. The day may have become a holiday since the
+        // morning setup ran, and those skeletons must not turn into Absent —
+        // an Absent row is an unpaid day in payroll. Drop them instead, so the
+        // holiday ends up looking like a Sunday: no attendance rows at all.
+        const nonWorkingReason = await getNonWorkingReason(parseShiftDate(targetDateStr));
+        if (nonWorkingReason) {
+            const cleared = await Attendance.deleteMany({ date: targetDateStr, status: 'Pending' });
+            console.log(`[CRON - EVENING] ${targetDateStr} is ${nonWorkingReason}. Removed ${cleared.deletedCount} leftover skeleton(s); nobody marked Absent.`);
+            return;
+        }
 
         // This single line replaces all the heavy math we used to do!
         const result = await Attendance.updateMany(

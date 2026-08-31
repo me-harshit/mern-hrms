@@ -46,6 +46,7 @@ const MessageComposer = ({
 
     const textRef = useRef(null);
     const typingTimer = useRef(null);
+    const attachRef = useRef(null);
 
     // Editing swaps the box's contents for the message being reworded.
     useEffect(() => {
@@ -117,6 +118,29 @@ const MessageComposer = ({
         setFiles((prev) => [...prev, ...incoming].slice(0, 10));
         if (meta) setAudioMeta(meta);
     }, []);
+
+    /**
+     * Paste a screenshot straight into the box — the fastest path there is, and
+     * the one people reach for constantly when reporting something.
+     */
+    const onPaste = (e) => {
+        const images = Array.from(e.clipboardData?.items || [])
+            .filter((i) => i.type.startsWith('image/'))
+            .map((i) => i.getAsFile())
+            .filter(Boolean);
+        if (images.length) {
+            e.preventDefault();
+            stage(images);
+        }
+    };
+
+    /** Drag a file anywhere onto the composer. */
+    const onDrop = (e) => {
+        const dropped = Array.from(e.dataTransfer?.files || []);
+        if (!dropped.length) return;
+        e.preventDefault();
+        stage(dropped);
+    };
 
     const removeFile = (i) => {
         setFiles((prev) => prev.filter((_, idx) => idx !== i));
@@ -269,6 +293,7 @@ const MessageComposer = ({
 
             <div className="msgr-input-row">
                 <AttachMenu
+                    ref={attachRef}
                     className="compact"
                     onFiles={stage}
                     allowVoiceNote
@@ -290,7 +315,7 @@ const MessageComposer = ({
                 {!text.trim() && !files.length && !editing && (
                     <button
                         className="msgr-icon-btn"
-                        onClick={() => setRecorder('audio')}
+                        onClick={() => attachRef.current?.startVoiceNote()}
                         title="Record a voice note"
                     >
                         <FontAwesomeIcon icon={faMicrophone} />

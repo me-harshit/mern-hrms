@@ -25,6 +25,13 @@ const buildPayslipEmail = ({ payslip, employee }) => {
     const b = payslip.breakdown || {};
     const unpaid = (b.absent || 0) + (b.unpaidLeave || 0);
     const halfDayDeduction = (b.halfDays || 0) * 0.5;
+    const sandwich = b.sandwich || 0;
+    const clAdjustment = b.clAdjustment || 0;
+    const cal = payslip.calendar || {};
+    // Older payslips predate the calendar snapshot; they simply omit the line.
+    const monthMakeup = cal.daysInMonth
+        ? `${cal.daysInMonth} days = ${cal.workingDays} working + ${cal.sundays} Sundays + ${cal.holidays} holidays`
+        : null;
 
     const subject = `Payslip for ${period} - ${employee.name}`;
 
@@ -55,9 +62,12 @@ const buildPayslipEmail = ({ payslip, employee }) => {
             </thead>
             <tbody>
                 ${row('Base Monthly Salary', money(payslip.baseSalary))}
-                ${row('Total Days in Month', payslip.totalWorkingDays)}
+                ${row('Standard Payroll Month', `${payslip.totalWorkingDays} days`)}
+                ${monthMakeup ? row('This Month', monthMakeup) : ''}
                 ${row('Unpaid Absences / Leaves', unpaid)}
                 ${row('Half Day Deductions', `${halfDayDeduction} (from ${b.halfDays || 0} half-days)`)}
+                ${sandwich ? row('Sandwich Deduction', `${sandwich} day(s) off between absences`) : ''}
+                ${clAdjustment ? row('Casual Leave Adjustment', `+${clAdjustment} day(s) credited against half days`) : ''}
                 ${row('Net Payable Days', payslip.payableDays, { bold: true, topBorder: true })}
                 ${row('Net Payable Salary', money(payslip.calculatedSalary), { bold: true, color: '#059669', topBorder: true })}
             </tbody>
