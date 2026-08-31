@@ -28,20 +28,57 @@ const storage = multer.diskStorage({
     }
 });
 
+/*
+ * Extension and mimetype must BOTH pass.
+ *
+ * Checking only the mimetype trusts a header the client sets; checking only the
+ * extension trusts a filename. Requiring both is what makes renaming an
+ * executable to .pdf insufficient on its own.
+ *
+ * Documents were previously limited to html/htm, which meant the honest answer
+ * to "here is the signed PDF proving the work" was a rejection — so people
+ * screenshotted the PDF, and the task carried a picture of evidence instead of
+ * the evidence. The list now matches what the chat accepts, minus the things a
+ * task attachment has no use for.
+ *
+ * Deliberately absent: .svg (scriptable, renders inline in an <img>), and every
+ * script and executable extension.
+ *
+ * Audio stays allowed even though the task attach menu no longer offers a voice
+ * note: the per-task discussion thread still records them, and it shares this
+ * middleware.
+ */
+const ALLOWED_EXTS = /^\.(jpe?g|png|webp|gif|heic|mp4|webm|mov|avi|mkv|mp3|m4a|wav|ogg|oga|aac|opus|pdf|docx?|xlsx?|pptx?|txt|csv|zip|html?|htm)$/;
+
+const ALLOWED_MIMES = new RegExp([
+    'image/(jpeg|jpg|png|webp|gif|heic)',
+    'video/(mp4|webm|quicktime|x-msvideo|x-matroska)',
+    'audio/(mpeg|mp4|mp4a-latm|wav|x-wav|ogg|aac|webm|opus|m4a|x-m4a)',
+    'application/pdf',
+    'application/msword',
+    'application/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)',
+    'application/vnd\.ms-(excel|powerpoint)',
+    'application/(zip|x-zip-compressed|octet-stream)',
+    'text/(plain|csv|html)'
+].join('|'));
+
 const fileFilter = (req, file, cb) => {
-    // html/htm covers "supporting document" briefs — a report or a mockup
-    // someone exported as a static page rather than a screenshot.
-    const allowedExts = /jpeg|jpg|png|webp|mp4|webm|mov|avi|mkv|mp3|m4a|wav|ogg|oga|aac|html|htm/;
-    const allowedMimes = /jpeg|jpg|png|webp|mp4|webm|quicktime|x-msvideo|x-matroska|mpeg|mp4a|wav|ogg|aac|opus|html/;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const extOk = ALLOWED_EXTS.test(ext);
+    const mimeOk = ALLOWED_MIMES.test(file.mimetype.toLowerCase());
 
-    const extname = allowedExts.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedMimes.test(file.mimetype.toLowerCase());
+    /*
+     * application/octet-stream is allowed above because that is what several
+     * browsers send for .m4a and .zip — but it is also the fallback for anything
+     * unrecognised, so on its own it would wave through any extension the regex
+     * happens to miss. Paired with the extension check it is safe: the name
+     * still has to be one we accept.
+     */
+    if (extOk && mimeOk) return cb(null, true);
 
-    if (extname && mimetype) {
-        cb(null, true);
-    } else {
-        cb(new Error('Only images (JPG/PNG/WEBP), videos (MP4/WEBM/MOV/AVI/MKV) and HTML documents are allowed!'), false);
-    }
+    cb(new Error(
+        'That file type is not allowed. Attach images, video, PDF, Office documents, HTML, text, CSV or ZIP.'
+    ), false);
 };
 
 const taskUpload = multer({

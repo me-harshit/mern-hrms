@@ -2,23 +2,19 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faPaperclip, faPaperPlane, faXmark, faImage, faFile,
-    faMicrophone, faDesktop, faTimes
+    faPaperPlane, faXmark, faMicrophone, faTimes
 } from '@fortawesome/free-solid-svg-icons';
-import imageCompression from 'browser-image-compression';
 
-import AudioRecorder from '../AudioRecorder';
-import ScreenRecorder from '../ScreenRecorder';
+import AttachMenu from '../AttachMenu';
 import Avatar from '../Avatar';
 
 /**
  * The message box: text, @mentions, files, voice notes and screen recordings.
  *
- * The three recorders are the components the task discussion already uses —
- * same `onAttach` / `autoStart` / `onClose` contract — so a voice note recorded
- * here is byte-identical to one recorded on a task, and both ride the same
- * server pipeline. Rebuilding them for chat would have meant two recorders
- * drifting apart.
+ * Attaching is delegated to the shared <AttachMenu>, which tasks use too, so
+ * the document types, the image compression and the recorder takeover are
+ * defined once. What stays here is what is genuinely chat-specific: the text
+ * box, @mention autocomplete, the reply and edit strips, and send.
  */
 
 const MAX_MB = 300;
@@ -40,8 +36,8 @@ const MessageComposer = ({
     const [files, setFiles] = useState([]);
     const [audioMeta, setAudioMeta] = useState(null);
     const [sending, setSending] = useState(false);
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [recorder, setRecorder] = useState(null);   // 'audio' | 'screen' | null
+    // AttachMenu reports true while it compresses a picked image set.
+    const [preparing, setPreparing] = useState(false);
 
     // @mention autocomplete state
     const [mentionQuery, setMentionQuery] = useState(null);
@@ -49,9 +45,6 @@ const MessageComposer = ({
     const [mentioned, setMentioned] = useState([]);
 
     const textRef = useRef(null);
-    const imageInput = useRef(null);
-    const fileInput = useRef(null);
-    const menuRef = useRef(null);
     const typingTimer = useRef(null);
 
     // Editing swaps the box's contents for the message being reworded.
@@ -69,16 +62,6 @@ const MessageComposer = ({
         el.style.height = 'auto';
         el.style.height = `${Math.min(el.scrollHeight, 130)}px`;
     }, [text]);
-
-    // Clicking anywhere else closes the attach menu.
-    useEffect(() => {
-        if (!menuOpen) return;
-        const close = (e) => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-        };
-        document.addEventListener('mousedown', close);
-        return () => document.removeEventListener('mousedown', close);
-    }, [menuOpen]);
 
     /* ------------------------------ mentions ------------------------------ */
 
@@ -125,79 +108,15 @@ const MessageComposer = ({
 
     /* ------------------------------ files ------------------------------ */
 
-    const stage = useCallback((incoming) => {
-        const ok = [];
-        for (const f of incoming) {
-            if (f.size > MAX_MB * 1024 * 1024) {
-                Swal.fire('Too large', `"${f.name}" is over ${MAX_MB}MB.`, 'warning');
-                continue;
-            }
-            ok.push(f);
-        }
-        setFiles((prev) => [...prev, ...ok].slice(0, 10));
+    /**
+     * Where AttachMenu hands files back. `meta` is present only for a voice
+     * note — the waveform and duration measured while recording, which travel
+     * with the upload so a player never decodes the audio just to draw it.
+     */
+    const stage = useCallback((incoming, meta) => {
+        setFiles((prev) => [...prev, ...incoming].slice(0, 10));
+        if (meta) setAudioMeta(meta);
     }, []);
-
-    const pickImages = async (e) => {
-        const picked = Array.from(e.target.files);
-        const processed = [];
-        for (const f of picked) {
-            try {
-                // Shrink before upload: a 12MP phone photo is 4MB of nothing
-                // useful in a chat bubble, and it costs the recipient's data too.
-                const blob = await imageCompression(f, {
-                    maxSizeMB: 1,
-                    maxWidthOrHeight: 1600,
-                    useWebWorker: false,
-                    fileType: 'image/jpeg'
-                });
-                processed.push(new File(
-                    [blob],
-                    f.name.replace(/\.[^/.]+$/, '') + '.jpg',
-                    { type: 'image/jpeg' }
-                ));
-            } catch {
-                processed.push(f);   // compression is an optimisation, not a gate
-            }
-        }
-        stage(processed);
-        e.target.value = '';
-        setMenuOpen(false);
-    };
-
-    const pickFiles = (e) => {
-        stage(Array.from(e.target.files));
-        e.target.value = '';
-        setMenuOpen(false);
-    };
-
-    // Paste a screenshot straight into the box — the fastest path there is.
-    const onPaste = (e) => {
-        const images = Array.from(e.clipboardData?.items || [])
-            .filter((i) => i.type.startsWith('image/'))
-            .map((i) => i.getAsFile())
-            .filter(Boolean);
-        if (images.length) {
-            e.preventDefault();
-            stage(images);
-        }
-    };
-
-    const onDrop = (e) => {
-        e.preventDefault();
-        const dropped = Array.from(e.dataTransfer?.files || []);
-        if (dropped.length) stage(dropped);
-    };
-
-    const handleVoiceAttach = (file, meta) => {
-        stage([file]);
-        setAudioMeta(meta || null);
-        setRecorder(null);
-    };
-
-    const handleRecordingAttach = (file) => {
-        stage([file]);
-        setRecorder(null);
-    };
 
     const removeFile = (i) => {
         setFiles((prev) => prev.filter((_, idx) => idx !== i));
@@ -306,30 +225,6 @@ const MessageComposer = ({
         );
     }
 
-    // A recorder takes the whole composer row while it is running — a text box
-    // beside a live microphone is a box nobody is typing in.
-    if (recorder) {
-        return (
-            <div className="msgr-composer">
-                <div className="msgr-recorder-slot">
-                    {recorder === 'audio' ? (
-                        <AudioRecorder
-                            autoStart
-                            onAttach={handleVoiceAttach}
-                            onClose={() => setRecorder(null)}
-                        />
-                    ) : (
-                        <ScreenRecorder
-                            autoStart
-                            onAttach={handleRecordingAttach}
-                            onClose={() => setRecorder(null)}
-                        />
-                    )}
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="msgr-composer" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
             {editing && (
@@ -373,60 +268,11 @@ const MessageComposer = ({
             )}
 
             <div className="msgr-input-row">
-                <div className="msgr-attach" ref={menuRef}>
-                    <button
-                        className={`msgr-icon-btn ${menuOpen ? 'is-on' : ''}`}
-                        onClick={() => setMenuOpen((o) => !o)}
-                        title="Attach"
-                    >
-                        <FontAwesomeIcon icon={faPaperclip} />
-                    </button>
-
-                    {menuOpen && (
-                        <div className="msgr-attach-menu">
-                            <button onClick={() => imageInput.current?.click()}>
-                                <span className="ico" style={{ background: '#7f66ff' }}>
-                                    <FontAwesomeIcon icon={faImage} />
-                                </span>
-                                Photos &amp; videos
-                            </button>
-                            <button onClick={() => fileInput.current?.click()}>
-                                <span className="ico" style={{ background: '#5157ae' }}>
-                                    <FontAwesomeIcon icon={faFile} />
-                                </span>
-                                Document
-                            </button>
-                            <button onClick={() => { setMenuOpen(false); setRecorder('audio'); }}>
-                                <span className="ico" style={{ background: '#0b9b7d' }}>
-                                    <FontAwesomeIcon icon={faMicrophone} />
-                                </span>
-                                Voice note
-                            </button>
-                            <button onClick={() => { setMenuOpen(false); setRecorder('screen'); }}>
-                                <span className="ico" style={{ background: '#d3396d' }}>
-                                    <FontAwesomeIcon icon={faDesktop} />
-                                </span>
-                                Screen recording
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                <input
-                    ref={imageInput}
-                    type="file"
-                    accept="image/*,video/*"
-                    multiple
-                    hidden
-                    onChange={pickImages}
-                />
-                <input
-                    ref={fileInput}
-                    type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
-                    multiple
-                    hidden
-                    onChange={pickFiles}
+                <AttachMenu
+                    className="compact"
+                    onFiles={stage}
+                    allowVoiceNote
+                    onBusyChange={setPreparing}
                 />
 
                 <textarea
@@ -454,7 +300,7 @@ const MessageComposer = ({
                 <button
                     className="msgr-send"
                     onClick={submit}
-                    disabled={sending || (!text.trim() && !files.length)}
+                    disabled={sending || preparing || (!text.trim() && !files.length)}
                     title="Send"
                 >
                     <FontAwesomeIcon icon={faPaperPlane} />
