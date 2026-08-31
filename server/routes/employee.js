@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { stampBalanceAnchor } = require('../utils/leaveAccrual');
 const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
 const bcrypt = require('bcryptjs');
@@ -294,6 +295,13 @@ router.put('/:id', auth, async (req, res) => {
         if (salary !== undefined && canAccessSalary(req.user)) updateData.salary = salary;
         if (casualLeaveBalance !== undefined) updateData.casualLeaveBalance = casualLeaveBalance;
         if (earnedLeaveBalance !== undefined) updateData.earnedLeaveBalance = earnedLeaveBalance;
+        // Setting a balance by hand has to re-anchor the accrual clock. Without
+        // this, the next time the employee opened their leave page the accrual
+        // back-filled every month since the *old* anchor straight over the top
+        // of the correction that was just made.
+        if (casualLeaveBalance !== undefined || earnedLeaveBalance !== undefined) {
+            stampBalanceAnchor(updateData);
+        }
 
         if (reportingManagerName !== undefined) updateData.reportingManagerName = reportingManagerName;
         if (reportingManagerEmail !== undefined) updateData.reportingManagerEmail = reportingManagerEmail;

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -39,7 +39,7 @@ import '../styles/attachMenu.css';
 export const DOCUMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.html,.htm';
 export const MEDIA_ACCEPT = 'image/*,video/*';
 
-const AttachMenu = ({
+const AttachMenu = forwardRef(({
     onFiles,
     onBusyChange,
     disabled = false,
@@ -48,7 +48,7 @@ const AttachMenu = ({
     label,
     maxFileMB = 300,
     className = ''
-}) => {
+}, ref) => {
     const [open, setOpen] = useState(false);
     const [recorder, setRecorder] = useState(null);   // 'audio' | 'screen' | null
 
@@ -69,6 +69,17 @@ const AttachMenu = ({
      * available where the trigger happens to be.
      */
     const [coords, setCoords] = useState(null);
+
+    /*
+     * Lets a caller start a recorder without going through the menu — the chat
+     * composer's mic shortcut, which is the one attachment people reach for
+     * mid-sentence. Exposed as a handle rather than lifting `recorder` into the
+     * caller, so the recorder lifecycle stays owned by exactly one component.
+     */
+    useImperativeHandle(ref, () => ({
+        startVoiceNote: () => { setOpen(false); setRecorder('audio'); },
+        startScreenRecording: () => { setOpen(false); setRecorder('screen'); }
+    }), []);
 
     // Measured after the menu is in the DOM but before paint, so it never
     // appears in the wrong place for a frame.
@@ -294,6 +305,8 @@ const AttachMenu = ({
             />
         </div>
     );
-};
+});
+
+AttachMenu.displayName = 'AttachMenu';
 
 export default AttachMenu;

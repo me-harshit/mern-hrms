@@ -7,6 +7,7 @@ const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const sendEmail = require('../utils/sendEmail');
 const { canAccessSalary, sanitizeSalary } = require('../utils/permissions');
+const { accrueCasualLeave, stampBalanceAnchor } = require('../utils/leaveAccrual');
 
 // @route   GET /api/leaves/my-leaves
 // @desc    Get history AND fetch stored balances (with Auto-Reset logic)
@@ -16,24 +17,9 @@ router.get('/my-leaves', auth, async (req, res) => {
         let user = await User.findById(userId).select('casualLeaveBalance earnedLeaveBalance leavesLastReset');
 
         // --- 1. AUTO-ACCRUAL & YEARLY RESET LOGIC ---
-        const now = new Date();
-        const lastReset = new Date(user.leavesLastReset || Date.now());
-        let isUpdated = false;
-
-        if (now.getFullYear() > lastReset.getFullYear()) {
-            user.casualLeaveBalance = now.getMonth() + 1;
-            user.leavesLastReset = now;
-            isUpdated = true;
-        } else {
-            const monthsPassed = now.getMonth() - lastReset.getMonth();
-            if (monthsPassed > 0) {
-                user.casualLeaveBalance += monthsPassed;
-                user.leavesLastReset = now;
-                isUpdated = true;
-            }
-        }
-
-        if (isUpdated) await user.save();
+        // Anchored to leavesLastReset, so opening this page early or late does
+        // not change the result. See utils/leaveAccrual.js.
+        if (accrueCasualLeave(user)) await user.save();
 
         // --- 2. Calculate Available Balance ---
         const pendingLeaves = await Leave.find({ userId, status: 'Pending' });
@@ -511,8 +497,8 @@ router.post('/admin/update-balance', auth, async (req, res) => {
         // MANAGER/TEAM LEAD/ACCOUNTS, so ignore the field for them.
         if (salary !== undefined && canAccessSalary(req.user)) user.salary = Number(salary);
 
-        // Reset the auto-accrual timer so the system doesn't immediately give them back past leaves
-        user.leavesLastReset = new Date();
+        // Re-anchor the accrual so the figure just entered is the one that stands.
+        if (cl !== undefined || el !== undefined) stampBalanceAnchor(user);
 
         await user.save();
         res.json({ message: 'User profile updated successfully', user: sanitizeSalary(user, req.user) });

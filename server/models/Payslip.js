@@ -36,7 +36,27 @@ const payslipSchema = new mongoose.Schema({
         onLeave: { type: Number, default: 0 },
         unpaidLeave: { type: Number, default: 0 },
         halfDays: { type: Number, default: 0 },
-        absent: { type: Number, default: 0 }
+        absent: { type: Number, default: 0 },
+        // Sundays and holidays charged under the sandwich rule.
+        sandwich: { type: Number, default: 0 },
+        // Working days with neither an attendance row nor a leave to explain
+        // them. Never charged; kept so the gap is on the record.
+        noRecord: { type: Number, default: 0 },
+        // Casual leave spent against unapplied half days when this payslip was
+        // finalized. The employee's balance was debited by this much, and
+        // reverting the payslip gives it back.
+        clAdjustment: { type: Number, default: 0 }
+    },
+    // The exact days off the sandwich rule charged for, as D/M/YYYY, so a
+    // query months later can be answered without recalculating anything.
+    sandwichDates: [{ type: String }],
+    // How the pay period was made up. Purely a record of what HR saw when
+    // finalizing: salary is always base/30 per day, never divided by these.
+    calendar: {
+        daysInMonth: { type: Number },
+        workingDays: { type: Number },
+        sundays: { type: Number },
+        holidays: { type: Number }
     },
     status: {
         type: String,
