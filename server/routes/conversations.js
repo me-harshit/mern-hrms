@@ -19,7 +19,10 @@ const VideoCompressionQueue = require('../models/VideoCompressionQueue');
 
 const { processTaskFiles, discardStagedFiles, s3Folder } = require('../utils/taskMedia');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Service');
-const { emitToConversation, emitToUsers } = require('../utils/realtime');
+const { emitToConversation, emitToConversationExternals, emitToUsers } = require('../utils/realtime');
+// Anything added to a thread must reach the external participants in it
+// too, in the reduced shape they are entitled to. See utils/portalShape.js.
+const { broadcastMessage, portalMessage } = require('../utils/portalShape');
 const {
     IS_OVERSIGHT,
     idStr,
@@ -57,6 +60,9 @@ const PAGE_SIZE = 40;
 const populateMessage = (query) =>
     query
         .populate('sender', USER_FIELDS)
+        // Module 2. Only the display identity, never the token, the email or
+        // the invite trail - this shape is sent to every member of the group.
+        .populate('externalSender', 'name company status')
         .populate('mentions', 'name employeeId')
         .populate('systemEvent.actor', 'name')
         .populate('systemEvent.targets', 'name');
@@ -142,6 +148,16 @@ const publicShape = (conversation) => {
     };
 };
 
+/*
+ * External participants (feature draft Module 2) live in their own file but
+ * hang off a conversation, so they mount here rather than at a top-level path.
+ *
+ * Mounted before the /:id routes below: Express matches in declaration order,
+ * and a later `router.get('/:id')` would otherwise never see /:id/externals
+ * reach it as a sub-router at all.
+ */
+router.use('/:id/externals', require('./externalParticipants'));
+
 /* ================================================================== *
  * THE CHAT LIST
  * ================================================================== */
@@ -208,15 +224,37 @@ router.get('/', auth, async (req, res) => {
             const counts = await Message.aggregate([
                 {
                     $match: {
-                        $or: clauses,
-                        // Your own messages are never unread to you, and a
-                        // system line ("X added Y") should not raise a badge.
-                        sender: { $ne: new mongoose.Types.ObjectId(req.user.id), $nin: [null] },
-                        // Nor should a message that was deleted before you got
-                        // to it — a badge you cannot clear by looking is worse
-                        // than no badge, because the chat opens with nothing new
-                        // in it and the count stays put.
-                        deletedAt: null
+                        $and: [
+                            { $or: clauses },
+                            {
+                                /*
+                                 * What counts as unread.
+                                 *
+                                 * Your own messages are never unread to you,
+                                 * and a system line ("X added Y") should not
+                                 * raise a badge — both are excluded by
+                                 * requiring a sender that is neither null nor
+                                 * you.
+                                 *
+                                 * But an external participant's message also
+                                 * has a null `sender` (their identity is on
+                                 * externalSender — see models/Message.js), so
+                                 * that test alone would swallow every vendor
+                                 * message: they would ask a question and
+                                 * nobody's badge would move. Hence the second
+                                 * branch, which is the whole point of Module 2.
+                                 */
+                                $or: [
+                                    { sender: { $ne: new mongoose.Types.ObjectId(req.user.id), $nin: [null] } },
+                                    { externalSender: { $ne: null } }
+                                ]
+                            },
+                            // A message deleted before you got to it should not
+                            // leave a badge you cannot clear by looking — the
+                            // chat would open with nothing new and the count
+                            // would stay put.
+                            { deletedAt: null }
+                        ]
                     }
                 },
                 { $group: { _id: '$conversationId', n: { $sum: 1 } } }
@@ -1065,7 +1103,7 @@ router.post('/:id/messages', auth, chatUpload.array('attachments', 10), async (r
 
         // Two audiences: people with the thread open get the message, everyone
         // in it gets a nudge to re-sort their sidebar and bump the badge.
-        emitToConversation(conversation._id, 'message:new', populated);
+        broadcastMessage(conversation._id, populated);
         emitToUsers(
             memberIds(conversation).filter((id) => id !== String(req.user.id)),
             'conversation:activity',
@@ -1151,6 +1189,10 @@ router.put('/:id/messages/:messageId', auth, async (req, res) => {
 
         const populated = presentMessage(await populateMessage(Message.findById(message._id)));
         emitToConversation(req.params.id, 'message:edited', populated);
+        // External participants are watching a different room and need the
+        // reduced shape - without this an edit is invisible to them until they
+        // reload, and they would go on reading wording that has been changed.
+        emitToConversationExternals(req.params.id, 'message:edited', portalMessage(populated));
         res.json(populated);
     } catch (err) {
         console.error('[CHAT] edit error:', err.message);
@@ -1179,10 +1221,16 @@ router.delete('/:id/messages/:messageId', auth, async (req, res) => {
         message.deletedBy = req.user.id;
         await message.save();
 
-        emitToConversation(req.params.id, 'message:deleted', {
-            _id: message._id,
-            conversationId: req.params.id
-        });
+        const removal = { _id: message._id, conversationId: req.params.id };
+        emitToConversation(req.params.id, 'message:deleted', removal);
+        /*
+         * And to the outsiders in the thread.
+         *
+         * This one matters more than the edit: "delete for everyone" that
+         * leaves the text on a vendor's open screen has not deleted it for
+         * everyone, and the person who pressed it has no way to tell.
+         */
+        emitToConversationExternals(req.params.id, 'message:deleted', removal);
         res.json({ message: 'Message deleted' });
     } catch (err) {
         console.error('[CHAT] delete error:', err.message);

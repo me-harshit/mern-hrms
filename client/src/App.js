@@ -30,6 +30,7 @@ import AddExpense from './pages/User/AddExpense';
 import EditExpense from './pages/User/EditExpense';
 import AdminChat from './pages/Admin/AdminChat'
 import Chats from './pages/Chats';
+import Portal from './pages/Portal';
 import Projects from './pages/Admin/Projects';
 import Inventory from './pages/Admin/Inventory';
 import MyInventory from './pages/User/MyInventory';
@@ -169,6 +170,19 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forever-begins" element={<ForeverBegins />} />
+
+        {/*
+          * The external participant portal (feature draft Module 2).
+          *
+          * Outside ProtectedRoute AND outside DashboardLayout, both
+          * deliberately. A vendor has no HRMS login, so the guard would bounce
+          * them to /login and the link would never open; and the layout would
+          * wrap their one conversation in a sidebar full of Attendance,
+          * Payroll and Employees, every item of which is a 401 they cannot
+          * read. The page owns its own chrome and its own auth - see
+          * utils/portalApi.js.
+          */}
+        <Route path="/portal/:token" element={<Portal />} />
 
         <Route element={<ProtectedRoute isAllowed={isAuthenticated} />}>
 

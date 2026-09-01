@@ -110,8 +110,26 @@ const MessageBubble = ({
             id={id}
             className={`msgr-msg ${mine ? 'out' : 'in'} ${firstOfRun ? 'first-of-run' : ''}`}
         >
-            <div className="msgr-bubble">
-                {!mine && showAuthor && (
+            <div className={`msgr-bubble ${message.externalSender ? 'from-external' : ''}`}>
+                {/*
+                  * The External badge (feature draft F2.4).
+                  *
+                  * Shown on every message an outsider wrote, and shown even when
+                  * the author line is otherwise suppressed for a run of
+                  * consecutive messages - the point of the badge is that nobody
+                  * can reply to a vendor believing they are talking to a
+                  * colleague, and a badge that appears only on the first message
+                  * of a run is a badge that is missing exactly when somebody has
+                  * scrolled into the middle of one.
+                  */}
+                {!mine && message.externalSender && (
+                    <div className="msgr-bubble-author">
+                        {message.externalSender.name || 'External participant'}
+                        <span className="ext-badge">External</span>
+                    </div>
+                )}
+
+                {!mine && showAuthor && !message.externalSender && (
                     <div className="msgr-bubble-author">{message.sender?.name || 'Unknown'}</div>
                 )}
 

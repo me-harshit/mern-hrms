@@ -11,6 +11,7 @@ import Avatar from '../Avatar';
 import ImageEditor from '../ImageEditor';
 import PeoplePicker from './PeoplePicker';
 import GroupIcon from './GroupIcon';
+import ExternalParticipants from './ExternalParticipants';
 
 /**
  * The details pane: who is in here, and the things you can do about it.
@@ -336,6 +337,13 @@ const GroupInfoPanel = ({ conversation, myId, myRole, onClose, onChanged, onLeft
                 </div>
             )}
 
+            {/* Feature draft Module 2. Placed directly under the member list,
+                because "who is in this room" is one question and the answer has
+                two halves - colleagues above, outsiders here. */}
+            {isGroup && (
+                <ExternalParticipants conversation={conversation} canManage={canManage} />
+            )}
+
             {isGroup && canManage && (
                 <div className="msgr-info-section">
                     <h5>Invite link</h5>
@@ -357,7 +365,9 @@ const GroupInfoPanel = ({ conversation, myId, myRole, onClose, onChanged, onLeft
                                 <FontAwesomeIcon icon={faCopy} /> Copy link
                             </button>
                             <p style={{ fontSize: 11.5, color: '#667781', marginTop: 8, marginBottom: 0 }}>
-                                Expires in 7 days. Anyone logged into the HRMS with this link can join.
+                                Expires in 7 days. For colleagues only — anyone logged into
+                                the HRMS with this link can join. To bring in someone from
+                                outside the company, use Invite someone from outside above.
                             </p>
                         </>
                     ) : (

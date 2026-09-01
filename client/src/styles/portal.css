@@ -1,0 +1,262 @@
+/*
+ * The external participant portal (pages/Portal.js) — feature draft Module 2.
+ *
+ * A standalone sheet rather than a section of messenger.css, because this page
+ * is the only thing in the product a person outside the company ever sees. It
+ * has no sidebar, no topbar and no navigation, and keeping its styles apart is
+ * what stops a later tidy-up of the internal chat from quietly reintroducing
+ * app chrome onto a page that must not have any.
+ *
+ * The message thread itself deliberately DOES reuse messenger.css — a vendor
+ * and an employee should be reading the same conversation, rendered the same
+ * way.
+ */
+
+:root {
+    --portal-brand: #215D7B;
+    --portal-ink: #0f172a;
+    --portal-muted: #64748b;
+    --portal-line: #e2e8f0;
+}
+
+/* ---------------------------- ENTRY STATES ---------------------------- */
+
+/* The join, pending, expired and error screens all share this frame. */
+.portal-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: linear-gradient(160deg, #f1f5f9 0%, #e7eef3 100%);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.portal-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(15, 23, 42, .10);
+    padding: 38px 34px;
+    width: 100%;
+    max-width: 430px;
+    text-align: center;
+}
+
+.portal-brand {
+    width: 46px;
+    height: 46px;
+    margin: 0 auto 18px;
+    border-radius: 12px;
+    background: var(--portal-brand);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: .5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.portal-card h2 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    line-height: 1.4;
+    color: var(--portal-ink);
+    font-weight: 600;
+}
+
+.portal-group {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--portal-brand);
+    margin-top: 4px;
+}
+
+.portal-muted {
+    color: var(--portal-muted);
+    font-size: 13.5px;
+    margin: 6px 0 0;
+}
+
+.portal-intro {
+    color: #334155;
+    font-size: 14.5px;
+    line-height: 1.6;
+    margin: 18px 0 22px;
+}
+
+.portal-label {
+    display: block;
+    font-size: 13px;
+    color: var(--portal-muted);
+    margin-bottom: 10px;
+}
+
+/* Wide tracking so a six-digit code is read as six separate digits, which is
+   how it will have been written down off the email. */
+.portal-code {
+    width: 100%;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 12px;
+    text-indent: 12px;
+    text-align: center;
+    padding: 14px 10px;
+    border: 1px solid var(--portal-line);
+    border-radius: 10px;
+    background: #f8fafc;
+    color: var(--portal-ink);
+    margin-bottom: 14px;
+    font-family: inherit;
+}
+
+.portal-code:focus {
+    outline: none;
+    border-color: var(--portal-brand);
+    background: #fff;
+}
+
+.portal-error {
+    color: #dc2626;
+    font-size: 13.5px;
+    margin: 0 0 14px;
+}
+
+.portal-primary {
+    width: 100%;
+    border: none;
+    background: var(--portal-brand);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    padding: 14px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: background .15s;
+}
+
+.portal-primary:hover:not(:disabled) { background: #1a4a63; }
+.portal-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+.portal-foot {
+    margin: 20px 0 0;
+    font-size: 12.5px;
+    color: var(--portal-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+}
+
+.portal-card.notice p { color: #334155; font-size: 14.5px; line-height: 1.6; }
+
+.portal-notice-icon {
+    width: 54px;
+    height: 54px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #eef6fa;
+    color: var(--portal-brand);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.portal-card.warn .portal-notice-icon { background: #fef2f2; color: #dc2626; }
+
+/* ------------------------------ THE CHAT ------------------------------ */
+
+/*
+ * Fixed to the viewport, and the thread is the only thing that scrolls.
+ *
+ * The internal chat page had the same requirement and solved it the same way;
+ * a composer that scrolls off the bottom of a phone is the single most common
+ * way a chat screen goes wrong.
+ */
+.portal-chat {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: #efeae2;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.portal-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+    background: #fff;
+    border-bottom: 1px solid var(--portal-line);
+    flex-shrink: 0;
+}
+
+.portal-head-body { flex: 1; min-width: 0; }
+
+.portal-head-body h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--portal-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.portal-head-body span {
+    font-size: 12.5px;
+    color: var(--portal-muted);
+}
+
+.portal-you {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+.portal-you-name {
+    font-size: 12.5px;
+    color: var(--portal-muted);
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* min-height:0 so this flex child may actually shrink and scroll, instead of
+   growing to fit its content and pushing the composer off the screen. */
+.portal-thread {
+    flex: 1;
+    min-height: 0;
+}
+
+.portal-composer {
+    flex-shrink: 0;
+    background: #f0f2f5;
+    border-top: 1px solid var(--portal-line);
+}
+
+.portal-composer-note {
+    margin: 0;
+    padding: 0 16px 8px;
+    font-size: 11.5px;
+    color: var(--portal-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+@media (max-width: 560px) {
+    .portal-card { padding: 30px 22px; }
+    .portal-you-name { display: none; }
+}

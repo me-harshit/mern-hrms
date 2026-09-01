@@ -63,6 +63,10 @@ app.use('/api/chat', chatRoutes);
 // Internal messaging (feature draft Module 3). Distinct from /api/chat, which
 // is the Gemini assistant — two unrelated features must not share a namespace.
 app.use('/api/conversations', conversationRoutes);
+// The external participant portal (feature draft Module 2). Its own
+// namespace and its own middleware: nothing under /api/portal uses the
+// employee auth, and nothing outside it accepts a portal token.
+app.use('/api/portal', require('./routes/portal'));
 app.use('/api/projects', projectsRoutes);
 app.use('/api/wallets', walletsRoute);
 app.use('/api/inventory', inventoryRoute);

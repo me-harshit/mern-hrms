@@ -206,7 +206,17 @@ const postSystemMessage = async (conversationId, { type, actor, actorName, targe
         removed: `${actorName} removed ${names}`,
         left: `${actorName} left`,
         renamed: `${actorName} changed the group name to "${extra}"`,
-        joined_via_link: `${actorName} joined via invite link`
+        joined_via_link: `${actorName} joined via invite link`,
+
+        /*
+         * Module 2. An outsider being let in is announced at the moment of
+         * invitation, not only when they first open the link, because by then
+         * it is too late to be careful about what was said in front of them.
+         * The team needs the warning while it still changes their behaviour.
+         */
+        external_invited: `${actorName} invited ${names} (external) — they will be able to read this conversation`,
+        external_joined: `${names} (external) joined the conversation`,
+        external_revoked: `${actorName} removed ${names} (external) from this conversation`
     };
 
     const message = await Message.create({
