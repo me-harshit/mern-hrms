@@ -34,6 +34,14 @@ router.get('/calculate', auth, async (req, res) => {
         // Find all active employees (excluding ADMIN)
         const employees = await User.find({ status: 'ACTIVE', role: { $ne: 'ADMIN' } });
 
+        // Payslips already finalized for this month. A finalized payslip is a
+        // decision, not a draft: it carries whatever HR keyed in by hand, so it
+        // is shown back exactly as saved rather than recalculated out from under
+        // them. The fresh figures are still worked out below and returned
+        // alongside, so a divergence since finalizing is visible.
+        const finalizedSlips = await Payslip.find({ month: monthNum, year: yearNum }).lean();
+        const slipByUser = new Map(finalizedSlips.map(slip => [String(slip.userId), slip]));
+
         // Regex to match dates ending with /M/YYYY (e.g., /7/2026)
         const dateRegex = new RegExp(`/${monthNum}/${yearNum}$`);
 
@@ -80,6 +88,8 @@ router.get('/calculate', auth, async (req, res) => {
             const leaveTypeByDate = {};
             // Days counted from an approved leave that has no attendance row.
             const derivedLeaveDates = new Set();
+            // Working days with no attendance row and no leave behind them.
+            const inferredAbsentDates = new Set();
 
             const startOfDayFor = (dateStr) => {
                 const [d, m, y] = dateStr.split('/').map(Number);
@@ -192,14 +202,18 @@ router.get('/calculate', auth, async (req, res) => {
                     return;
                 }
 
-                // No row and no leave. Deliberately not charged: this is missing
-                // data, not evidence of absence. Counted so HR can see it.
+                // No row, no leave, and the employee had already joined. Nothing
+                // puts them at work that day, so it is an absence like any other.
+                // noRecord is kept alongside it purely so HR can tell an inferred
+                // absence from one the system actually marked.
+                breakdown.absent++;
                 breakdown.noRecord++;
+                inferredAbsentDates.add(date);
             });
 
             // Away on a day means an absence the company knows about: a row saying
             // Absent or On Leave, or an approved leave whose row was never written.
-            const awayDates = new Set(derivedLeaveDates);
+            const awayDates = new Set([...derivedLeaveDates, ...inferredAbsentDates]);
             records.forEach(r => {
                 if (['Absent', 'On Leave'].includes(r.status)) awayDates.add(r.date);
             });
@@ -249,20 +263,34 @@ router.get('/calculate', auth, async (req, res) => {
             const days = calendar.allDates.map(date => {
                 const rec = recordByDate.get(date);
                 const derived = derivedLeaveDates.has(date);
+                const inferredAbsent = inferredAbsentDates.has(date);
+                let status = rec ? rec.status : null;
+                if (!rec && derived) status = 'On Leave';
+                if (!rec && inferredAbsent) status = 'Absent';
+                let note = rec ? rec.note : '';
+                if (!rec && derived) note = 'Approved leave (no attendance record)';
+                if (!rec && inferredAbsent) note = 'No punch recorded';
                 return {
                     date,
                     type: calendar.dayTypes[date],
                     holidayName: calendar.holidayNameByDate[date] || null,
-                    status: rec ? rec.status : (derived ? 'On Leave' : null),
-                    note: rec ? rec.note : (derived ? 'Approved leave (no attendance record)' : ''),
+                    status,
+                    note,
                     leaveType: leaveTypeByDate[date] || null,
                     derived,
+                    inferredAbsent,
                     checkIn: rec ? rec.checkIn : null,
                     checkOut: rec ? rec.checkOut : null,
                     totalHours: rec ? rec.totalHours : 0,
                     sandwiched: sandwichSet.has(date)
                 };
             });
+
+            const saved = slipByUser.get(String(emp._id));
+
+            // What a fresh calculation says, kept so the UI can point out that
+            // attendance has moved since the payslip was finalized.
+            const recalculated = { payableDays, calculatedSalary, breakdown };
 
             payrollPreview.push({
                 user: {
@@ -272,15 +300,23 @@ router.get('/calculate', auth, async (req, res) => {
                     employeeId: emp.employeeId,
                     profilePic: emp.profilePic
                 },
-                baseSalary,
-                totalWorkingDays: STANDARD_MONTH_DAYS,
-                payableDays,
-                calculatedSalary,
-                breakdown,
-                sandwichDates,
+                baseSalary: saved ? saved.baseSalary : baseSalary,
+                totalWorkingDays: saved ? saved.totalWorkingDays : STANDARD_MONTH_DAYS,
+                payableDays: saved ? saved.payableDays : payableDays,
+                calculatedSalary: saved ? saved.calculatedSalary : calculatedSalary,
+                // Saved values win key by key, so a payslip finalized before a
+                // field existed still reads sensibly.
+                breakdown: saved ? { ...breakdown, ...saved.breakdown } : breakdown,
+                sandwichDates: saved ? (saved.sandwichDates || []) : sandwichDates,
+                // The calendar always shows attendance as it stands today; only
+                // the figures are frozen.
                 days,
                 clBalance,
-                maxClAdjustment
+                maxClAdjustment,
+                finalized: !!saved,
+                finalizedAt: saved ? saved.updatedAt : null,
+                payslipStatus: saved ? saved.status : null,
+                recalculated: saved ? recalculated : null
             });
         }
 

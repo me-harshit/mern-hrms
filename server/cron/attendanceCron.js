@@ -78,11 +78,15 @@ const setupMorningRecords = async (shiftType) => {
         if (Wfh) todayWfh = await Wfh.find({ userId: { $in: userIds }, status: 'Approved', fromDate: { $lte: endOfDay }, toDate: { $gte: startOfDay } });
 
         let createdCount = 0;
+        let notJoinedYet = 0;
         const failures = [];
 
         // 5. Generate Records
         for (const user of users) {
-            if (user.joiningDate && shiftDateObj < new Date(new Date(user.joiningDate).setHours(0,0,0,0))) continue;
+            if (user.joiningDate && shiftDateObj < new Date(new Date(user.joiningDate).setHours(0,0,0,0))) {
+                notJoinedYet++;
+                continue;
+            }
 
             const recordExists = existingAttendances.some(a => a.userId.toString() === user._id.toString());
 
@@ -113,10 +117,22 @@ const setupMorningRecords = async (shiftType) => {
                 }
             }
         }
-        console.log(`[CRON - MORNING] ${shiftType} Complete. Created ${createdCount} skeleton records.`);
+        // Coverage is the thing worth watching. A run that quietly produces 8
+        // rows instead of 52 is what left two days of August blank, and nothing
+        // in the log said so at the time.
+        const expected = users.length - notJoinedYet;
+        const covered = existingAttendances.length + createdCount;
+        console.log(`[CRON - MORNING] ${shiftType} ${targetDateStr}: ${expected} employee(s) due,` +
+            ` ${existingAttendances.length} already had a row, ${createdCount} created,` +
+            ` ${failures.length} failed, ${notJoinedYet} not joined yet.`);
+
         if (failures.length) {
             console.error(`[CRON - MORNING] ${shiftType} skipped ${failures.length} employee(s):`);
             failures.forEach(f => console.error(`   - ${f}`));
+        }
+        if (covered < expected) {
+            console.error(`[CRON - MORNING] *** ${shiftType} ${targetDateStr} COVERED ONLY ${covered}/${expected}` +
+                ` — ${expected - covered} employee(s) have no attendance row for this day ***`);
         }
     } catch (err) {
         console.error('[CRON - MORNING] Error:', err);
@@ -142,6 +158,14 @@ const sweepEveningAbsentees = async (shiftType) => {
             console.log(`[CRON - EVENING] ${targetDateStr} is ${nonWorkingReason}. Removed ${cleared.deletedCount} leftover skeleton(s); nobody marked Absent.`);
             return;
         }
+
+        // Backstop. The sweep can only flip rows that already exist, so anything
+        // the morning run missed — a crash, a server restart over 7 AM, an
+        // account created later in the day — would otherwise leave the day blank
+        // for ever rather than absent. Re-running the setup here is safe:
+        // employees who already have a row are skipped, and it is the same code
+        // path, so a day is either covered by the morning or by the evening.
+        await setupMorningRecords(shiftType);
 
         // This single line replaces all the heavy math we used to do!
         const result = await Attendance.updateMany(

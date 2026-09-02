@@ -251,15 +251,18 @@ router.get('/email-action', async (req, res) => {
 
         // --- DEDUCTION LOGIC ---
         if (status === 'Approved') {
+            // Same reason as the portal action route: $inc instead of user.save(),
+            // so a legacy-invalid profile field can't break email quick-actions.
             if (leave.leaveType === 'CL') {
                 if (user.casualLeaveBalance < leave.days) return res.send('<h2 style="text-align:center; padding:50px;">Employee has insufficient Casual Leave balance.</h2>');
+                await User.updateOne({ _id: user._id }, { $inc: { casualLeaveBalance: -leave.days } });
                 user.casualLeaveBalance -= leave.days;
             }
             else if (leave.leaveType === 'EL') {
                 if (user.earnedLeaveBalance < leave.days) return res.send('<h2 style="text-align:center; padding:50px;">Employee has insufficient Earned Leave balance.</h2>');
+                await User.updateOne({ _id: user._id }, { $inc: { earnedLeaveBalance: -leave.days } });
                 user.earnedLeaveBalance -= leave.days;
             }
-            await user.save();
         }
 
         // Update Leave Status
@@ -324,15 +327,20 @@ router.put('/action/:id', auth, async (req, res) => {
         const user = await User.findById(leave.userId);
 
         if (status === 'Approved') {
+            // Deduct with a targeted $inc rather than user.save(). save() revalidates
+            // the WHOLE user document, so one legacy field that predates a schema
+            // enum (e.g. an old free-text workLocation) made every approval for that
+            // employee fail with a 500. $inc also avoids clobbering concurrent edits.
             if (leave.leaveType === 'CL') {
                 if (user.casualLeaveBalance < leave.days) return res.status(400).json({ message: 'Insufficient Balance' });
+                await User.updateOne({ _id: user._id }, { $inc: { casualLeaveBalance: -leave.days } });
                 user.casualLeaveBalance -= leave.days;
             }
             else if (leave.leaveType === 'EL') {
                 if (user.earnedLeaveBalance < leave.days) return res.status(400).json({ message: 'Insufficient Balance' });
+                await User.updateOne({ _id: user._id }, { $inc: { earnedLeaveBalance: -leave.days } });
                 user.earnedLeaveBalance -= leave.days;
             }
-            await user.save();
 
             // Update Attendance Records directly
             const from = new Date(leave.fromDate);

@@ -18,8 +18,32 @@ const messageSchema = new mongoose.Schema({
         required: true
     },
 
-    // Null only for system messages ("Riya added Amit").
+    // Null for system messages ("Riya added Amit"), and for anything an
+    // external participant wrote - see externalSender below.
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
+    /**
+     * Set instead of `sender` when the author is a vendor or other outsider
+     * writing through the portal (feature draft Module 2).
+     *
+     * A separate field rather than a polymorphic sender/senderModel pair,
+     * because exactly one question is asked of it everywhere in the client and
+     * the server: is this from inside the company or outside. A single field
+     * that is either populated or not answers that at a glance, and it makes
+     * the External badge (F2.4) impossible to forget to render - there is no
+     * value of `sender` that could stand in for an outsider by accident.
+     *
+     * Points at the PERSON (ExternalUser), not at their membership of this
+     * group (ExternalParticipant). Authorship is a fact about who wrote the
+     * words; a membership can be revoked, and re-inviting the same vendor
+     * later creates a new one. Referencing the membership would make their old
+     * messages appear to come from somebody else the second time they joined.
+     */
+    externalSender: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ExternalUser',
+        default: null
+    },
 
     text: { type: String, default: '', trim: true },
 
@@ -52,7 +76,14 @@ const messageSchema = new mongoose.Schema({
     systemEvent: {
         type: {
             type: String,
-            enum: ['created', 'added', 'removed', 'left', 'renamed', 'joined_via_link', null],
+            enum: [
+                'created', 'added', 'removed', 'left', 'renamed', 'joined_via_link',
+                // Module 2. An outsider arriving or losing access is the single
+                // most important thing to be able to see in the thread
+                // afterwards, so it is announced inline like any other
+                // membership change.
+                'external_invited', 'external_joined', 'external_revoked', null
+            ],
             default: null
         },
         actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -71,6 +102,18 @@ const messageSchema = new mongoose.Schema({
      */
     readBy: [{
         user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        at: { type: Date, default: Date.now },
+        _id: false
+    }],
+
+    /**
+     * The external mirror of readBy. Kept apart rather than adding a type
+     * discriminator to the rows above, so that counting how many *colleagues*
+     * have read a message - which is what the ticks mean - does not have to
+     * filter outsiders back out on every render.
+     */
+    readByExternal: [{
+        participant: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalUser' },
         at: { type: Date, default: Date.now },
         _id: false
     }],

@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faMagnifyingGlass, faPenToSquare, faUserGroup,
-    faComments, faXmark, faShieldHalved
+    faComments, faXmark, faShieldHalved, faAddressBook
 } from '@fortawesome/free-solid-svg-icons';
 
 import api from '../utils/api';
@@ -393,6 +393,21 @@ const Chats = () => {
                     <div className="msgr-sidebar-title">
                         <h3>{oversightMode ? 'All conversations' : 'Chats'}</h3>
                         <div className="msgr-head-actions">
+                            {/*
+                              * Through to the external users directory
+                              * (feature draft Module 2). Shown to the roles
+                              * that can actually invite somebody, because for
+                              * anyone else it is a door to a 403.
+                              */}
+                            {['ADMIN', 'HR', 'MANAGER', 'TEAM LEAD'].includes(myRole) && (
+                                <button
+                                    className="msgr-icon-btn"
+                                    onClick={() => navigate('/external-users')}
+                                    title="External users — vendors, clients and consultants"
+                                >
+                                    <FontAwesomeIcon icon={faAddressBook} />
+                                </button>
+                            )}
                             {myRole === 'ADMIN' && (
                                 <button
                                     className={`msgr-icon-btn ${oversightMode ? 'is-on' : ''}`}

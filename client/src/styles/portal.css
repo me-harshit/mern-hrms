@@ -1,0 +1,748 @@
+/*
+ * The external participant portal (pages/Portal.js) — feature draft Module 2.
+ *
+ * A standalone sheet rather than a section of messenger.css, because this page
+ * is the only thing in the product a person outside the company ever sees. It
+ * has no sidebar, no topbar and no navigation, and keeping its styles apart is
+ * what stops a later tidy-up of the internal chat from quietly reintroducing
+ * app chrome onto a page that must not have any.
+ *
+ * The message THREAD is reused from messenger.css — the bubbles, attachments,
+ * the voice-note player, the composer — because a vendor and an employee should
+ * be reading the same conversation. What this sheet does is re-skin it.
+ *
+ * The internal chat is deliberately WhatsApp-shaped: that is the app it is
+ * replacing, and every difference is something staff have to relearn. The
+ * portal has the opposite problem. A vendor has never seen this product, has no
+ * WhatsApp muscle memory to borrow from, and opens it maybe twice — so it is
+ * built as its own small branded application instead: a centred card on desktop,
+ * softer geometry, the company's colour rather than WhatsApp green, and enough
+ * whitespace that the one thing they can do is obvious.
+ *
+ * Almost all of the re-skin is token overrides on .portal-chat (the tokens are
+ * declared for both surfaces at the top of messenger.css). Only the handful of
+ * rules whose geometry genuinely differs are restated.
+ */
+
+.portal-shell,
+.portal-chat {
+    --pt-brand: #1d5f7e;
+    --pt-brand-soft: #eaf3f7;
+    --pt-brand-deep: #164a63;
+    --pt-ink: #101b23;
+    --pt-body: #3d4d59;
+    --pt-muted: #7b8b97;
+    --pt-line: #e6ebef;
+    --pt-surface: #ffffff;
+    --pt-canvas: #f4f6f8;
+    --pt-external: #b45309;
+    --pt-radius: 18px;
+    --pt-shadow: 0 1px 2px rgba(16, 27, 35, .04), 0 12px 32px rgba(16, 27, 35, .08);
+    --pt-font: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+}
+
+/* ====================================================================== *
+ * ENTRY STATES — join, waiting for approval, expired, revoked
+ * ====================================================================== */
+
+.portal-shell {
+    min-height: 100vh;
+    min-height: 100dvh;   /* mobile browser chrome eats vh; dvh accounts for it */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    font-family: var(--pt-font);
+    color: var(--pt-body);
+
+    /* A plain flat grey reads as an error page. Two very soft brand-tinted
+       washes give it depth without decorating a page whose job is one button. */
+    background:
+        radial-gradient(1100px 520px at 15% -10%, #e3eef4 0%, rgba(227, 238, 244, 0) 60%),
+        radial-gradient(900px 460px at 100% 110%, #e8f0f3 0%, rgba(232, 240, 243, 0) 55%),
+        #f4f6f8;
+}
+
+.portal-card {
+    background: var(--pt-surface);
+    border: 1px solid var(--pt-line);
+    border-radius: 22px;
+    box-shadow: var(--pt-shadow);
+    padding: 40px 36px 32px;
+    width: 100%;
+    max-width: 440px;
+    text-align: center;
+    box-sizing: border-box;
+    animation: pt-rise .35s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@keyframes pt-rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* Respect a stated preference for less motion — this is a page people reach
+   from an email, with no settings of their own to adjust. */
+@media (prefers-reduced-motion: reduce) {
+    .portal-card { animation: none; }
+}
+
+.portal-brand {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 20px;
+    border-radius: 15px;
+    background: linear-gradient(140deg, var(--pt-brand) 0%, var(--pt-brand-deep) 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: .6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(29, 95, 126, .28);
+}
+
+.portal-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+    color: var(--pt-muted);
+    margin: 0 0 6px;
+}
+
+.portal-card h2 {
+    margin: 0;
+    font-size: 21px;
+    line-height: 1.35;
+    color: var(--pt-ink);
+    font-weight: 650;
+    letter-spacing: -.2px;
+}
+
+.portal-group {
+    display: block;
+    font-size: 25px;
+    font-weight: 700;
+    color: var(--pt-brand);
+    margin-top: 5px;
+    letter-spacing: -.4px;
+    word-break: break-word;
+}
+
+.portal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--pt-brand-soft);
+    color: var(--pt-brand);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 20px;
+    margin-top: 12px;
+}
+
+.portal-intro {
+    color: var(--pt-body);
+    font-size: 14.5px;
+    line-height: 1.62;
+    margin: 20px 0 24px;
+}
+
+.portal-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pt-muted);
+    margin-bottom: 12px;
+}
+
+/* Wide tracking so a six-digit code reads as six separate digits — which is
+   how it will have been copied off the email, or read down a phone. */
+.portal-code {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: 13px;
+    text-indent: 13px;
+    text-align: center;
+    padding: 15px 10px;
+    border: 1.5px solid var(--pt-line);
+    border-radius: 13px;
+    background: var(--pt-canvas);
+    color: var(--pt-ink);
+    margin-bottom: 16px;
+    font-family: inherit;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+}
+
+.portal-code:focus {
+    outline: none;
+    border-color: var(--pt-brand);
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(29, 95, 126, .12);
+}
+
+.portal-error {
+    color: #c2410c;
+    background: #fff7ed;
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 14px;
+}
+
+.portal-primary {
+    width: 100%;
+    border: none;
+    background: var(--pt-brand);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    padding: 15px 20px;
+    border-radius: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 6px 16px rgba(29, 95, 126, .24);
+    transition: background .16s, transform .16s, box-shadow .16s;
+}
+
+.portal-primary:hover:not(:disabled) {
+    background: var(--pt-brand-deep);
+    transform: translateY(-1px);
+    box-shadow: 0 9px 22px rgba(29, 95, 126, .3);
+}
+
+.portal-primary:active:not(:disabled) { transform: none; }
+
+.portal-primary:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.portal-foot {
+    margin: 22px 0 0;
+    padding-top: 18px;
+    border-top: 1px solid var(--pt-line);
+    font-size: 12.5px;
+    color: var(--pt-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    line-height: 1.5;
+}
+
+.portal-card.notice p {
+    color: var(--pt-body);
+    font-size: 14.5px;
+    line-height: 1.62;
+    margin: 0 0 10px;
+}
+
+.portal-card.notice p:last-child { margin-bottom: 0; }
+
+.portal-muted {
+    color: var(--pt-muted);
+    font-size: 13.5px;
+    line-height: 1.6;
+}
+
+.portal-notice-icon {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: var(--pt-brand-soft);
+    color: var(--pt-brand);
+    font-size: 21px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.portal-card.warn .portal-notice-icon { background: #fff1f2; color: #dc2626; }
+
+.portal-spinner {
+    width: 34px;
+    height: 34px;
+    margin: 0 auto 16px;
+    border: 3px solid var(--pt-line);
+    border-top-color: var(--pt-brand);
+    border-radius: 50%;
+    animation: pt-spin .8s linear infinite;
+}
+
+@keyframes pt-spin { to { transform: rotate(360deg); } }
+
+/* ====================================================================== *
+ * THE CHAT
+ * ====================================================================== */
+
+/*
+ * Fixed to the viewport, with the thread as the only scrolling region.
+ *
+ * A composer that scrolls off the bottom of a phone is the single most common
+ * way a chat screen goes wrong, and this page is opened on a phone more often
+ * than the internal one — it arrives as a link in an email.
+ */
+.portal-chat {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    box-sizing: border-box;
+    font-family: var(--pt-font);
+    color: var(--pt-ink);
+    background:
+        radial-gradient(900px 400px at 10% -5%, #e6eff4 0%, rgba(230, 239, 244, 0) 55%),
+        #eef1f4;
+}
+
+/*
+ * On a wide screen the conversation becomes a centred card rather than
+ * stretching edge to edge.
+ *
+ * Full-bleed is right for the internal messenger, where the thread shares the
+ * window with a conversation list. Here there is nothing else on the page, and
+ * a single column of text spanning a 27-inch monitor is unreadable — the eye
+ * has no anchor and every line starts somewhere different.
+ */
+.portal-frame {
+    width: 100%;
+    max-width: 880px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--pt-surface);
+    border: 1px solid var(--pt-line);
+    border-radius: var(--pt-radius);
+    box-shadow: var(--pt-shadow);
+    overflow: hidden;
+}
+
+/* ------------------------------ HEADER ------------------------------ */
+
+.portal-head {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 13px 18px;
+    background: var(--pt-surface);
+    border-bottom: 1px solid var(--pt-line);
+    flex-shrink: 0;
+}
+
+.portal-head .msgr-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;   /* squircle, not a circle — this is a room, not a person */
+    flex-shrink: 0;
+}
+
+.portal-head-body { flex: 1; min-width: 0; }
+
+.portal-head-body h1 {
+    margin: 0;
+    font-size: 16.5px;
+    font-weight: 650;
+    color: var(--pt-ink);
+    letter-spacing: -.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.portal-head-sub {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--pt-muted);
+    min-width: 0;
+}
+
+.portal-head-sub span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.portal-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+    opacity: .55;
+}
+
+/* Overlapping avatars of the people on the other side, so the vendor can see
+   they are talking to a team rather than into a void. */
+.portal-faces {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.portal-faces .msgr-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--pt-surface);
+    margin-left: -8px;
+    font-size: 10.5px;
+    font-weight: 600;
+    background: var(--pt-brand-soft);
+    color: var(--pt-brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.portal-faces .msgr-avatar:first-child { margin-left: 0; }
+
+.portal-faces-more {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--pt-surface);
+    margin-left: -8px;
+    background: var(--pt-canvas);
+    color: var(--pt-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.portal-you {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding-left: 13px;
+    margin-left: 3px;
+    border-left: 1px solid var(--pt-line);
+}
+
+.portal-you-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--pt-body);
+    max-width: 130px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------------------------- INFO STRIP ---------------------------- */
+
+/*
+ * Says plainly what an outsider would otherwise have to work out: that the
+ * thread starts at their invitation rather than at the beginning. Without it,
+ * a vendor joining a six-month-old project group sees an almost empty screen
+ * and reasonably concludes the page is broken.
+ */
+.portal-strip {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 18px;
+    background: #fffaf2;
+    border-bottom: 1px solid #f5e6cf;
+    color: #8a5a10;
+    font-size: 12.5px;
+    line-height: 1.5;
+    flex-shrink: 0;
+}
+
+.portal-strip svg { margin-top: 2px; flex-shrink: 0; }
+.portal-strip p { margin: 0; flex: 1; }
+
+.portal-strip button {
+    border: none;
+    background: none;
+    color: #a06a17;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 13px;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: .7;
+}
+
+.portal-strip button:hover { opacity: 1; }
+
+/* ------------------------------ THREAD ------------------------------ */
+
+/*
+ * Re-skinned from the WhatsApp look the internal chat wears.
+ *
+ * These are token overrides rather than rewritten rules, so the bubbles keep
+ * every behaviour messenger.css gives them — attachments, quoted replies, the
+ * deleted state, hover actions — and only their colour and geometry change.
+ */
+.portal-chat {
+    --msgr-bubble-in: #ffffff;
+    --msgr-bubble-out: #e7f1f6;   /* brand tint, not WhatsApp green */
+    --msgr-green: #1d5f7e;        /* author names, reply strip, send button */
+    --msgr-green-dark: #164a63;
+    --msgr-panel: #fbfcfd;
+    --msgr-border: #e6ebef;
+    --msgr-muted: #7b8b97;
+    --msgr-text: #101b23;
+}
+
+.portal-thread {
+    flex: 1;
+    min-height: 0;
+    background: var(--pt-canvas);
+    padding: 18px 22px 22px;
+    gap: 2px;
+}
+
+/* Roomier and softer than the internal bubble, which is tuned for density in
+   a narrow pane beside a conversation list. */
+.portal-thread .msgr-bubble {
+    border-radius: 14px;
+    padding: 9px 13px 7px;
+    box-shadow: 0 1px 2px rgba(16, 27, 35, .06);
+    min-width: 0;
+}
+
+.portal-thread .msgr-msg { max-width: 78%; }
+
+.portal-thread .msgr-msg.out .msgr-bubble {
+    border-bottom-right-radius: 5px;   /* a quiet nod to which side is speaking */
+}
+
+.portal-thread .msgr-msg.in .msgr-bubble {
+    border-bottom-left-radius: 5px;
+    border: 1px solid #e9eef2;
+}
+
+.portal-thread .msgr-bubble-text { font-size: 14.5px; line-height: 21px; }
+
+.portal-thread .msgr-bubble-author {
+    font-size: 12.5px;
+    font-weight: 650;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+}
+
+/* Sticky, so you always know which day you are reading in a long scroll. */
+.portal-thread .msgr-daysep {
+    position: sticky;
+    top: -4px;
+    z-index: 2;
+    background: rgba(244, 246, 248, .92);
+    backdrop-filter: blur(6px);
+    color: var(--pt-muted);
+    box-shadow: none;
+    border: 1px solid var(--pt-line);
+    border-radius: 20px;
+    padding: 4px 13px;
+    font-weight: 600;
+}
+
+.portal-thread .msgr-system {
+    background: #fff;
+    border: 1px solid var(--pt-line);
+    border-radius: 20px;
+    color: var(--pt-muted);
+    box-shadow: none;
+    padding: 6px 14px;
+    font-size: 12px;
+}
+
+.portal-thread .msgr-load-more {
+    background: #fff;
+    border: 1px solid var(--pt-line);
+    border-radius: 20px;
+    color: var(--pt-brand);
+    font-weight: 600;
+    padding: 7px 16px;
+    box-shadow: none;
+    transition: background .15s;
+}
+
+.portal-thread .msgr-load-more:hover:not(:disabled) { background: var(--pt-brand-soft); }
+
+/* An empty conversation is the first thing most vendors will see, so it gets
+   an actual welcome rather than one grey line. */
+.portal-empty {
+    margin: auto;
+    text-align: center;
+    max-width: 330px;
+    padding: 20px;
+}
+
+.portal-empty-icon {
+    width: 62px;
+    height: 62px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--pt-line);
+    color: var(--pt-brand);
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.portal-empty h3 {
+    margin: 0 0 7px;
+    font-size: 16px;
+    font-weight: 650;
+    color: var(--pt-ink);
+}
+
+.portal-empty p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--pt-muted);
+}
+
+/* ----------------------------- COMPOSER ----------------------------- */
+
+.portal-composer {
+    flex-shrink: 0;
+    background: var(--pt-surface);
+    border-top: 1px solid var(--pt-line);
+    padding: 12px 18px 10px;
+}
+
+.portal-composer .msgr-composer {
+    background: transparent;
+    border-top: none;
+    padding: 0;
+}
+
+/* The input row becomes one rounded field that the attach, mic and send
+   buttons sit inside, rather than three controls in a row. */
+.portal-composer .msgr-input-row {
+    background: var(--pt-canvas);
+    border: 1.5px solid var(--pt-line);
+    border-radius: 24px;
+    padding: 4px 5px 4px 8px;
+    align-items: center;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+}
+
+.portal-composer .msgr-input-row:focus-within {
+    border-color: var(--pt-brand);
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(29, 95, 126, .1);
+}
+
+.portal-composer .msgr-input-row textarea {
+    background: transparent;
+    padding: 9px 6px;
+    font-size: 14.5px;
+    line-height: 21px;
+}
+
+.portal-composer .msgr-send {
+    width: 38px;
+    height: 38px;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(29, 95, 126, .28);
+}
+
+.portal-composer .msgr-send:disabled { box-shadow: none; }
+
+.portal-composer .msgr-reply-strip,
+.portal-composer .msgr-staged {
+    background: var(--pt-canvas);
+    border: 1px solid var(--pt-line);
+    border-radius: 12px;
+}
+
+.portal-composer-note {
+    margin: 9px 2px 0;
+    font-size: 11.5px;
+    color: var(--pt-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+}
+
+/* ====================================================================== *
+ * NARROW SCREENS
+ *
+ * The card collapses to full bleed. On a phone the framing is wasted space,
+ * and the rounded corners of a card that touches every edge read as a bug.
+ * ====================================================================== */
+
+@media (max-width: 900px) {
+    .portal-chat { padding: 0; }
+
+    .portal-frame {
+        max-width: none;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .portal-thread { padding: 14px 12px 16px; }
+    .portal-thread .msgr-msg { max-width: 88%; }
+    .portal-head { padding: 11px 14px; }
+    .portal-composer { padding: 10px 12px 8px; }
+    .portal-strip { padding: 9px 14px; }
+}
+
+@media (max-width: 620px) {
+    .portal-faces,
+    .portal-you-name { display: none; }
+
+    .portal-you { padding-left: 0; margin-left: 0; border-left: none; }
+    .portal-card { padding: 32px 22px 26px; }
+    .portal-code { letter-spacing: 9px; text-indent: 9px; font-size: 23px; }
+    .portal-composer-note { display: none; }
+}
+
+/*
+ * The group's own icon in the header.
+ *
+ * GroupIcon falls back to .msgr-avatar.group, which is the internal chat's
+ * neutral grey — right in a list of thirty conversations where the icon is
+ * only a way to tell rows apart, wrong here where it is the single piece of
+ * identity on the page. Matched to the brand tile on the join screen instead,
+ * so arriving from that screen into this one feels like one product.
+ */
+.portal-head .msgr-avatar.group,
+.portal-head .msgr-avatar.project {
+    background: linear-gradient(140deg, var(--pt-brand) 0%, var(--pt-brand-deep) 100%);
+    color: #fff;
+    font-size: 16px;
+}
+
+/* The External badge sits on the author line, which the portal makes a flex
+   row — keep it off the text baseline. */
+.portal-thread .msgr-bubble-author .ext-badge { margin-left: 7px; }
+
+/* An outsider's own messages are already right-aligned and tinted; the amber
+   left edge on top of that is noise on your own words. */
+.portal-thread .msgr-msg.out .msgr-bubble.from-external { border-left: none; }

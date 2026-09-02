@@ -99,7 +99,7 @@ const EmployeeMonthDrawer = ({ data, month, year, calendar, standardMonthDays, o
         d.sandwiched || d.status === 'Absent' || d.status === 'Half Day' ||
         // A split day reads "CL + UL": any unpaid part makes it costly.
         (d.status === 'On Leave' && String(d.leaveType || '').includes('UL')));
-    const blankDays = days.filter(d => d.type === 'working' && !d.status);
+    const blankDays = days.filter(d => d.inferredAbsent);
     const maxAdjust = data.maxClAdjustment || 0;
     const holidayDays = days.filter(d => d.holidayName);
 
@@ -141,6 +141,23 @@ const EmployeeMonthDrawer = ({ data, month, year, calendar, standardMonthDays, o
                 </div>
 
                 <div className="pmd-body">
+                    {data.finalized && (
+                        <div className="pmd-saved">
+                            <strong>Finalized payslip.</strong> These figures are exactly as saved
+                            {data.finalizedAt ? ` on ${new Date(data.finalizedAt).toLocaleString('en-IN')}` : ''},
+                            including any adjustment made by hand. The calendar below still shows attendance
+                            as it stands today. Revert the payslip to calculate it again.
+                            {data.recalculated && data.recalculated.calculatedSalary !== data.calculatedSalary && (
+                                <div className="pmd-saved-drift">
+                                    Attendance has changed since: a fresh calculation would now give
+                                    {' '}&#8377;{data.recalculated.calculatedSalary.toLocaleString()}
+                                    {' '}({data.recalculated.payableDays} payable days) instead of
+                                    {' '}&#8377;{data.calculatedSalary.toLocaleString()} ({data.payableDays}).
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="pmd-net">
                         <div>
                             <div className="pmd-net-label">Net Salary</div>
@@ -213,7 +230,7 @@ const EmployeeMonthDrawer = ({ data, month, year, calendar, standardMonthDays, o
                             `${data.payableDays} days`, 'total')}
                     </div>
 
-                    {(maxAdjust > 0 || clAdjustment > 0) && (
+                    {!data.finalized && (maxAdjust > 0 || clAdjustment > 0) && (
                         <div className="pmd-adjust">
                             <div className="pmd-adjust-head">Spend Casual Leave on Half Days</div>
                             <p className="pmd-adjust-text">
@@ -246,8 +263,9 @@ const EmployeeMonthDrawer = ({ data, month, year, calendar, standardMonthDays, o
 
                     {blankDays.length > 0 && (
                         <div className="pmd-warn">
-                            <strong>{blankDays.length} working day{blankDays.length === 1 ? '' : 's'} with no attendance record.</strong>
-                            {' '}Nothing was charged for {blankDays.length === 1 ? 'it' : 'them'} — there is no evidence either way.
+                            <strong>{blankDays.length} working day{blankDays.length === 1 ? '' : 's'} with no punch and no leave.</strong>
+                            {' '}Charged as absent{blankDays.length === 1 ? '' : ', one day each'}. Nothing in the records
+                            puts {blankDays.length === 1 ? 'this day' : 'these days'} at work.
                             <div className="pmd-warn-dates">{blankDays.map(d => shortDate(d.date)).join(' · ')}</div>
                         </div>
                     )}
@@ -268,6 +286,7 @@ const EmployeeMonthDrawer = ({ data, month, year, calendar, standardMonthDays, o
                                         <span className="pmd-day-punch">{dayActivity(day).join(' · ')}</span>
                                     )}
                                     {day.derived && <span className="pmd-derived">from leave</span>}
+                                    {day.inferredAbsent && <span className="pmd-inferred">no punch</span>}
                                 </span>
                             </div>
                         ))}
@@ -1212,7 +1231,10 @@ const Payroll = () => {
                             {filteredData.map(data => {
                                 const b = data.breakdown || {};
                                 const unpaidAbs = (b.absent || 0) + (b.unpaidLeave || 0);
-                                const isFinalized = finalizedUsers.includes(data.user._id);
+                                const isFinalized = data.finalized || finalizedUsers.includes(data.user._id);
+                                // Attendance has moved since this payslip was saved.
+                                const drifted = data.recalculated
+                                    && data.recalculated.calculatedSalary !== data.calculatedSalary;
                                 const slipData = { ...data, month, year, totalWorkingDays: standardMonthDays, calendar };
 
                                 return (
@@ -1251,9 +1273,14 @@ const Payroll = () => {
                                             {(b.wfh || 0) > 0 && <span className="payroll-att-pill wfh" title="Work from home">{b.wfh}W</span>}
                                             {(b.onLeave || 0) > 0 && <span className="payroll-att-pill leave" title="Paid leave (CL / EL)">{b.onLeave}L</span>}
                                             {(b.halfDays || 0) > 0 && <span className="payroll-att-pill half" title="Half days">{b.halfDays}H</span>}
-                                            {unpaidAbs > 0 && <span className="payroll-att-pill absent" title="Absent + unpaid leave">{unpaidAbs}A</span>}
+                                            {unpaidAbs > 0 && (
+                                                <span
+                                                    className="payroll-att-pill absent"
+                                                    title={`Absent + unpaid leave${(b.noRecord || 0) > 0 ? ` — ${b.noRecord} of them with no punch recorded at all` : ''}`}
+                                                >{unpaidAbs}A</span>
+                                            )}
                                             {(b.sandwich || 0) > 0 && <span className="payroll-att-pill sandwich" title="Days off charged under the sandwich rule">{b.sandwich}S</span>}
-                                            {(b.noRecord || 0) > 0 && <span className="payroll-att-pill norecord" title="Working days with no attendance record and no leave — not charged">{b.noRecord}?</span>}
+
                                         </div>
                                     </td>
 
@@ -1263,6 +1290,7 @@ const Payroll = () => {
                                                 <span>Unpaid</span>
                                                 <input
                                                     type="number" min="0" step="0.5"
+                                                    disabled={isFinalized}
                                                     value={unpaidAbs}
                                                     onChange={(e) => handleBreakdownChange(data.user._id, 'unpaidAbs', e.target.value)}
                                                 />
@@ -1271,6 +1299,7 @@ const Payroll = () => {
                                                 <span>Half</span>
                                                 <input
                                                     type="number" min="0" step="1"
+                                                    disabled={isFinalized}
                                                     value={b.halfDays || 0}
                                                     onChange={(e) => handleBreakdownChange(data.user._id, 'halfDays', e.target.value)}
                                                 />
@@ -1284,6 +1313,7 @@ const Payroll = () => {
                                                 <span>Sandwich</span>
                                                 <input
                                                     type="number" min="0" step="1"
+                                                    disabled={isFinalized}
                                                     value={b.sandwich || 0}
                                                     onChange={(e) => handleBreakdownChange(data.user._id, 'sandwich', e.target.value)}
                                                 />
@@ -1298,7 +1328,7 @@ const Payroll = () => {
                                                 <input
                                                     type="number" min="0" step="0.5"
                                                     max={data.maxClAdjustment || 0}
-                                                    disabled={(data.maxClAdjustment || 0) <= 0 && !(b.clAdjustment || 0)}
+                                                    disabled={isFinalized || ((data.maxClAdjustment || 0) <= 0 && !(b.clAdjustment || 0))}
                                                     value={b.clAdjustment || 0}
                                                     onChange={(e) => handleBreakdownChange(data.user._id, 'clAdjustment', e.target.value)}
                                                 />
@@ -1346,7 +1376,16 @@ const Payroll = () => {
                                                 </button>
                                             )}
                                         </div>
-                                        {isFinalized && <div className="payroll-final-tag">Finalized</div>}
+                                        {isFinalized && (
+                                            <div
+                                                className={`payroll-final-tag ${drifted ? 'drifted' : ''}`}
+                                                title={data.finalizedAt
+                                                    ? `Saved ${new Date(data.finalizedAt).toLocaleString('en-IN')}${drifted ? ` — attendance has changed since; a fresh calculation would give ₹${data.recalculated.calculatedSalary.toLocaleString()}. Revert to re-run it.` : ''}`
+                                                    : 'Saved payslip'}
+                                            >
+                                                {drifted ? 'Finalized · changed' : 'Finalized'}
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                                 );

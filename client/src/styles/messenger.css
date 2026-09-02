@@ -9,7 +9,22 @@
  * Scoped under .msgr so nothing here leaks into the rest of the HRMS.
  */
 
-.msgr {
+/*
+ * The tokens, declared for BOTH surfaces that render a message thread.
+ *
+ * Split out of the .msgr layout rule below because the external participant
+ * portal (styles/portal.css) reuses the thread, the bubbles and the composer
+ * but is not inside a .msgr element - it has no sidebar and no app chrome to
+ * be inside of. While these lived on .msgr alone, every var() in this file
+ * resolved to nothing on the portal: bubbles rendered with no background at
+ * all against the thread, and the day separators and composer went with them.
+ *
+ * Kept as one shared declaration rather than a copy in portal.css, so that
+ * changing a colour here cannot silently leave the vendor's view behind.
+ * The portal then overrides the handful it wants to look different.
+ */
+.msgr,
+.portal-chat {
     --msgr-green: #128c7e;
     --msgr-green-dark: #075e54;
     --msgr-bubble-out: #d9fdd3;
@@ -21,7 +36,9 @@
     --msgr-hover: #f5f6f6;
     --msgr-active: #e9edef;
     --msgr-tick: #53bdeb;
+}
 
+.msgr {
     display: flex;
 
     /*
@@ -1354,3 +1371,448 @@
 .msgr-icon-camera:hover {
     background: var(--msgr-green-dark);
 }
+
+/* ====================================================================== *
+ * EXTERNAL PARTICIPANTS  (feature draft Module 2)
+ *
+ * Used by the details pane (ExternalParticipants), the invite dialog
+ * (InviteExternalModal), the message bubble badge, and the portal header.
+ * Amber throughout, and nowhere else in the product — an outsider in the room
+ * is the one thing a member should be able to spot without reading anything.
+ * ====================================================================== */
+
+.ext-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #b45309;
+    color: #fff;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+/* A left edge on the bubble itself, so a run of vendor messages reads as one
+   block even where the badge sits only on the author line. */
+.msgr-bubble.from-external {
+    border-left: 3px solid #b45309;
+}
+
+.msgr-msg.in .msgr-bubble.from-external .msgr-bubble-author {
+    color: #b45309;
+}
+
+/* --------------------------- THE LIST ROWS --------------------------- */
+
+.ext-count {
+    display: inline-block;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 9px;
+    margin-left: 7px;
+}
+
+.ext-row {
+    border: 1px solid var(--msgr-border);
+    border-left: 3px solid #b45309;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 9px;
+    background: #fffbf5;
+}
+
+.ext-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ext-row-id {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.ext-row-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-left: 7px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ext-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.ext-status.ok { color: #15803d; }
+.ext-status.wait { color: #b45309; }
+.ext-status.off { color: #94a3b8; }
+
+.ext-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 11.5px;
+    color: var(--msgr-muted);
+    margin-top: 5px;
+    word-break: break-word;
+}
+
+.ext-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.ext-row-actions .msgr-btn {
+    font-size: 11.5px;
+    padding: 5px 10px;
+}
+
+/* --------------------------- THE DIALOG --------------------------- */
+
+.ext-modal { max-width: 480px; }
+
+.ext-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--msgr-muted);
+    margin: 14px 0 5px;
+}
+
+.ext-input {
+    width: 100%;
+    border: 1px solid var(--msgr-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: #1e293b;
+    background: #fff;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+.ext-input:focus {
+    outline: none;
+    border-color: #215D7B;
+}
+
+.ext-hint {
+    font-size: 12px;
+    color: var(--msgr-muted);
+    line-height: 1.55;
+    margin: 10px 0 0;
+}
+
+.ext-toggle {
+    border: none;
+    background: none;
+    color: #215D7B;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 12px 0 0;
+}
+
+.ext-options {
+    border-top: 1px dashed var(--msgr-border);
+    margin-top: 10px;
+    padding-top: 4px;
+}
+
+.ext-days {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.ext-days button {
+    border: 1px solid var(--msgr-border);
+    background: #fff;
+    color: #475569;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.ext-days button.active {
+    border-color: #215D7B;
+    background: #eef6fa;
+    color: #215D7B;
+    font-weight: 600;
+}
+
+.ext-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-top: 14px;
+    cursor: pointer;
+}
+
+.ext-check input { margin-top: 3px; flex-shrink: 0; }
+
+.ext-check span {
+    font-size: 13px;
+    color: #1e293b;
+    line-height: 1.4;
+}
+
+.ext-check small {
+    display: block;
+    font-size: 11.5px;
+    color: var(--msgr-muted);
+    font-weight: 400;
+    margin-top: 2px;
+    line-height: 1.5;
+}
+
+/* ------------------------ THE LINK, AFTER SENDING ------------------------ */
+
+.ext-mail-state {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin: 0 0 4px;
+}
+
+.ext-mail-state.ok { background: #f0fdf4; color: #15803d; }
+.ext-mail-state.warn { background: #fffbeb; color: #b45309; }
+
+.ext-link-box {
+    display: flex;
+    gap: 7px;
+    align-items: stretch;
+}
+
+.ext-link-box input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--msgr-border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 12px;
+    font-family: inherit;
+    color: #475569;
+    background: #f8fafc;
+}
+
+.ext-link-box .msgr-btn { flex-shrink: 0; }
+
+.ext-code {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 10px;
+    text-indent: 10px;
+    text-align: center;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 14px;
+    border-radius: 10px;
+}
+
+/* ---------------------- THE DIRECTORY PICKER ---------------------- *
+ * Choosing an existing external user rather than describing them again
+ * (components/chat/InviteExternalModal.js).
+ * ----------------------------------------------------------------- */
+
+.ext-picker-search {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.ext-picker-search svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--msgr-muted);
+    font-size: 12.5px;
+}
+
+.ext-picker-search input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--msgr-border);
+    border-radius: 9px;
+    padding: 10px 12px 10px 34px;
+    font-size: 13.5px;
+    font-family: inherit;
+    background: #fff;
+}
+
+.ext-picker-search input:focus {
+    outline: none;
+    border-color: #215D7B;
+}
+
+/* Deliberately at the TOP of the list, not buried under it: the first time you
+   deal with a vendor they genuinely are not in the directory, and hunting for
+   an "add new" link below thirty rows is the wrong shape for that. */
+.ext-new-btn {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    border: 1px dashed #cbd5e1;
+    background: #fbfdfe;
+    border-radius: 10px;
+    padding: 11px 12px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: border-color .15s, background .15s;
+}
+
+.ext-new-btn:hover { border-color: #215D7B; background: #eef6fa; }
+
+.ext-new-btn > span:last-child {
+    display: flex;
+    flex-direction: column;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.ext-new-btn small {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--msgr-muted);
+    margin-top: 1px;
+}
+
+.ext-new-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #215D7B;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.ext-pick {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    border: 1px solid transparent;
+    background: none;
+    border-radius: 10px;
+    padding: 9px 10px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: background .12s, border-color .12s;
+}
+
+.ext-pick:hover:not(.disabled) {
+    background: #f7fafc;
+    border-color: var(--msgr-border);
+}
+
+.ext-pick.disabled { opacity: .5; cursor: not-allowed; }
+
+.ext-pick-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #fdf3e7;
+    color: #b45309;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ext-pick-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.ext-pick-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ext-pick-meta {
+    font-size: 11.5px;
+    color: var(--msgr-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ext-pick-meta svg { width: 10px; opacity: .6; }
+
+.ext-pick-tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 3px 8px;
+    border-radius: 5px;
+    flex-shrink: 0;
+}
+
+.ext-pick-tag.in { background: #dcfce7; color: #166534; }
+
+.ext-back {
+    border: none;
+    background: none;
+    color: #215D7B;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.ext-back:hover { text-decoration: underline; }
