@@ -120,9 +120,22 @@ const EmployeeTaskBoard = () => {
             if (overdueOnly && r.counts.overdue === 0) return false;
 
             if (workload === 'All') return true;
+            // "No task at all" is a list of gaps to fill, so it only counts
+            // people who are actually in today — otherwise everyone on leave
+            // lands in it, having no tasks for exactly the reason you'd
+            // expect, and buries the handful who genuinely need work.
+            if (workload === 'none-ever' && r.absentToday) return false;
             return r.bucket === workload;
         });
     }, [rows, searchTerm, department, workload, overdueOnly]);
+
+    // Only for the line that says so — these rows are never rendered.
+    const hiddenAbsent = useMemo(
+        () => (workload === 'none-ever'
+            ? rows.filter(r => r.bucket === 'none-ever' && r.absentToday).length
+            : 0),
+        [rows, workload]
+    );
 
     const grouped = useMemo(() => {
         const map = new Map();
@@ -320,6 +333,19 @@ const EmployeeTaskBoard = () => {
                 </div>
             </div>
 
+            {/* Said out loud rather than left as a silent omission — a count
+                that doesn't match the roster is unsettling if nothing explains
+                where the rest went. */}
+            {!loading && hiddenAbsent > 0 && grouped.length > 0 && (
+                <div className="wl-absent-note">
+                    <FontAwesomeIcon icon={faCalendarMinus} />
+                    <span>
+                        {hiddenAbsent} more {hiddenAbsent === 1 ? 'person has' : 'people have'} nothing
+                        assigned but {hiddenAbsent === 1 ? 'is' : 'are'} not in today — hidden from this list.
+                    </span>
+                </div>
+            )}
+
             {loading ? (
                 <div className="control-card text-center" style={{ padding: '50px 20px', color: '#64748b' }}>
                     Loading employees...
@@ -332,14 +358,18 @@ const EmployeeTaskBoard = () => {
                             ? 'No employee matches that search'
                             : rosterIsEmpty
                                 ? 'No employees in your scope'
-                                : 'Nobody falls into this group'}
+                                : hiddenAbsent > 0
+                                    ? 'Nobody here is short of work'
+                                    : 'Nobody falls into this group'}
                     </h3>
                     <p className="text-muted">
                         {searchTerm
                             ? `Nothing matched "${searchTerm}".`
                             : rosterIsEmpty
                                 ? 'Nobody is mapped to you yet — ask HR to set up your team.'
-                                : `${summary?.totalEmployees ?? 0} employee${summary?.totalEmployees === 1 ? ' is' : 's are'} in your scope, but none are in "${workloadLabel}".`}
+                                : hiddenAbsent > 0
+                                    ? `Everyone with nothing assigned (${hiddenAbsent}) is out today.`
+                                    : `${summary?.totalEmployees ?? 0} employee${summary?.totalEmployees === 1 ? ' is' : 's are'} in your scope, but none are in "${workloadLabel}".`}
                     </p>
                     {!rosterIsEmpty && (
                         <button className="gts-btn secondary" style={{ marginTop: '12px' }} onClick={clearFilters}>

@@ -4,6 +4,8 @@ const auth = require('../middleware/authMiddleware');
 const taskUpload = require('../middleware/taskUploadMiddleware');
 const { processTaskFiles, discardStagedFiles, s3Folder, isVideo } = require('../utils/taskMedia');
 const { syncProjectGroupMembers } = require('../utils/conversationAccess');
+const { buildTaskDateFilter } = require('../utils/taskDateFilter');
+const { getAbsentToday } = require('../utils/attendanceToday');
 
 const Task = require('../models/Task');
 const User = require('../models/User');
@@ -257,6 +259,9 @@ router.get('/my', auth, async (req, res) => {
         if (req.query.taskType && req.query.taskType !== 'All') {
             andConditions.push({ taskType: req.query.taskType });
         }
+        // Today/Yesterday/Week/Month/All/Custom, on the day the task belongs to.
+        const dateFilter = buildTaskDateFilter(req.query.filterType, req.query.fromDate, req.query.toDate);
+        if (dateFilter) andConditions.push(dateFilter);
         // Matches the title, the people on it, whoever assigned it, the project
         // and the task type — everything the row actually displays.
         const searchFilter = await buildTaskSearchFilter(req.query.search);
@@ -672,6 +677,10 @@ router.get('/managed', auth, async (req, res) => {
             andConditions.push({ overdueAt: { $lt: new Date() } });
             andConditions.push({ status: { $ne: 'Completed' } });
         }
+        // Today/Yesterday/Week/Month/All/Custom, on the day the task belongs to.
+        // Stacks with every filter above rather than replacing them.
+        const dateFilter = buildTaskDateFilter(req.query.filterType, req.query.fromDate, req.query.toDate);
+        if (dateFilter) andConditions.push(dateFilter);
         // Matches the title, the people on it, whoever assigned it, the project
         // and the task type — everything the row actually displays.
         const searchFilter = await buildTaskSearchFilter(req.query.search);
@@ -805,7 +814,10 @@ router.get('/by-employee', auth, async (req, res) => {
         }
 
         const employees = await User.find(scopeFilter)
-            .select('name email role employeeId jobTitle department profilePic')
+            // shiftType and joiningDate feed the absence check below — each
+            // shift is judged against its own start time, and someone who has
+            // not joined yet is not expected in.
+            .select('name email role employeeId jobTitle department profilePic shiftType joiningDate')
             .sort({ name: 1 })
             .lean();
 
@@ -979,6 +991,12 @@ router.get('/by-employee', auth, async (req, res) => {
             return 'today-none';
         };
 
+        // Who isn't in today. Only the "no task at all" tile acts on this —
+        // a roster of people who were never going to be here today made that
+        // list unreadable, since somebody on leave has no tasks for exactly
+        // the reason you'd expect and needs no chasing.
+        const absentToday = await getAbsentToday(employees);
+
         let rows = employees.map(emp => {
             const c = countsById.get(emp._id.toString());
             const counts = c ? {
@@ -988,10 +1006,16 @@ router.get('/by-employee', auth, async (req, res) => {
                 awaitingApproval: c.awaitingApproval
             } : { ...NO_TASKS };
 
+            const absenceReason = absentToday.get(emp._id.toString()) || null;
+
             return {
                 ...emp,
                 counts,
                 bucket: bucketOf(counts),
+                // Reported rather than acted on here: the board decides what
+                // to do with it, and every other bucket still shows everyone.
+                absentToday: Boolean(absenceReason),
+                absenceReason,
                 // Open work overall, which is what "how loaded is this person"
                 // means — completed tasks are history, not load.
                 openCount: counts.total - counts.completed
@@ -1005,7 +1029,13 @@ router.get('/by-employee', auth, async (req, res) => {
             outstandingToday: rows.filter(r => r.bucket === 'today-open').length,
             doneToday: rows.filter(r => r.bucket === 'today-done').length,
             noTaskToday: rows.filter(r => r.bucket === 'today-none').length,
-            noTaskAtAll: rows.filter(r => r.bucket === 'none-ever').length,
+            // The actionable number: people with nothing assigned who are
+            // actually in today. Someone on leave with an empty plate is not
+            // a gap to fill, and counting them made this tile useless.
+            noTaskAtAll: rows.filter(r => r.bucket === 'none-ever' && !r.absentToday).length,
+            // Kept alongside rather than folded in, so the board can say how
+            // many it set aside instead of silently dropping them.
+            noTaskAtAllAbsent: rows.filter(r => r.bucket === 'none-ever' && r.absentToday).length,
             // Cross-cutting, so this deliberately overlaps the buckets above
             // and is surfaced as a toggle rather than a further tile.
             //
@@ -1019,6 +1049,9 @@ router.get('/by-employee', auth, async (req, res) => {
 
         if (['today-open', 'today-done', 'today-none', 'none-ever'].includes(req.query.workload)) {
             rows = rows.filter(r => r.bucket === req.query.workload);
+            // Matches the summary tile above: "no task at all" means the
+            // people who are here and have nothing to do.
+            if (req.query.workload === 'none-ever') rows = rows.filter(r => !r.absentToday);
         }
 
         // Independent of the bucket, so "who has work today AND is overdue" is
