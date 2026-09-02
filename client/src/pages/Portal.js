@@ -8,7 +8,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 import portalApi, {
-    useSession, getPortalToken, setPortalToken, clearPortalToken
+    setActiveSession, getPortalToken, setPortalToken, clearPortalToken
 } from '../utils/portalApi';
 import { SERVER_URL } from '../utils/api';
 import Avatar from '../components/Avatar';
@@ -116,7 +116,7 @@ const Portal = () => {
 
     const enterChat = useCallback((sessionToken, conversationPayload) => {
         setPortalToken(inviteToken, sessionToken);
-        useSession(sessionToken);
+        setActiveSession(sessionToken);
         setConversation(conversationPayload);
         setPhase('chat');
     }, [inviteToken]);
@@ -133,7 +133,7 @@ const Portal = () => {
              */
             const saved = getPortalToken(inviteToken);
             if (saved) {
-                useSession(saved);
+                setActiveSession(saved);
                 try {
                     const res = await portalApi.get('/conversation');
                     if (cancelled) return;
@@ -142,7 +142,7 @@ const Portal = () => {
                     return;
                 } catch {
                     clearPortalToken(inviteToken);
-                    useSession(null);
+                    setActiveSession(null);
                 }
             }
 
