@@ -18,9 +18,14 @@ import '../../styles/tasks.css';
 import '../../styles/recurring.css';
 import '../../styles/selftask.css';
 import SelfTaskForm from '../../components/SelfTaskForm';
+import DateRangeFilter from '../../components/DateRangeFilter';
 
 const COLUMNS = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const VIEW_KEY = 'mytasks_view';
+
+// Which window the board opens on. 'All' here restores the previous
+// show-everything behaviour without touching anything else.
+const DEFAULT_DATE_FILTER = 'Today';
 
 const TaskCard = ({
     task, compact, currentUser, currentUserId,
@@ -158,6 +163,11 @@ const MyTasks = () => {
     const [priority, setPriority] = useState('All');
     const [project, setProject] = useState('All');
 
+    // Opens on today's work rather than the whole backlog — the board is a
+    // "what am I doing now" view, and every other day is one button away.
+    const [dateFilter, setDateFilter] = useState(DEFAULT_DATE_FILTER);
+    const [customDates, setCustomDates] = useState({ from: '', to: '' });
+
     // `editing` doubles as the resubmit target: null means "new task".
     const [selfFormOpen, setSelfFormOpen] = useState(false);
     const [editing, setEditing] = useState(null);
@@ -177,7 +187,16 @@ const MyTasks = () => {
     const fetchTasks = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await api.get('/tasks/my', { params: { page: 1, limit: 200, search: debouncedSearch } });
+            const res = await api.get('/tasks/my', {
+                params: {
+                    page: 1,
+                    limit: 200,
+                    search: debouncedSearch,
+                    filterType: dateFilter,
+                    fromDate: customDates.from,
+                    toDate: customDates.to
+                }
+            });
             setTasks(res.data.data);
         } catch (err) {
             console.error('Failed to load tasks', err);
@@ -185,7 +204,7 @@ const MyTasks = () => {
         } finally {
             setLoading(false);
         }
-    }, [debouncedSearch]);
+    }, [debouncedSearch, dateFilter, customDates]);
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -221,8 +240,28 @@ const MyTasks = () => {
         };
     }, [visibleTasks]);
 
-    const activeFilters = (priority !== 'All' ? 1 : 0) + (project !== 'All' ? 1 : 0) + (searchTerm ? 1 : 0);
-    const clearFilters = () => { setPriority('All'); setProject('All'); setSearchTerm(''); };
+    // Tracked apart from the date window so an empty list can say which of the
+    // two emptied it — "nothing due today" and "nothing matches your search"
+    // send the reader somewhere quite different.
+    const otherFilters = (priority !== 'All' ? 1 : 0) + (project !== 'All' ? 1 : 0) + (searchTerm ? 1 : 0);
+    // The date window counts as a filter only when it has been moved off the
+    // default, so landing on the page doesn't look like something is already
+    // narrowing the list.
+    const activeFilters = otherFilters + (dateFilter !== DEFAULT_DATE_FILTER ? 1 : 0);
+    const windowLabel = {
+        Today: 'today',
+        Yesterday: 'yesterday',
+        Week: 'in the last 7 days',
+        Month: 'in the last 30 days',
+        Custom: 'in this date range'
+    }[dateFilter];
+    const clearFilters = () => {
+        setPriority('All');
+        setProject('All');
+        setSearchTerm('');
+        setDateFilter(DEFAULT_DATE_FILTER);
+        setCustomDates({ from: '', to: '' });
+    };
 
     // --- Drag to move between columns ---
     const moveTask = async (task, newStatus) => {
@@ -323,6 +362,14 @@ const MyTasks = () => {
                 </div>
             </div>
 
+            {/* ---------- Date window ---------- */}
+            <DateRangeFilter
+                value={dateFilter}
+                onChange={setDateFilter}
+                custom={customDates}
+                onCustomChange={setCustomDates}
+            />
+
             {/* ---------- Toolbar ---------- */}
             <div className="tk-toolbar">
                 <div className="tk-search">
@@ -365,10 +412,25 @@ const MyTasks = () => {
             ) : visibleTasks.length === 0 ? (
                 <div className="tk-empty big">
                     <FontAwesomeIcon icon={faInbox} className="tk-empty-icon" />
-                    <h3>{activeFilters > 0 ? 'No tasks match your filters' : 'Nothing assigned to you'}</h3>
-                    <p>{activeFilters > 0 ? 'Try widening your search.' : "When someone assigns you work, it'll show up here."}</p>
-                    {activeFilters > 0 && (
-                        <button className="gts-btn secondary" onClick={clearFilters}>Clear filters</button>
+                    {otherFilters > 0 ? (
+                        <>
+                            <h3>No tasks match your filters</h3>
+                            <p>Try widening your search.</p>
+                            <button className="gts-btn secondary" onClick={clearFilters}>Clear filters</button>
+                        </>
+                    ) : dateFilter !== 'All' ? (
+                        <>
+                            <h3>Nothing due {windowLabel}</h3>
+                            <p>You may still have work outside this window.</p>
+                            <button className="gts-btn secondary" onClick={() => setDateFilter('All')}>
+                                Show all tasks
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <h3>Nothing assigned to you</h3>
+                            <p>When someone assigns you work, it'll show up here.</p>
+                        </>
                     )}
                 </div>
             ) : view === 'board' ? (

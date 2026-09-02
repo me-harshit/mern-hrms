@@ -433,6 +433,85 @@
     font-weight: 600;
 }
 
+/* From/To sit together as one range control rather than two loose inputs,
+   so the pair reads as a single filter beside the selects. */
+.task-filter-dates {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.task-filter-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 10px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    transition: border-color 0.15s ease;
+}
+
+.task-filter-date:hover {
+    border-color: #cbd5e1;
+}
+
+.task-filter-date:focus-within {
+    border-color: #215D7B;
+    box-shadow: 0 0 0 3px rgba(33, 93, 123, 0.1);
+}
+
+.task-filter-date > span {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.task-filter-date input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 0.85rem;
+    color: #334155;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.task-filter-date input.is-active {
+    color: #215D7B;
+    font-weight: 600;
+}
+
+/* The whole control picks up the accent, matching how a narrowing select
+   reads, rather than only the text inside it. */
+.task-filter-date:has(input.is-active) {
+    border-color: #215D7B;
+    background-color: #f0f7fb;
+}
+
+.task-filter-date:has(input.is-active) > span {
+    color: #215D7B;
+}
+
+@media (max-width: 640px) {
+    .task-filter-dates {
+        width: 100%;
+    }
+
+    .task-filter-date {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .task-filter-date input {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
 .task-filter-clear {
     height: 40px;
     padding: 0 14px;
@@ -3300,6 +3379,27 @@
 
 /* --- The roster itself --- */
 /* --- Department-grouped workload grid --- */
+/* Explains a gap between the roster and this list, so it sits quietly above
+   the results rather than competing with them for attention. */
+.wl-absent-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 9px 13px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.wl-absent-note svg {
+    flex-shrink: 0;
+    color: #94a3b8;
+}
+
 .wl-dept-section {
     margin-bottom: 22px;
 }

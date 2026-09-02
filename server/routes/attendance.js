@@ -33,15 +33,9 @@ const formatLateTime = (mins) => {
 };
 
 // --- HELPER: Shift Date Calculator ---
-const getShiftDate = (punchTime, shiftType) => {
-    const d = new Date(punchTime);
-    if (shiftType === 'NIGHT') {
-        if (d.getHours() < 14) {
-            d.setDate(d.getDate() - 1);
-        }
-    }
-    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-};
+// Shared with the task board's absence check, which has to bracket the day
+// exactly the way this route does or the two would disagree about who is in.
+const { getShiftDate } = require('../utils/attendanceToday');
 
 // ==========================================
 // 🚀 1. BIOMETRIC UPLOAD ROUTE 
