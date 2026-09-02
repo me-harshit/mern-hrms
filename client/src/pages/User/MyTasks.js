@@ -23,6 +23,10 @@ import DateRangeFilter from '../../components/DateRangeFilter';
 const COLUMNS = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const VIEW_KEY = 'mytasks_view';
 
+// How many finished tasks the Completed column shows before asking. Whatever
+// this is, it must be small: the column is history, and history only grows.
+const COMPLETED_PAGE = 12;
+
 // Which window the board opens on. 'All' here restores the previous
 // show-everything behaviour without touching anything else.
 const DEFAULT_DATE_FILTER = 'Today';
@@ -154,7 +158,18 @@ const MyTasks = () => {
     const currentUserId = currentUser?.id || currentUser?._id;
     const [searchParams, setSearchParams] = useSearchParams();
 
+    // Outstanding work and finished history are fetched separately.
+    //
+    // They grow at completely different rates -- open work stays small
+    // because people finish things, history never shrinks -- so one shared
+    // request meant the Completed column made the page enormous and, past the
+    // page limit, pushed live work out of the response entirely.
     const [tasks, setTasks] = useState([]);
+    const [done, setDone] = useState([]);
+    const [doneTotal, setDoneTotal] = useState(0);
+    const [donePages, setDonePages] = useState(1);
+    const [donePage, setDonePage] = useState(1);
+    const [doneLoading, setDoneLoading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState(() => localStorage.getItem(VIEW_KEY) || 'board');
 
@@ -191,10 +206,33 @@ const MyTasks = () => {
                 params: {
                     page: 1,
                     limit: 200,
+                    /*
+                     * Open work only; the Completed column loads its own pages.
+                     *
+                     * A flag rather than a status value, so an API that predates
+                     * it ignores the parameter and returns everything -- which
+                     * this page renders correctly anyway, because the open
+                     * columns filter by status and the Completed column reads
+                     * its own list. Sending `status=Open` to such an API would
+                     * match nothing and blank the board.
+                     */
+                    excludeCompleted: true,
                     search: debouncedSearch,
                     filterType: dateFilter,
                     fromDate: customDates.from,
-                    toDate: customDates.to
+                    toDate: customDates.to,
+                    /*
+                     * The project filter is server-side (feature draft F1.9).
+                     *
+                     * It used to be derived from whatever the 200-task page
+                     * happened to contain, which meant a project with nothing
+                     * in the current date window simply had no option to pick,
+                     * and picking one could only ever narrow what was already
+                     * on screen. Asking the server means the filter selects
+                     * from the real set of the reader's projects.
+                     */
+                    projectId: project !== 'All' && project !== 'OFFICE' ? project : undefined,
+                    taskType: project === 'OFFICE' ? 'Regular Office Task' : undefined
                 }
             });
             setTasks(res.data.data);
@@ -204,9 +242,46 @@ const MyTasks = () => {
         } finally {
             setLoading(false);
         }
-    }, [debouncedSearch, dateFilter, customDates]);
+    }, [debouncedSearch, dateFilter, customDates, project]);
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+    /**
+     * One page of finished work, appended to what is already shown.
+     *
+     * `reset` is what a filter change needs: the pages already loaded belong
+     * to the old query and would otherwise be stacked underneath the new one.
+     */
+    const fetchDone = useCallback(async (pageToGet, { reset = false } = {}) => {
+        setDoneLoading(true);
+        try {
+            const res = await api.get('/tasks/my', {
+                params: {
+                    page: pageToGet,
+                    limit: COMPLETED_PAGE,
+                    status: 'Completed',
+                    search: debouncedSearch,
+                    filterType: dateFilter,
+                    fromDate: customDates.from,
+                    toDate: customDates.to,
+                    projectId: project !== 'All' && project !== 'OFFICE' ? project : undefined,
+                    taskType: project === 'OFFICE' ? 'Regular Office Task' : undefined
+                }
+            });
+            const rows = res.data.data || [];
+            setDone(prev => (reset ? rows : [...prev, ...rows]));
+            setDoneTotal(res.data.pagination?.totalRecords ?? rows.length);
+            setDonePages(res.data.pagination?.totalPages ?? 1);
+            setDonePage(pageToGet);
+        } catch (err) {
+            console.error('Failed to load completed tasks', err);
+        } finally {
+            setDoneLoading(false);
+        }
+    }, [debouncedSearch, dateFilter, customDates, project]);
+
+    // Any change to the query restarts the history at page one.
+    useEffect(() => { fetchDone(1, { reset: true }); }, [fetchDone]);
 
     // Deep link from a notification.
     useEffect(() => {
@@ -219,26 +294,42 @@ const MyTasks = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Project options come from the tasks themselves — employees can't list projects.
-    const projectOptions = useMemo(() => {
-        const names = new Set(tasks.map(t => taskContextLabel(t)).filter(Boolean));
-        return Array.from(names).sort();
-    }, [tasks]);
+    // The reader's own projects, from the workspace endpoint — an employee
+    // cannot list every project in the company, and does not need to: this
+    // filter only ever narrows work that is already theirs.
+    const [projectOptions, setProjectOptions] = useState([]);
+    useEffect(() => {
+        api.get('/projects/mine')
+            .then(res => setProjectOptions(res.data || []))
+            .catch(() => setProjectOptions([]));
+    }, []);
 
-    const visibleTasks = useMemo(() => tasks.filter(t =>
-        (priority === 'All' || t.priority === priority) &&
-        (project === 'All' || taskContextLabel(t) === project)
-    ), [tasks, priority, project]);
+    // Project filtering now happens server-side; only priority is left to do
+    // here, because it never changes which tasks were fetched.
+    const byPriority = useCallback(
+        (t) => priority === 'All' || t.priority === priority,
+        [priority]
+    );
+
+    // Open work only. The Completed column reads `visibleDone` instead, since
+    // it is paged and the two must not be concatenated into one array.
+    const visibleTasks = useMemo(() => tasks.filter(byPriority), [tasks, byPriority]);
+    const visibleDone = useMemo(() => done.filter(byPriority), [done, byPriority]);
 
     const stats = useMemo(() => {
         const now = new Date();
         return {
-            total: visibleTasks.length,
+            // `doneTotal` is the server's count of the whole history, not the
+            // page in hand, so the tiles do not shrink to whatever happens to
+            // be loaded. The priority filter is client-side, so it can only be
+            // reflected in what is on screen -- an acknowledged approximation
+            // while a priority is selected.
+            total: visibleTasks.length + (priority === 'All' ? doneTotal : visibleDone.length),
             active: visibleTasks.filter(t => t.status === 'In Progress').length,
-            overdue: visibleTasks.filter(t => t.status !== 'Completed' && new Date(t.overdueAt || t.dueDate) < now).length,
-            done: visibleTasks.filter(t => t.status === 'Completed').length
+            overdue: visibleTasks.filter(t => new Date(t.overdueAt || t.dueDate) < now).length,
+            done: priority === 'All' ? doneTotal : visibleDone.length
         };
-    }, [visibleTasks]);
+    }, [visibleTasks, visibleDone, doneTotal, priority]);
 
     // Tracked apart from the date window so an empty list can say which of the
     // two emptied it — "nothing due today" and "nothing matches your search"
@@ -264,13 +355,44 @@ const MyTasks = () => {
     };
 
     // --- Drag to move between columns ---
+    /**
+     * Move a card between columns.
+     *
+     * Crossing the Completed boundary means moving the task between the two
+     * lists, not just relabelling it: `tasks` holds open work and `done` holds
+     * the loaded page of history. The count moves with it so the column header
+     * and the tiles stay honest without a refetch.
+     */
+    const place = useCallback((task, nextStatus) => {
+        const wasDone = task.status === 'Completed';
+        const nowDone = nextStatus === 'Completed';
+        const moved = { ...task, status: nextStatus };
+
+        if (wasDone === nowDone) {
+            const put = (prev) => prev.map(t => (t._id === task._id ? moved : t));
+            if (nowDone) setDone(put); else setTasks(put);
+            return;
+        }
+
+        if (nowDone) {
+            setTasks(prev => prev.filter(t => t._id !== task._id));
+            // Newest-first, matching the order the server returns history in.
+            setDone(prev => [moved, ...prev]);
+            setDoneTotal(n => n + 1);
+        } else {
+            setDone(prev => prev.filter(t => t._id !== task._id));
+            setTasks(prev => [...prev, moved]);
+            setDoneTotal(n => Math.max(0, n - 1));
+        }
+    }, []);
+
     const moveTask = async (task, newStatus) => {
         if (!task || task.status === newStatus) return;
 
         const previous = task.status;
         setMovingId(task._id);
         // Optimistic: the card lands in the new column immediately.
-        setTasks(prev => prev.map(t => (t._id === task._id ? { ...t, status: newStatus } : t)));
+        place(task, newStatus);
 
         try {
             const data = new FormData();
@@ -278,10 +400,14 @@ const MyTasks = () => {
             const res = await api.put(`/tasks/${task._id}/status`, data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            setTasks(prev => prev.map(t => (t._id === task._id ? res.data : t)));
+            // Replace the optimistic copy with the server's, in whichever list
+            // it now belongs to.
+            const saved = res.data;
+            const swap = (prev) => prev.map(t => (t._id === saved._id ? saved : t));
+            if (saved.status === 'Completed') setDone(swap); else setTasks(swap);
         } catch (err) {
-            // Put it back where it came from.
-            setTasks(prev => prev.map(t => (t._id === task._id ? { ...t, status: previous } : t)));
+            // Put it back where it came from, list included.
+            place({ ...task, status: newStatus }, previous);
             Swal.fire('Could not move task', err.response?.data?.message || 'Please try again.', 'error');
         } finally {
             setMovingId(null);
@@ -362,16 +488,16 @@ const MyTasks = () => {
                 </div>
             </div>
 
-            {/* ---------- Date window ---------- */}
-            <DateRangeFilter
-                value={dateFilter}
-                onChange={setDateFilter}
-                custom={customDates}
-                onCustomChange={setCustomDates}
-            />
-
-            {/* ---------- Toolbar ---------- */}
+            {/* ---------- Toolbar: date window, filters and search on one line ---------- */}
             <div className="tk-toolbar">
+                <DateRangeFilter
+                    value={dateFilter}
+                    onChange={setDateFilter}
+                    custom={customDates}
+                    onCustomChange={setCustomDates}
+                    inline
+                />
+
                 <div className="tk-search">
                     <FontAwesomeIcon icon={faSearch} />
                     <input
@@ -396,7 +522,11 @@ const MyTasks = () => {
                     value={project} onChange={(e) => setProject(e.target.value)}
                 >
                     <option value="All">All Projects</option>
-                    {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                    {projectOptions.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                    {/* Office work has no project, so it cannot be one of the
+                        options above — but it is still a thing people want to
+                        filter down to. */}
+                    <option value="OFFICE">Regular Office</option>
                 </select>
 
                 {activeFilters > 0 && (
@@ -409,7 +539,7 @@ const MyTasks = () => {
             {/* ---------- Content ---------- */}
             {loading ? (
                 <div className="tk-empty"><FontAwesomeIcon icon={faSpinner} spin /> Loading your tasks...</div>
-            ) : visibleTasks.length === 0 ? (
+            ) : visibleTasks.length === 0 && visibleDone.length === 0 ? (
                 <div className="tk-empty big">
                     <FontAwesomeIcon icon={faInbox} className="tk-empty-icon" />
                     {otherFilters > 0 ? (
@@ -436,7 +566,11 @@ const MyTasks = () => {
             ) : view === 'board' ? (
                 <div className="tk-board">
                     {COLUMNS.map(col => {
-                        const colTasks = visibleTasks.filter(t => t.status === col);
+                        const isDone = col === 'Completed';
+                        // History comes from its own paged list; the other three
+                        // columns are the open set, which is loaded in full.
+                        const colTasks = isDone ? visibleDone : visibleTasks.filter(t => t.status === col);
+                        const more = isDone && donePage < donePages;
                         return (
                             <section
                                 key={col}
@@ -448,7 +582,9 @@ const MyTasks = () => {
                                 <header className="tk-col-head">
                                     <span className="tk-col-dot" />
                                     <span className="tk-col-name">{col}</span>
-                                    <span className="tk-col-count">{colTasks.length}</span>
+                                    <span className="tk-col-count">
+                                        {isDone && priority === 'All' ? doneTotal : colTasks.length}
+                                    </span>
                                 </header>
 
                                 <div className="tk-col-body">
@@ -461,7 +597,22 @@ const MyTasks = () => {
                                         />
                                     ))}
                                     {colTasks.length === 0 && (
-                                        <div className="tk-col-empty">Drop a task here</div>
+                                        <div className="tk-col-empty">
+                                            {isDone ? 'Nothing finished yet' : 'Drop a task here'}
+                                        </div>
+                                    )}
+
+                                    {more && (
+                                        <button
+                                            type="button"
+                                            className="tk-load-more"
+                                            onClick={() => fetchDone(donePage + 1)}
+                                            disabled={doneLoading}
+                                        >
+                                            {doneLoading
+                                                ? 'Loading...'
+                                                : `Show more (${Math.max(0, doneTotal - colTasks.length)} left)`}
+                                        </button>
                                     )}
                                 </div>
                             </section>
@@ -470,29 +621,49 @@ const MyTasks = () => {
                 </div>
             ) : (
                 <div className="tk-list">
-                    {COLUMNS.filter(col => visibleTasks.some(t => t.status === col)).map(col => (
-                        <div key={col} className="tk-list-group">
-                            <div className={`tk-list-group-head ${slug(col)}`}>
-                                <span className="tk-col-dot" />
-                                {col}
-                                <span className="tk-col-count">{visibleTasks.filter(t => t.status === col).length}</span>
+                    {COLUMNS.map(col => {
+                        const isDone = col === 'Completed';
+                        const rows = isDone ? visibleDone : visibleTasks.filter(t => t.status === col);
+                        if (rows.length === 0) return null;
+                        const more = isDone && donePage < donePages;
+                        return (
+                            <div key={col} className="tk-list-group">
+                                <div className={`tk-list-group-head ${slug(col)}`}>
+                                    <span className="tk-col-dot" />
+                                    {col}
+                                    <span className="tk-col-count">
+                                        {isDone && priority === 'All' ? doneTotal : rows.length}
+                                    </span>
+                                </div>
+                                <div className="tk-list-rows">
+                                    {rows.map(t => (
+                                        <TaskCard
+                                            key={t._id} task={t} compact
+                                            currentUser={currentUser} currentUserId={currentUserId}
+                                            isDragging={draggingId === t._id} isMoving={movingId === t._id}
+                                            onDragStart={onDragStart} onDragEnd={onDragEnd} onOpen={(t) => navigate(`/task/${t._id}`)}
+                                        />
+                                    ))}
+                                    {more && (
+                                        <button
+                                            type="button"
+                                            className="tk-load-more"
+                                            onClick={() => fetchDone(donePage + 1)}
+                                            disabled={doneLoading}
+                                        >
+                                            {doneLoading
+                                                ? 'Loading...'
+                                                : `Show more (${Math.max(0, doneTotal - rows.length)} left)`}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                            <div className="tk-list-rows">
-                                {visibleTasks.filter(t => t.status === col).map(t => (
-                                    <TaskCard
-                                        key={t._id} task={t} compact
-                                        currentUser={currentUser} currentUserId={currentUserId}
-                                        isDragging={draggingId === t._id} isMoving={movingId === t._id}
-                                        onDragStart={onDragStart} onDragEnd={onDragEnd} onOpen={(t) => navigate(`/task/${t._id}`)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
-            {view === 'board' && !loading && visibleTasks.length > 0 && (
+            {view === 'board' && !loading && (visibleTasks.length > 0 || visibleDone.length > 0) && (
                 <p className="tk-hint">
                     Tip: drag a card to another column to change its status. The status is shared, so everyone on the task sees the change.
                 </p>

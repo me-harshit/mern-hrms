@@ -1,0 +1,747 @@
+/*
+ * Project workspace — feature draft Module 1.
+ *
+ * Shared by both detail pages (Admin/ProjectWorkspace and User/MyProjectDetail)
+ * and by the tab components in components/project/. The two pages own their own
+ * chrome; everything below the tab bar is styled from here so the tabs look the
+ * same whichever shell they are mounted in.
+ *
+ * Layout rule the page is built on: the header answers "which project is this
+ * and who runs it", the tab bar answers "what is in it", and the numbers about
+ * a thing live in that thing's own tab. Task counts on the header competed with
+ * the Tasks tab for the same job and made the top of the page a wall of digits
+ * to decode before you could read anything.
+ */
+
+:root {
+    --pw-ink:      #0f172a;
+    --pw-body:     #475569;
+    --pw-muted:    #94a3b8;
+    --pw-line:     #e2e8f0;
+    --pw-line-soft:#f1f5f9;
+    --pw-surface:  #ffffff;
+    --pw-canvas:   #f8fafc;
+    --pw-brand:    #215D7B;
+    --pw-brand-sky:#e0f2fe;
+}
+
+/* ------------------------------------------------------------------ *
+ * List page
+ * ------------------------------------------------------------------ */
+
+.pw-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.pw-card {
+    position: relative;
+    background: var(--pw-surface);
+    border: 1px solid var(--pw-line);
+    border-radius: 14px;
+    padding: 18px;
+    cursor: pointer;
+    transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+}
+
+/* A colour rail rather than a full tinted card: it reads as status at a
+   glance without dyeing the content behind it. */
+.pw-card::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--pw-brand);
+    opacity: 0;
+    transition: opacity .18s ease;
+}
+
+.pw-card:hover {
+    border-color: #bae6fd;
+    box-shadow: 0 10px 24px -14px rgba(15, 23, 42, .3);
+    transform: translateY(-2px);
+}
+
+.pw-card:hover::before { opacity: 1; }
+
+.pw-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.pw-card-name {
+    font-size: 15.5px;
+    font-weight: 700;
+    color: var(--pw-ink);
+    margin: 0;
+    line-height: 1.35;
+}
+
+.pw-card-desc {
+    font-size: 12.5px;
+    color: var(--pw-body);
+    margin: 0;
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.pw-card-lead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--pw-body);
+}
+
+.pw-card-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 11.5px;
+    color: var(--pw-muted);
+    border-top: 1px solid var(--pw-line-soft);
+    padding-top: 11px;
+    margin-top: auto;
+}
+
+/* ------------------------------------------------------------------ *
+ * Detail header
+ * ------------------------------------------------------------------ */
+
+.pw-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.pw-header-main { min-width: 0; flex: 1 1 420px; }
+
+.pw-back {
+    background: none;
+    border: none;
+    color: var(--pw-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transition: color .15s ease;
+}
+
+.pw-back:hover { color: var(--pw-brand); }
+
+.pw-title {
+    font-size: 25px;
+    font-weight: 700;
+    color: var(--pw-ink);
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    letter-spacing: -0.015em;
+}
+
+.pw-subtitle {
+    font-size: 13px;
+    color: var(--pw-body);
+    margin: 0;
+    line-height: 1.6;
+    max-width: 68ch;
+}
+
+/* The meta line under the title — lead, dates. Chips rather than a run-on
+   sentence, so each fact is separately scannable. */
+.pw-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.pw-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--pw-canvas);
+    border: 1px solid var(--pw-line);
+    border-radius: 999px;
+    padding: 4px 12px 4px 5px;
+    font-size: 12px;
+    color: var(--pw-body);
+    font-weight: 500;
+}
+
+/* An icon-led chip has no avatar to pad around, so it gets even padding. */
+.pw-meta-chip.is-plain { padding: 5px 12px; }
+.pw-meta-chip svg { color: var(--pw-muted); font-size: 11px; }
+
+.pw-header-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+/* ------------------------------------------------------------------ *
+ * Budget card (management shell only)
+ *
+ * The one number that survived on the header, because it is the only one
+ * that is not already the subject of a tab.
+ * ------------------------------------------------------------------ */
+
+.pw-budget {
+    background: var(--pw-surface);
+    border: 1px solid var(--pw-line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    min-width: 220px;
+}
+
+.pw-budget-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--pw-muted);
+    font-weight: 700;
+}
+
+.pw-budget-value {
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--pw-ink);
+    line-height: 1.35;
+    margin-top: 2px;
+}
+
+.pw-budget-of {
+    font-size: 12px;
+    color: var(--pw-muted);
+    font-weight: 500;
+}
+
+.pw-budget.is-over .pw-budget-value { color: #dc2626; }
+
+.pw-progress {
+    width: 100%;
+    height: 6px;
+    background: var(--pw-line);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 9px;
+}
+
+.pw-progress > span {
+    display: block;
+    height: 100%;
+    background: var(--pw-brand);
+    border-radius: 3px;
+    transition: width .3s ease;
+}
+
+.pw-budget.is-over .pw-progress > span { background: #dc2626; }
+
+/* ------------------------------------------------------------------ *
+ * Tab bar
+ * ------------------------------------------------------------------ */
+
+.pw-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--pw-line);
+    margin-bottom: 18px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.pw-tabs::-webkit-scrollbar { display: none; }
+
+.pw-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 11px 15px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--pw-body);
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color .15s ease, border-color .15s ease;
+}
+
+.pw-tab svg { font-size: 12px; opacity: .75; }
+.pw-tab:hover { color: var(--pw-brand); }
+
+.pw-tab.is-active {
+    color: var(--pw-brand);
+    border-bottom-color: var(--pw-brand);
+}
+
+.pw-tab.is-active svg { opacity: 1; }
+
+.pw-tab-count {
+    background: var(--pw-line-soft);
+    color: var(--pw-body);
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 20px;
+    text-align: center;
+}
+
+.pw-tab.is-active .pw-tab-count {
+    background: var(--pw-brand-sky);
+    color: #0369a1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Status chips — the Tasks tab's own summary
+ *
+ * These are the counts that used to sit on the page header. They belong
+ * here: in the one tab they describe, where each is also the control that
+ * filters to it. A number you can act on beats a number you can only read.
+ * ------------------------------------------------------------------ */
+
+.pw-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.pw-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--pw-surface);
+    border: 1px solid var(--pw-line);
+    border-radius: 10px;
+    padding: 7px 13px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--pw-body);
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+
+.pw-chip:hover { border-color: #cbd5e1; background: var(--pw-canvas); }
+
+.pw-chip-n {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--pw-ink);
+}
+
+.pw-chip.is-active {
+    border-color: var(--pw-brand);
+    background: var(--pw-brand);
+    color: #fff;
+}
+
+.pw-chip.is-active .pw-chip-n { color: #fff; }
+
+/* A dot carries the status colour so the chip row reads without labels once
+   people know it — and stays legible for anyone who never learns them. */
+.pw-chip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: .55;
+}
+
+.pw-chip.tone-progress .pw-chip-dot { background: #1d4ed8; opacity: 1; }
+.pw-chip.tone-hold     .pw-chip-dot { background: #b45309; opacity: 1; }
+.pw-chip.tone-done     .pw-chip-dot { background: #15803d; opacity: 1; }
+.pw-chip.tone-late     .pw-chip-dot { background: #dc2626; opacity: 1; }
+.pw-chip.is-active .pw-chip-dot     { background: #fff; opacity: 1; }
+
+/* Overdue is the one chip that stays coloured while inactive — it is the
+   thing on this page most worth noticing without looking for it. */
+.pw-chip.tone-late:not(.is-active) {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.pw-chip.tone-late:not(.is-active) .pw-chip-n { color: #b91c1c; }
+.pw-chip.tone-late.is-active { background: #dc2626; border-color: #dc2626; }
+
+/* Nothing overdue is good news, not a control — so it stops being a button. */
+.pw-chip.is-empty {
+    opacity: .5;
+    cursor: default;
+    background: var(--pw-surface);
+    border-color: var(--pw-line);
+    color: var(--pw-muted);
+}
+
+.pw-chip.is-empty .pw-chip-n { color: var(--pw-muted); }
+
+/* ------------------------------------------------------------------ *
+ * Shared tab surfaces
+ * ------------------------------------------------------------------ */
+
+.pw-panel {
+    background: var(--pw-surface);
+    border: 1px solid var(--pw-line);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.pw-empty {
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--pw-body);
+    font-size: 13.5px;
+    line-height: 1.65;
+    max-width: 46ch;
+    margin: 0 auto;
+}
+
+.pw-empty-icon {
+    font-size: 26px;
+    color: #cbd5e1;
+    margin-bottom: 14px;
+    display: block;
+}
+
+.pw-empty strong {
+    display: block;
+    color: var(--pw-ink);
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.pw-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.pw-select,
+.pw-search {
+    height: 38px;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 0 12px;
+    font-size: 13px;
+    background: var(--pw-surface);
+    color: var(--pw-ink);
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.pw-search:focus,
+.pw-select:focus {
+    border-color: var(--pw-brand);
+    box-shadow: 0 0 0 3px rgba(33, 93, 123, .12);
+}
+
+.pw-search { min-width: 220px; flex: 1; max-width: 320px; }
+.pw-select.is-active { border-color: var(--pw-brand); color: var(--pw-brand); font-weight: 600; }
+
+/* ------------------------------------------------------------------ *
+ * Rows — tasks, team, conversations
+ * ------------------------------------------------------------------ */
+
+.pw-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--pw-line-soft);
+    text-decoration: none;
+    color: inherit;
+}
+
+.pw-row:last-child { border-bottom: none; }
+.pw-row.is-clickable { cursor: pointer; transition: background .15s ease; }
+.pw-row.is-clickable:hover { background: var(--pw-canvas); }
+
+.pw-row-main { flex: 1; min-width: 0; }
+
+.pw-row-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--pw-ink);
+    margin: 0 0 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pw-row-sub {
+    font-size: 11.5px;
+    color: var(--pw-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.pw-row-sub svg { font-size: 10px; margin-right: 3px; }
+
+.pw-row-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/*
+ * Overlapping avatar stack.
+ *
+ * Scoped to the avatar itself, NOT `> *`. EmployeeAvatar renders a fragment —
+ * the picture AND its full-screen AssigneePopup overlay are both direct
+ * children of this container. A `> *` rule put border-radius:50% and a white
+ * border on a position:fixed, viewport-sized overlay, which drew an enormous
+ * white-edged oval across the screen the moment anyone opened a photo.
+ */
+.pw-avatars { display: flex; align-items: center; }
+
+.pw-avatars > .table-avatar,
+.pw-avatars > .pw-avatar {
+    margin-left: -8px;
+    border: 2px solid var(--pw-surface);
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .1);
+}
+
+.pw-avatars > .table-avatar:first-child,
+.pw-avatars > .pw-avatar:first-child { margin-left: 0; }
+
+/* Status and priority pills reuse the app's colour language. */
+.pw-pill {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+    letter-spacing: .01em;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.pw-pill.pending      { background: #f1f5f9; color: #475569; }
+.pw-pill.in-progress  { background: #dbeafe; color: #1d4ed8; }
+.pw-pill.on-hold      { background: #fef3c7; color: #b45309; }
+.pw-pill.completed    { background: #dcfce7; color: #15803d; }
+.pw-pill.overdue      { background: #fee2e2; color: #b91c1c; }
+.pw-pill.urgent       { background: #fee2e2; color: #b91c1c; }
+.pw-pill.high         { background: #ffedd5; color: #c2410c; }
+.pw-pill.medium       { background: #e0e7ff; color: #4338ca; }
+.pw-pill.low          { background: #f1f5f9; color: #64748b; }
+
+/* Priority is secondary to status in this list, so it is drawn as a quiet
+   outline rather than a second filled badge competing with it. */
+.pw-pill.is-ghost {
+    background: transparent;
+    border: 1px solid currentColor;
+    opacity: .8;
+}
+
+/* F2.4 — the External badge, everywhere an outsider appears. */
+.pw-pill.external {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+/* ------------------------------------------------------------------ *
+ * Conversations (F1.5 / F1.6)
+ *
+ * Vendor threads are deliberately not styled like internal ones — the draft
+ * asks for them to be "visually distinct", and an amber left edge is legible
+ * at a glance without the badge needing to be read.
+ * ------------------------------------------------------------------ */
+
+.pw-thread { border-left: 3px solid transparent; }
+.pw-thread.is-vendor { border-left-color: #f59e0b; background: #fffbeb; }
+.pw-thread.is-vendor:hover { background: #fef3c7; }
+
+.pw-thread-preview {
+    font-size: 12px;
+    color: var(--pw-body);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    margin-bottom: 4px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Documents (F1.7)
+ * ------------------------------------------------------------------ */
+
+.pw-docs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+    gap: 14px;
+}
+
+.pw-doc {
+    border: 1px solid var(--pw-line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--pw-surface);
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.pw-doc:hover {
+    border-color: #bae6fd;
+    box-shadow: 0 8px 18px -12px rgba(15, 23, 42, .35);
+    transform: translateY(-2px);
+}
+
+.pw-doc-thumb {
+    height: 112px;
+    background: var(--pw-canvas);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cbd5e1;
+    font-size: 26px;
+    overflow: hidden;
+    border-bottom: 1px solid var(--pw-line-soft);
+}
+
+.pw-doc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.pw-doc-meta { padding: 10px 12px 12px; }
+
+.pw-doc-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--pw-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pw-doc-src {
+    font-size: 11px;
+    color: var(--pw-muted);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* A screen recording still being compressed is not yet playable. */
+.pw-doc.is-processing { opacity: .6; cursor: default; }
+.pw-doc.is-processing:hover { transform: none; box-shadow: none; border-color: var(--pw-line); }
+
+/* ------------------------------------------------------------------ *
+ * Activity feed (F1.8)
+ * ------------------------------------------------------------------ */
+
+.pw-feed { padding: 4px 0; }
+
+.pw-event {
+    display: flex;
+    gap: 13px;
+    padding: 13px 16px;
+    align-items: flex-start;
+    transition: background .15s ease;
+}
+
+.pw-event + .pw-event { border-top: 1px solid var(--pw-line-soft); }
+.pw-event.is-clickable { cursor: pointer; }
+.pw-event.is-clickable:hover { background: var(--pw-canvas); }
+
+.pw-event-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11.5px;
+    flex-shrink: 0;
+    background: var(--pw-line-soft);
+    color: var(--pw-body);
+}
+
+.pw-event-icon.task     { background: #dbeafe; color: #1d4ed8; }
+.pw-event-icon.done     { background: #dcfce7; color: #15803d; }
+.pw-event-icon.chat     { background: #ede9fe; color: #6d28d9; }
+.pw-event-icon.vendor   { background: #fef3c7; color: #b45309; }
+
+.pw-event-body { flex: 1; min-width: 0; }
+
+.pw-event-text {
+    font-size: 13px;
+    color: #334155;
+    margin: 0;
+    line-height: 1.55;
+}
+
+.pw-event-time {
+    font-size: 11px;
+    color: var(--pw-muted);
+    margin-top: 3px;
+}
+
+.pw-more {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background: var(--pw-canvas);
+    border: none;
+    border-top: 1px solid var(--pw-line);
+    color: var(--pw-brand);
+    font-weight: 600;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.pw-more:hover { background: var(--pw-line-soft); }
+.pw-more:disabled { color: var(--pw-muted); cursor: default; }
+
+/* ------------------------------------------------------------------ *
+ * Responsive
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 720px) {
+    .pw-title { font-size: 21px; }
+    .pw-header { gap: 14px; }
+    .pw-budget { min-width: 0; width: 100%; }
+    .pw-row { flex-wrap: wrap; gap: 10px; }
+    .pw-row-side { width: 100%; justify-content: flex-start; }
+    .pw-search { max-width: none; }
+}

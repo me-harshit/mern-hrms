@@ -139,6 +139,15 @@ const Sidebar = ({ isOpen, onClose }) => {
                     )}
                 </Link>
 
+                {/* The project workspace (feature draft Module 1). Every role,
+                    including Team Lead — who is deliberately kept out of the
+                    financial registry below but is exactly who needs the "what
+                    is happening on this project" view. The list is scoped to
+                    the projects you are on, so it is never empty of meaning. */}
+                <Link to="/my-projects" onClick={handleLinkClick} className={`nav-link ${location.pathname.startsWith('/my-projects') ? 'active' : ''}`}>
+                    <FontAwesomeIcon icon={faFolderOpen} className="nav-icon" /> <span>My Projects</span>
+                </Link>
+
                 {/* 👇 FIXED: Hidden personal employee links for the ADMIN role */}
                 {userRole !== 'ADMIN' && (
                     <>

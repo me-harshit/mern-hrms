@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -8,6 +9,8 @@ import EmployeeAvatar from '../../components/EmployeeAvatar'; // 👇 NEW: Modul
 import '../../styles/App.css';
 
 const Projects = () => {
+    const navigate = useNavigate();
+
     // --- DATA & PAGINATION STATES ---
     const [projects, setProjects] = useState([]);
     const [usersList, setUsersList] = useState([]);
@@ -342,9 +345,20 @@ const Projects = () => {
                                     </td>
                                    
                                     <td data-label="Action">
-                                        <button className="gts-btn primary btn-small" onClick={() => handleEditProject(proj)}>
-                                            <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
-                                        </button>
+                                        {/* The registry is the commercial record;
+                                            the workspace is the work. This is the
+                                            way between them (feature draft F1.2). */}
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                            <button
+                                                className="gts-btn primary btn-small"
+                                                onClick={() => navigate(`/projects/${proj._id}`)}
+                                            >
+                                                <FontAwesomeIcon icon={faFolderOpen} className="btn-icon" /> Open
+                                            </button>
+                                            <button className="gts-btn btn-small" onClick={() => handleEditProject(proj)}>
+                                                <FontAwesomeIcon icon={faEdit} className="btn-icon" /> Edit
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             )})

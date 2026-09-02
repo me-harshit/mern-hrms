@@ -33,6 +33,9 @@ import Chats from './pages/Chats';
 import Portal from './pages/Portal';
 import ExternalUsers from './pages/ExternalUsers';
 import Projects from './pages/Admin/Projects';
+import ProjectWorkspace from './pages/Admin/ProjectWorkspace';
+import MyProjects from './pages/User/MyProjects';
+import MyProjectDetail from './pages/User/MyProjectDetail';
 import Inventory from './pages/Admin/Inventory';
 import MyInventory from './pages/User/MyInventory';
 import AddInventory from './pages/Admin/AddInventory';
@@ -206,6 +209,13 @@ function App() {
             <Route path="/my-tasks" element={<MyTasks />} />
             <Route path="/task/:id" element={<TaskDetail />} />
 
+            {/* The project workspace (feature draft Module 1), employee half.
+                Open to every role: the list is scoped to projects you are
+                actually on, and the detail page is refused by the server for
+                anything else — so there is nothing here to gate by role. */}
+            <Route path="/my-projects" element={<MyProjects />} />
+            <Route path="/my-projects/:id" element={<MyProjectDetail />} />
+
             {/* Groups & internal chat (feature draft Module 3). Every role —
                 management's rule is that anyone may message anyone. The
                 /join/:token route is the group invite link. */}
@@ -231,6 +241,14 @@ function App() {
             <Route path="/absent-employees" element={isManagement ? <AbsentEmployees /> : <Navigate to="/dashboard" />} />
             <Route path="/Employee-requests" element={isManagement ? <EmployeeRequests /> : <Navigate to="/dashboard" />} />
             <Route path="/projects" element={isManagement ? <Projects /> : <Navigate to="/dashboard" />} />
+            {/* The management half of the workspace, reached from the registry.
+                An employee who follows a link here is sent to their own project
+                list rather than the dashboard — same project, the shell they
+                are allowed. The server still decides whether they may read it. */}
+            <Route
+                path="/projects/:id"
+                element={isManagement ? <ProjectWorkspace /> : <Navigate to="/my-projects" />}
+            />
             <Route path="/tasks" element={isManagement ? <Tasks /> : <Navigate to="/dashboard" />} />
             <Route path="/task-report" element={canSeeTaskReport ? <TaskReport /> : <Navigate to="/dashboard" />} />
             <Route path="/add-task" element={isManagement ? <AddTask /> : <Navigate to="/dashboard" />} />

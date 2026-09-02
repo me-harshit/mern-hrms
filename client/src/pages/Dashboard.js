@@ -8,6 +8,7 @@ import {
     faSpinner, faBriefcase, faCalendarCheck, faClock, faUserTimes,
     faWallet, faFileInvoiceDollar, faPlus, faHistory, faTimes
 } from '@fortawesome/free-solid-svg-icons';
+import ProjectLensStrip from '../components/project/ProjectLensStrip';
 import '../styles/App.css';
 
 const Dashboard = () => {
@@ -177,6 +178,16 @@ const Dashboard = () => {
                     )}
                 </div>
             )}
+
+            {/*
+              * The project lens (feature draft F1.9), for every role.
+              *
+              * Management is sent to the workspace behind the registry, which
+              * carries the budget strip they can already see; everyone else
+              * goes to the employee shell. Renders nothing when the reader is
+              * on no projects.
+              */}
+            <ProjectLensStrip detailPath={isEmployee ? '/my-projects' : '/projects'} />
 
             {/* --- COMMON QUICK ACTIONS --- */}
             <div className="quick-actions-section">

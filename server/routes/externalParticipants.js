@@ -13,6 +13,7 @@ const ExternalUser = require('../models/ExternalUser');
 const { emitToUsers, emitToConversation, emitToConversationExternals } = require('../utils/realtime');
 const { broadcastMessage } = require('../utils/portalShape');
 const { portalLink, sendInviteEmail } = require('../utils/externalInvite');
+const { recordActivity } = require('../utils/projectAccess');
 const {
     canRead, canManage, postSystemMessage
 } = require('../utils/conversationAccess');
@@ -228,6 +229,25 @@ router.post('/', auth, async (req, res) => {
             targetNames: [person.name]
         });
         broadcastMessage(conversation._id, sys);
+
+        // The vendor tab and the project feed both need to know (F1.6, F1.8).
+        // participant.projectId is the denormalised copy that survives the
+        // membership being revoked later.
+        recordActivity(participant.projectId, {
+            type: 'vendor_invited',
+            actor: req.user.id,
+            actorName: me?.name || '',
+            text: `${me?.name || 'Someone'} invited ${person.name} (external) to ${conversation.name}`,
+            refModel: 'ExternalParticipant',
+            refId: participant._id,
+            link: `/chats/${conversation._id}`,
+            meta: {
+                conversationId: String(conversation._id),
+                groupName: conversation.name || '',
+                externalName: person.name,
+                company: person.company || ''
+            }
+        });
 
         // Mail failure must not lose the invitation — the link is already
         // minted and copyable, which is the fallback the inviter asked for.
@@ -531,6 +551,21 @@ router.delete('/:pid', auth, async (req, res) => {
                 targetNames: [participant.externalUser?.name || 'An external participant']
             });
             broadcastMessage(conversation._id, sys);
+
+            recordActivity(participant.projectId, {
+                type: 'vendor_revoked',
+                actor: req.user.id,
+                actorName: me?.name || '',
+                text: `${me?.name || 'Someone'} removed ${participant.externalUser?.name || 'an external participant'} (external) from ${conversation.name}`,
+                refModel: 'ExternalParticipant',
+                refId: participant._id,
+                link: `/chats/${conversation._id}`,
+                meta: {
+                    conversationId: String(conversation._id),
+                    groupName: conversation.name || '',
+                    externalName: participant.externalUser?.name || ''
+                }
+            });
         }
 
         /*
