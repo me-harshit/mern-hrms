@@ -2750,3 +2750,43 @@ a.payroll-emp-name:hover,
   color: #15803d;
   line-height: 1.5;
 }
+
+/* An absence inferred from the total lack of a record, as opposed to one the
+   system actually marked. Same deduction, different provenance. */
+.pmd-inferred {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* A finalized payslip is shown as saved, not recalculated. */
+.pmd-saved {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-left: 3px solid #2563eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 0.78rem;
+  color: #1e40af;
+  line-height: 1.55;
+}
+
+.pmd-saved-drift {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #bfdbfe;
+  color: #b45309;
+}
+
+/* The saved figures no longer match what the attendance would produce. */
+.payroll-final-tag.drifted {
+  color: #b45309;
+}

@@ -67,6 +67,9 @@ app.use('/api/conversations', conversationRoutes);
 // namespace and its own middleware: nothing under /api/portal uses the
 // employee auth, and nothing outside it accepts a portal token.
 app.use('/api/portal', require('./routes/portal'));
+// The directory of people outside the company. Separate from the portal:
+// this is staff-facing (create, edit, deactivate), the portal is theirs.
+app.use('/api/external-users', require('./routes/externalUsers'));
 app.use('/api/projects', projectsRoutes);
 app.use('/api/wallets', walletsRoute);
 app.use('/api/inventory', inventoryRoute);

@@ -72,7 +72,8 @@ const historyFloor = (participant) => participant.invitedAt || participant.creat
 router.get('/invite/:token', async (req, res) => {
     try {
         const participant = await ExternalParticipant.findOne({ token: req.params.token })
-            .populate('invitedBy', 'name');
+            .populate('invitedBy', 'name')
+            .populate('externalUser');
         if (!participant) {
             return res.status(404).json({ message: 'This invitation link is not valid.' });
         }
@@ -91,7 +92,7 @@ router.get('/invite/:token', async (req, res) => {
         const expired = participant.expiresAt && participant.expiresAt < new Date();
 
         res.json({
-            name: participant.name,
+            name: participant.externalUser?.name || '',
             groupName: conversation.name,
             projectName: conversation.projectId?.name || '',
             invitedByName: participant.invitedBy?.name || 'A colleague',
@@ -122,9 +123,15 @@ router.get('/invite/:token', async (req, res) => {
  */
 router.post('/invite/:token/join', async (req, res) => {
     try {
-        const participant = await ExternalParticipant.findOne({ token: req.params.token });
+        const participant = await ExternalParticipant.findOne({ token: req.params.token })
+            .populate('externalUser');
         if (!participant) {
             return res.status(404).json({ message: 'This invitation link is not valid.' });
+        }
+        if (!participant.externalUser || participant.externalUser.isActive === false) {
+            // Switched off in the directory: every link they hold stops
+            // working, without having to walk their conversations.
+            return res.status(403).json({ message: 'This invitation has been withdrawn.' });
         }
         if (participant.status === 'revoked') {
             return res.status(403).json({ message: 'This invitation has been withdrawn.' });
@@ -171,6 +178,10 @@ router.post('/invite/:token/join', async (req, res) => {
             return res.status(404).json({ message: 'That conversation no longer exists.' });
         }
 
+        // Who they are lives in the directory (models/ExternalUser.js); this
+        // membership only says which conversation they may reach.
+        const person = participant.externalUser;
+
         // F2.2 — first arrival on an approval-gated invite asks rather than admits.
         if (participant.requireApproval && participant.status !== 'active') {
             if (participant.status !== 'pending') {
@@ -179,8 +190,8 @@ router.post('/invite/:token/join', async (req, res) => {
                 await participant.save();
 
                 await notifyOwners(conversation, participant, {
-                    title: `${participant.name} wants to join ${conversation.name}`,
-                    body: `${participant.name} (${participant.email}) opened your invitation and is waiting to be approved.`
+                    title: `${person.name} wants to join ${conversation.name}`,
+                    body: `${person.name} (${person.email}) opened your invitation and is waiting to be approved.`
                 });
             }
             return res.status(202).json({
@@ -202,13 +213,13 @@ router.post('/invite/:token/join', async (req, res) => {
                 type: 'external_joined',
                 actor: null,
                 actorName: '',
-                targetNames: [participant.name]
+                targetNames: [person.name]
             });
             broadcastMessage(conversation._id, sys);
 
             await notifyOwners(conversation, participant, {
-                title: `${participant.name} joined ${conversation.name}`,
-                body: `${participant.name} opened the invitation you sent and can now read and reply in this group.`
+                title: `${person.name} joined ${conversation.name}`,
+                body: `${person.name} opened the invitation you sent and can now read and reply in this group.`
             });
         }
 
@@ -350,11 +361,11 @@ router.post('/messages', externalAuth, chatUpload.array('attachments', 5), async
         const message = await Message.create({
             conversationId: conversation._id,
             sender: null,
-            externalSender: req.external._id,
+            externalSender: req.external.externalUser._id,
             text,
             attachments: media,
             replyTo,
-            readByExternal: [{ participant: req.external._id, at: new Date() }]
+            readByExternal: [{ participant: req.external.externalUser._id, at: new Date() }]
         });
 
         if (pendingVideos.length) {
@@ -370,7 +381,7 @@ router.post('/messages', externalAuth, chatUpload.array('attachments', 5), async
             })));
         }
 
-        await touchConversation(conversation._id, message, req.external.name);
+        await touchConversation(conversation._id, message, req.external.externalUser.name);
 
         // broadcastMessage sends the full internal shape to colleagues and the
         // reduced one to any other external participant, in one call.
@@ -386,7 +397,7 @@ router.post('/messages', externalAuth, chatUpload.array('attachments', 5), async
          * the escalation there needs a first notification to escalate from.
          */
         await notifyOwners(conversation, req.external, {
-            title: `${req.external.name} (external) posted in ${conversation.name}`,
+            title: `${req.external.externalUser.name} (external) posted in ${conversation.name}`,
             body: previewFor(message).text || 'sent an attachment'
         });
 

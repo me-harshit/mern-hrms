@@ -56,11 +56,24 @@ const externalAuth = async (req, res, next) => {
         return res.status(401).json({ message: 'Not a valid portal session' });
     }
 
-    const participant = await ExternalParticipant.findById(decoded.ext.pid);
+    /*
+     * Populated, always. hasAccess() consults the directory record so that
+     * somebody switched off company-wide is shut out of every group at once,
+     * and every portal route reads their name from it rather than from a
+     * copy on the membership.
+     */
+    const participant = await ExternalParticipant.findById(decoded.ext.pid)
+        .populate('externalUser');
     if (!participant) {
         return res.status(401).json({ message: 'This invitation no longer exists' });
     }
 
+    if (!participant.externalUser) {
+        return res.status(401).json({ message: 'This invitation no longer exists' });
+    }
+    if (participant.externalUser.isActive === false) {
+        return res.status(403).json({ message: 'Your access has been withdrawn.' });
+    }
     if (participant.revokedAt || participant.status === 'revoked') {
         return res.status(403).json({ message: 'Your access to this conversation has been withdrawn.' });
     }

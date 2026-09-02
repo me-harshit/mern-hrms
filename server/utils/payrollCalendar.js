@@ -75,6 +75,10 @@ const buildMonthCalendar = async (month, year) => {
 
         nonWorkingRuns.push({
             dates,
+            // Only the Sundays in the run can ever be charged. A holiday is a
+            // day the company gave; it stays paid even when it falls between
+            // two absences.
+            sundayDates: dates.filter(k => dayTypes[k] === 'sunday'),
             prevWorkingDate: dateKey(before),
             nextWorkingDate: dateKey(after)
         });
@@ -102,10 +106,14 @@ const buildMonthCalendar = async (month, year) => {
 };
 
 /**
- * The sandwich rule: a day off surrounded by absence is not a paid day off.
+ * The sandwich rule: a Sunday surrounded by absence is not a paid day off.
  * If someone is away on the Saturday and away again on the Monday, the Sunday
- * between them is deducted too — and the whole stretch goes if a holiday sits
- * next to that Sunday.
+ * between them is deducted too.
+ *
+ * Official holidays are never charged, even when they sit inside the same
+ * stretch — a holiday is the company's day to give, so being absent around it
+ * does not take it away. A holiday still counts for working out which working
+ * days flank the stretch; it just is not billed.
  *
  * `isAwayOn(dateKey)` decides what "away" means for one employee.
  * Returns the dates to deduct, so the payslip can name them.
@@ -114,7 +122,7 @@ const sandwichedDates = (nonWorkingRuns, isAwayOn) => {
     const dates = [];
     nonWorkingRuns.forEach(run => {
         if (isAwayOn(run.prevWorkingDate) && isAwayOn(run.nextWorkingDate)) {
-            dates.push(...run.dates);
+            dates.push(...run.sundayDates);
         }
     });
     return dates;

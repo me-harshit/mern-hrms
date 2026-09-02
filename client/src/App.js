@@ -31,6 +31,7 @@ import EditExpense from './pages/User/EditExpense';
 import AdminChat from './pages/Admin/AdminChat'
 import Chats from './pages/Chats';
 import Portal from './pages/Portal';
+import ExternalUsers from './pages/ExternalUsers';
 import Projects from './pages/Admin/Projects';
 import Inventory from './pages/Admin/Inventory';
 import MyInventory from './pages/User/MyInventory';
@@ -211,6 +212,14 @@ function App() {
             <Route path="/chats" element={<Chats />} />
             <Route path="/chats/join/:token" element={<Chats />} />
             <Route path="/chats/:id" element={<Chats />} />
+            {/* The external users directory. Inside the layout and the guard -
+                this is staff-facing; the vendors themselves never see it. */}
+            <Route
+                path="/external-users"
+                element={['ADMIN', 'HR', 'MANAGER', 'TEAM LEAD'].includes(userRole)
+                    ? <ExternalUsers />
+                    : <Navigate to="/chats" />}
+            />
 
             {/* 👇 Management Routes (Admin, HR, Manager, Accounts) */}
             <Route path="/employees" element={isManagement ? <Employees /> : <Navigate to="/dashboard" />} />

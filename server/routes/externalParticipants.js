@@ -8,6 +8,7 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const ExternalParticipant = require('../models/ExternalParticipant');
+const ExternalUser = require('../models/ExternalUser');
 
 const { emitToUsers, emitToConversation, emitToConversationExternals } = require('../utils/realtime');
 const { broadcastMessage } = require('../utils/portalShape');
@@ -57,10 +58,21 @@ const loadGroup = async (req, res) => {
  */
 const present = (p, req, withLink) => ({
     _id: p._id,
-    externalId: p.externalId,
-    name: p.name,
-    email: p.email,
-    company: p.company,
+
+    /*
+     * Who they are is read through the populated directory record, never
+     * copied onto the membership. Two rows that each held a name is exactly
+     * the drift this split was made to remove, and a `p.name ||` fallback here
+     * would quietly reintroduce it the first time somebody forgot to populate.
+     */
+    externalUser: p.externalUser?._id || p.externalUser,
+    externalId: p.externalUser?.externalId,
+    name: p.externalUser?.name || 'External participant',
+    email: p.externalUser?.email || '',
+    company: p.externalUser?.company || '',
+    type: p.externalUser?.type || null,
+    personActive: p.externalUser?.isActive !== false,
+
     status: p.status,
     requireApproval: p.requireApproval,
     hasCode: Boolean(p.code),
@@ -103,47 +115,92 @@ router.post('/', auth, async (req, res) => {
             });
         }
 
-        const name = String(req.body.name || '').trim();
-        const email = String(req.body.email || '').trim().toLowerCase();
-
-        if (!name || !email) {
-            return res.status(400).json({ message: 'A name and an email address are both needed' });
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-            return res.status(400).json({ message: 'That does not look like an email address' });
-        }
-
         /*
-         * An outsider must not be invited under a colleague's address.
+         * Two ways in, one outcome.
          *
-         * Without this, inviting a staff member's own email mints a portal
-         * token for a real employee's mailbox that bypasses the login and the
-         * role checks entirely — a second, weaker way into the building.
+         * externalUserId  - picked from the directory, which is the normal
+         *                   path now that a person exists independently of any
+         *                   one group.
+         * name + email    - typed here, for somebody nobody has dealt with
+         *                   before. It creates the directory record rather
+         *                   than storing details on this row, so the second
+         *                   group they are added to can pick them instead of
+         *                   retyping them.
          */
-        const staff = await User.findOne({ email }).select('_id name');
-        if (staff) {
-            return res.status(400).json({
-                message: `${staff.name} works here — add them as a member instead of an external participant.`
-            });
+        let person = null;
+
+        if (req.body.externalUserId) {
+            person = await ExternalUser.findById(req.body.externalUserId);
+            if (!person) {
+                return res.status(404).json({ message: 'That external user is no longer in the directory' });
+            }
+            if (!person.isActive) {
+                return res.status(400).json({
+                    message: `${person.name} is switched off in the external users directory. Turn them back on before adding them to a group.`
+                });
+            }
+        } else {
+            const name = String(req.body.name || '').trim();
+            const email = String(req.body.email || '').trim().toLowerCase();
+
+            if (!name || !email) {
+                return res.status(400).json({
+                    message: 'Pick somebody from the directory, or give a name and an email address'
+                });
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+                return res.status(400).json({ message: 'That does not look like an email address' });
+            }
+
+            /*
+             * A colleague must never be turned into an external user.
+             *
+             * Without this, inviting a staff member by their own email mints a
+             * portal token for a real employee mailbox that bypasses the login
+             * and the role checks entirely - a second, weaker way into the
+             * building.
+             */
+            const staff = await User.findOne({ email }).select('_id name');
+            if (staff) {
+                return res.status(400).json({
+                    message: `${staff.name} works here - add them as a member instead of an external participant.`
+                });
+            }
+
+            // Reuse the existing record if that address is already known. The
+            // whole point of the directory is that one person is one row.
+            person = await ExternalUser.findOne({ email });
+            if (person && !person.isActive) {
+                return res.status(400).json({
+                    message: `${person.name} is already in the directory but switched off. Turn them back on before adding them to a group.`
+                });
+            }
+            if (!person) {
+                person = await ExternalUser.create({
+                    name,
+                    email,
+                    company: String(req.body.company || '').trim(),
+                    type: req.body.type || 'VENDOR',
+                    createdBy: req.user.id
+                });
+            }
         }
 
         const existing = await ExternalParticipant.findOne({
             conversationId: conversation._id,
-            email,
+            externalUser: person._id,
             status: { $in: ['invited', 'pending', 'active'] }
         });
         if (existing) {
             return res.status(409).json({
-                message: `${existing.name} has already been invited to this group. Resend their link instead.`
+                message: `${person.name} has already been invited to this group. Resend their link instead.`
             });
         }
 
         const days = Math.min(Math.max(parseInt(req.body.days, 10) || DEFAULT_DAYS, 1), MAX_DAYS);
 
         const participant = await ExternalParticipant.create({
-            name,
-            email,
-            company: String(req.body.company || '').trim(),
+            externalUser: person._id,
             conversationId: conversation._id,
             projectId: conversation.projectId?._id || conversation.projectId || null,
             invitedBy: req.user.id,
@@ -152,6 +209,9 @@ router.post('/', auth, async (req, res) => {
             requireApproval: Boolean(req.body.requireApproval),
             expiresAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000)
         });
+        // Attached rather than re-fetched, so present() and the invitation
+        // email both see the person without another round trip.
+        participant.externalUser = person;
 
         const link = portalLink(req, participant.token);
         const me = await User.findById(req.user.id).select('name');
@@ -165,7 +225,7 @@ router.post('/', auth, async (req, res) => {
             type: 'external_invited',
             actor: req.user.id,
             actorName: me?.name || 'Someone',
-            targetNames: [name]
+            targetNames: [person.name]
         });
         broadcastMessage(conversation._id, sys);
 
@@ -174,7 +234,7 @@ router.post('/', auth, async (req, res) => {
         let emailed = false;
         try {
             emailed = await sendInviteEmail({
-                participant,
+                person,
                 link,
                 code: participant.code,
                 inviterName: me?.name || 'A colleague',
@@ -225,6 +285,7 @@ router.get('/', auth, async (req, res) => {
         const manage = canManage(conversation, req.user);
         const rows = await ExternalParticipant.find({ conversationId: conversation._id })
             .populate('invitedBy', 'name profilePic role')
+            .populate('externalUser')
             .sort({ createdAt: -1 });
 
         res.json(rows.map((p) => present(p, req, manage)));
@@ -256,11 +317,22 @@ router.get('/:pid', auth, async (req, res) => {
         const participant = await ExternalParticipant.findOne({
             _id: req.params.pid,
             conversationId: conversation._id
-        }).populate('invitedBy', 'name profilePic role');
+        }).populate('invitedBy', 'name profilePic role')
+            .populate('externalUser');
         if (!participant) return res.status(404).json({ message: 'Not found' });
 
+        /*
+         * Keyed on the directory record, and narrowed to THIS conversation.
+         *
+         * externalSender points at the person, so without the conversation
+         * filter this would return what they had written in every group they
+         * belong to - handing whoever opened one project a window into
+         * another. The company-wide view of the same person is a separate,
+         * deliberately-asked-for endpoint (routes/externalUsers.js).
+         */
         const messages = await Message.find({
-            externalSender: participant._id,
+            externalSender: participant.externalUser?._id || participant.externalUser,
+            conversationId: conversation._id,
             deletedAt: null
         }).sort({ createdAt: -1 }).limit(200);
 
@@ -298,7 +370,7 @@ router.post('/:pid/resend', auth, async (req, res) => {
         const participant = await ExternalParticipant.findOne({
             _id: req.params.pid,
             conversationId: conversation._id
-        });
+        }).populate('externalUser');
         if (!participant) return res.status(404).json({ message: 'Not found' });
         if (participant.status === 'revoked') {
             return res.status(400).json({ message: 'That access was withdrawn. Invite them again instead.' });
@@ -321,7 +393,7 @@ router.post('/:pid/resend', auth, async (req, res) => {
         let emailed = false;
         try {
             emailed = await sendInviteEmail({
-                participant,
+                person: participant.externalUser,
                 link,
                 code: participant.code,
                 inviterName: me?.name || 'A colleague',
@@ -353,7 +425,7 @@ router.put('/:pid', auth, async (req, res) => {
         const participant = await ExternalParticipant.findOne({
             _id: req.params.pid,
             conversationId: conversation._id
-        });
+        }).populate('externalUser');
         if (!participant) return res.status(404).json({ message: 'Not found' });
 
         const days = Math.min(Math.max(parseInt(req.body.days, 10) || DEFAULT_DAYS, 1), MAX_DAYS);
@@ -384,7 +456,7 @@ const decide = (approved) => async (req, res) => {
         const participant = await ExternalParticipant.findOne({
             _id: req.params.pid,
             conversationId: conversation._id
-        });
+        }).populate('externalUser');
         if (!participant) return res.status(404).json({ message: 'Not found' });
         if (participant.status !== 'pending') {
             return res.status(400).json({ message: 'That request has already been decided' });
@@ -400,7 +472,7 @@ const decide = (approved) => async (req, res) => {
                 type: 'external_joined',
                 actor: req.user.id,
                 actorName: '',
-                targetNames: [participant.name]
+                targetNames: [participant.externalUser?.name || 'An external participant']
             });
             broadcastMessage(conversation._id, sys);
         }
@@ -442,7 +514,7 @@ router.delete('/:pid', auth, async (req, res) => {
         const participant = await ExternalParticipant.findOne({
             _id: req.params.pid,
             conversationId: conversation._id
-        });
+        }).populate('externalUser');
         if (!participant) return res.status(404).json({ message: 'Not found' });
 
         if (participant.status !== 'revoked') {
@@ -456,7 +528,7 @@ router.delete('/:pid', auth, async (req, res) => {
                 type: 'external_revoked',
                 actor: req.user.id,
                 actorName: me?.name || 'Someone',
-                targetNames: [participant.name]
+                targetNames: [participant.externalUser?.name || 'An external participant']
             });
             broadcastMessage(conversation._id, sys);
         }

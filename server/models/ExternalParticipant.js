@@ -2,25 +2,26 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 
 /**
- * Somebody outside the company who has been let into exactly one conversation
- * — feature draft Module 2 (F2.1-F2.7).
+ * One external person's access to ONE conversation — feature draft Module 2.
  *
- * A separate collection rather than a User row with a role of EXTERNAL, and
- * that choice is the whole security model of this module.
+ * This row used to carry the person's name and email as well, which made it
+ * both the identity and the membership. That collapsed the moment somebody was
+ * invited to a second group: their details had to be typed again, giving one
+ * human two records that could disagree, and no way to ask "where does this
+ * vendor have access". Who they are now lives in models/ExternalUser.js, one
+ * row per person, and this is only where they can go.
  *
- * A User carries a token that satisfies middleware/authMiddleware, which every
- * one of the two dozen route files in this server trusts. Making a vendor a
- * User would mean F2.3 ("sees only the group they were invited to") had to be
- * re-established by hand in payroll, attendance, tasks, employees, documents
- * and everywhere else — and the first route that forgot would hand an outsider
- * employee data. Giving them their own identity instead means the default is
- * no access to anything, and the only thing that grants access is the portal
- * middleware, which resolves the conversation from this row rather than from
- * anything the caller sends.
+ * Everything about ACCESS stays here, per conversation, and that is the point:
+ * the link, its expiry, its verification code, the approval state and the
+ * revocation are all facts about one group. Revoking a vendor from Spectra
+ * must leave their access to Coco 2.0 untouched, and a single shared token
+ * could not express that.
  *
- * Membership also lives here, not as a second array on Conversation. One row
- * is the invitation, the identity and the membership at once, so there is no
- * pair of lists that can drift apart.
+ * The security model is unchanged and still rests on two rules:
+ *   - portal routes take the conversation from this row, never from a request
+ *     parameter, so F2.3 is a property of the routing (see routes/portal.js);
+ *   - an outsider's token carries `ext`, never `user`, so it is refused by
+ *     every internal route (see middleware/authMiddleware.js).
  */
 
 const STATUSES = [
@@ -32,22 +33,20 @@ const STATUSES = [
 ];
 
 const externalParticipantSchema = new mongoose.Schema({
-    name: { type: String, required: true, trim: true },
+    /** Who. The directory record; this row holds no copy of their details. */
+    externalUser: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ExternalUser',
+        required: true,
+        index: true
+    },
 
     /**
-     * Where the invite was sent, and the identity the code is checked against.
-     * Lowercased because an invite to Name@Vendor.com and one to
-     * name@vendor.com are the same person, and a duplicate row would give them
-     * two identities in the same thread.
-     */
-    email: { type: String, required: true, trim: true, lowercase: true },
-
-    company: { type: String, default: '', trim: true },
-
-    /**
-     * The one conversation this person can reach. Every portal route derives
-     * the thread from this field and never from a url parameter, which is what
-     * makes F2.3 structural rather than a check somebody has to remember.
+     * Where. The one conversation this membership can reach.
+     *
+     * Every portal route derives the thread from this field and never from a
+     * url parameter, which is what makes scoped access structural rather than
+     * a check somebody has to remember.
      */
     conversationId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -55,30 +54,33 @@ const externalParticipantSchema = new mongoose.Schema({
         required: true
     },
 
-    // Denormalised so a revoked participant still shows which project they were
-    // brought into after the conversation has moved on.
+    // Denormalised so a revoked membership still shows which project it was
+    // for, after the conversation itself has moved on.
     projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', default: null },
 
-    // "We have to know who invited that person."
+    // "We have to know who invited that person" — per group, because the
+    // person who brought them into one project is rarely the one who brought
+    // them into the next.
     invitedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     invitedAt: { type: Date, default: Date.now },
 
     /**
-     * The link. Stored as the token itself rather than a hash, deliberately:
-     * the inviter has to be able to copy it later and send it over WhatsApp or
-     * read it down a phone, which a hash cannot serve. The trade is that
-     * database read access is group read access, so the token is 32 random
-     * bytes, scoped to one conversation, and expires.
+     * The link, for this group only.
+     *
+     * Stored as the token itself rather than a hash, deliberately: the inviter
+     * has to be able to copy it later and send it over WhatsApp or read it
+     * down a phone, which a hash cannot serve. The trade is that database read
+     * access is group read access, so the token is 32 random bytes, scoped to
+     * one conversation, and expires.
      */
     token: { type: String, required: true, unique: true, index: true },
 
     /**
      * The emailed verification code (F2.1).
      *
-     * Optional. Management asked for one-click joining, so this is off unless
-     * the inviter ticks the box; when it is on, the link alone is not enough
-     * and the code binds it to the mailbox it was sent to. Six digits is weak
-     * on its own and strong enough alongside a 32-byte token.
+     * Optional and per invitation. Management asked for one-click joining, so
+     * this is off unless the inviter ticks the box; when it is on, the link
+     * alone is not enough and the code binds it to the mailbox it was sent to.
      */
     code: { type: String, default: null },
     codeAttempts: { type: Number, default: 0 },
@@ -95,7 +97,7 @@ const externalParticipantSchema = new mongoose.Schema({
     joinedAt: { type: Date, default: null },
     lastSeenAt: { type: Date, default: null },
 
-    // Their own read watermark, the external mirror of members[].lastReadAt.
+    // Their read watermark for this conversation.
     lastReadAt: { type: Date, default: null },
 
     revokedAt: { type: Date, default: null },
@@ -104,48 +106,47 @@ const externalParticipantSchema = new mongoose.Schema({
     decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
     // Where the link was opened from. Not identification, just the thread of
-    // evidence if an invite is ever disputed.
+    // evidence if an invitation is ever disputed.
     lastIp: { type: String, default: '' }
 }, { timestamps: true });
 
 /**
- * The visible identity (F2.4 — "each vendor gets an ID").
+ * Access is a live question, not a stored one — an expiry passes on its own,
+ * with no job needing to run.
  *
- * Derived from the _id rather than counted, because a sequential counter needs
- * either a counter document every insert races on, or a scan of the collection.
- * The last five hex characters of an ObjectId are drawn from its random and
- * counter portions, so two rows colliding inside one conversation is not a
- * practical concern, and this needs no extra field, no migration and no lock.
+ * Takes the directory record when it has been populated, so that a person
+ * blocked company-wide is shut out of every group at once rather than one
+ * membership at a time. Callers that have not populated it must check
+ * externalUser.isActive themselves; middleware/externalAuthMiddleware.js
+ * always populates.
  */
-externalParticipantSchema.virtual('externalId').get(function () {
-    return `EXT-${String(this._id).slice(-5).toUpperCase()}`;
-});
-
-externalParticipantSchema.set('toJSON', { virtuals: true });
-externalParticipantSchema.set('toObject', { virtuals: true });
-
-/** Access is a live question, not a stored one — an expiry passes on its own. */
 externalParticipantSchema.methods.hasAccess = function () {
+    const person = this.externalUser;
+    if (person && typeof person === 'object' && person.isActive === false) return false;
+
     if (this.status !== 'active') return false;
     if (this.revokedAt) return false;
     if (this.expiresAt && this.expiresAt < new Date()) return false;
     return true;
 };
 
-/** The panel listing a group's externals, newest invite first. */
+/** The panel listing a group's externals, newest invitation first. */
 externalParticipantSchema.index({ conversationId: 1, createdAt: -1 });
+
+// "Where does this person have access" — the directory's detail view.
+externalParticipantSchema.index({ externalUser: 1, createdAt: -1 });
 
 // "Who has this person let in", for the accountability view.
 externalParticipantSchema.index({ invitedBy: 1, createdAt: -1 });
 
 /**
- * One live invitation per address per conversation.
+ * One live membership per person per conversation.
  *
- * Partial so that revoked and declined rows — which are kept as the record of
- * what happened — do not block the same vendor being invited back later.
+ * Partial so that revoked and declined rows — kept as the record of what
+ * happened — do not block the same person being invited back later.
  */
 externalParticipantSchema.index(
-    { conversationId: 1, email: 1 },
+    { conversationId: 1, externalUser: 1 },
     {
         unique: true,
         partialFilterExpression: { status: { $in: ['invited', 'pending', 'active'] } }

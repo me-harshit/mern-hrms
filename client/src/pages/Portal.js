@@ -3,13 +3,15 @@ import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faLock, faTriangleExclamation, faHourglassHalf, faArrowRight, faCircleCheck
+    faLock, faTriangleExclamation, faHourglassHalf, faArrowRight,
+    faCircleCheck, faCommentDots, faXmark, faCircleInfo, faDiagramProject
 } from '@fortawesome/free-solid-svg-icons';
 
 import portalApi, {
     useSession, getPortalToken, setPortalToken, clearPortalToken
 } from '../utils/portalApi';
 import { SERVER_URL } from '../utils/api';
+import Avatar from '../components/Avatar';
 import MessageBubble from '../components/chat/MessageBubble';
 import MessageComposer from '../components/chat/MessageComposer';
 import GroupIcon from '../components/chat/GroupIcon';
@@ -92,6 +94,17 @@ const Portal = () => {
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [replyTo, setReplyTo] = useState(null);
+
+    /*
+     * The "you are an external participant" strip.
+     *
+     * Shown by default and dismissible for the visit rather than remembered:
+     * it is the one thing on this page a first-time reader needs, and most
+     * vendors open the link a handful of times over a project. Persisting the
+     * dismissal would save a click and cost the explanation to the person who
+     * comes back a month later having forgotten what this page is.
+     */
+    const [showStrip, setShowStrip] = useState(true);
 
     const threadRef = useRef(null);
     const socketRef = useRef(null);
@@ -339,7 +352,10 @@ const Portal = () => {
     if (phase === 'loading') {
         return (
             <div className="portal-shell">
-                <div className="portal-card notice"><p>Opening your conversation…</p></div>
+                <div className="portal-card notice">
+                    <div className="portal-spinner" />
+                    <p>Opening your conversation…</p>
+                </div>
             </div>
         );
     }
@@ -373,12 +389,16 @@ const Portal = () => {
             <div className="portal-shell">
                 <div className="portal-card">
                     <div className="portal-brand">GTS</div>
+                    <p className="portal-eyebrow">You have been invited</p>
                     <h2>
                         {invite.invitedByName} invited you to
                         <span className="portal-group">{invite.groupName}</span>
                     </h2>
                     {invite.projectName && (
-                        <p className="portal-muted">Project: {invite.projectName}</p>
+                        <span className="portal-chip">
+                            <FontAwesomeIcon icon={faDiagramProject} />
+                            {invite.projectName}
+                        </span>
                     )}
 
                     <p className="portal-intro">
@@ -435,80 +455,138 @@ const Portal = () => {
     /* ---------------------------- the chat ---------------------------- */
     let lastDay = null;
 
+    const team = conversation.members || [];
+    const faces = team.slice(0, 4);
+    const moreFaces = team.length - faces.length;
+
     return (
         <div className="portal-chat">
-            <header className="portal-head">
-                <GroupIcon
-                    conversation={{ name: conversation.name, avatar: conversation.avatar }}
-                    className="msgr-avatar"
-                />
-                <div className="portal-head-body">
-                    <h1>{conversation.name}</h1>
-                    <span>
-                        {conversation.projectName ? `${conversation.projectName} · ` : ''}
-                        {conversation.members.length} people from the team
-                    </span>
-                </div>
-                <div className="portal-you">
-                    <span className="ext-badge">External</span>
-                    <span className="portal-you-name">{conversation.me.name}</span>
-                </div>
-            </header>
+            <div className="portal-frame">
+                <header className="portal-head">
+                    <GroupIcon
+                        conversation={{ name: conversation.name, avatar: conversation.avatar }}
+                        className="msgr-avatar"
+                    />
+                    <div className="portal-head-body">
+                        <h1>{conversation.name}</h1>
+                        <div className="portal-head-sub">
+                            {conversation.projectName && (
+                                <>
+                                    <span>{conversation.projectName}</span>
+                                    <i className="portal-dot" />
+                                </>
+                            )}
+                            <span>
+                                {team.length} {team.length === 1 ? 'person' : 'people'} from the team
+                            </span>
+                        </div>
+                    </div>
 
-            <div className="msgr-thread portal-thread" ref={threadRef}>
-                {loadingThread && <div className="msgr-empty">Loading…</div>}
+                    {/* Who is on the other side. A vendor writing into what looks
+                        like an empty inbox has no idea whether anyone is there. */}
+                    {faces.length > 0 && (
+                        <div className="portal-faces">
+                            {faces.map((u) => (
+                                <Avatar
+                                    key={u._id}
+                                    name={u.name}
+                                    profilePic={u.profilePic}
+                                    className="msgr-avatar"
+                                />
+                            ))}
+                            {moreFaces > 0 && (
+                                <div className="portal-faces-more">+{moreFaces}</div>
+                            )}
+                        </div>
+                    )}
 
-                {!loadingThread && hasMore && (
-                    <button className="msgr-load-more" onClick={loadOlder} disabled={loadingMore}>
-                        {loadingMore ? 'Loading…' : 'Load earlier messages'}
-                    </button>
-                )}
+                    <div className="portal-you">
+                        <span className="ext-badge">External</span>
+                        <span className="portal-you-name">{conversation.me.name}</span>
+                    </div>
+                </header>
 
-                {!loadingThread && !messages.length && (
-                    <div className="msgr-empty">
-                        Nothing here yet. Say hello — the team will see it straight away.
+                {showStrip && (
+                    <div className="portal-strip">
+                        <FontAwesomeIcon icon={faCircleInfo} />
+                        <p>
+                            You are in this conversation as an external participant. You can see
+                            messages from the point you were invited, and everyone here can see
+                            that you are from outside the company.
+                        </p>
+                        <button onClick={() => setShowStrip(false)} title="Dismiss">
+                            <FontAwesomeIcon icon={faXmark} />
+                        </button>
                     </div>
                 )}
 
-                {messages.map((m) => {
-                    const day = daySeparator(m.createdAt);
-                    const showDay = day !== lastDay;
-                    lastDay = day;
+                <div className="msgr-thread portal-thread" ref={threadRef}>
+                    {loadingThread && (
+                        <div className="portal-empty">
+                            <div className="portal-spinner" />
+                            <p>Loading the conversation…</p>
+                        </div>
+                    )}
 
-                    const mine = Boolean(m.author?.external
-                        && String(m.author.externalId) === String(meId));
+                    {!loadingThread && hasMore && (
+                        <button className="msgr-load-more" onClick={loadOlder} disabled={loadingMore}>
+                            {loadingMore ? 'Loading…' : 'Load earlier messages'}
+                        </button>
+                    )}
 
-                    return (
-                        <React.Fragment key={m._id}>
-                            {showDay && <div className="msgr-daysep">{day}</div>}
-                            <MessageBubble
-                                id={`m-${m._id}`}
-                                message={toBubble(m)}
-                                mine={mine}
-                                showAuthor
-                                firstOfRun
-                                memberCount={0}
-                                onReply={setReplyTo}
-                            />
-                        </React.Fragment>
-                    );
-                })}
-            </div>
+                    {!loadingThread && !messages.length && (
+                        <div className="portal-empty">
+                            <div className="portal-empty-icon">
+                                <FontAwesomeIcon icon={faCommentDots} />
+                            </div>
+                            <h3>No messages yet</h3>
+                            <p>
+                                Say hello, ask a question, or attach a file — the team at GTS
+                                will see it straight away.
+                            </p>
+                        </div>
+                    )}
 
-            <div className="portal-composer">
-                <MessageComposer
-                    conversation={conversation}
-                    /* No mentions: @-tagging a colleague would need the employee
-                       directory, which an outsider does not get to have. */
-                    members={[]}
-                    replyTo={replyTo ? toBubble(replyTo) : null}
-                    onCancelReply={() => setReplyTo(null)}
-                    onSend={send}
-                />
-                <p className="portal-composer-note">
-                    <FontAwesomeIcon icon={faCircleCheck} />
-                    Messages and files you send here go to the project team at GTS.
-                </p>
+                    {messages.map((m) => {
+                        const day = daySeparator(m.createdAt);
+                        const showDay = day !== lastDay;
+                        lastDay = day;
+
+                        const mine = Boolean(m.author?.external
+                            && String(m.author.externalId) === String(meId));
+
+                        return (
+                            <React.Fragment key={m._id}>
+                                {showDay && <div className="msgr-daysep">{day}</div>}
+                                <MessageBubble
+                                    id={`m-${m._id}`}
+                                    message={toBubble(m)}
+                                    mine={mine}
+                                    showAuthor
+                                    firstOfRun
+                                    memberCount={0}
+                                    onReply={setReplyTo}
+                                />
+                            </React.Fragment>
+                        );
+                    })}
+                </div>
+
+                <div className="portal-composer">
+                    <MessageComposer
+                        conversation={conversation}
+                        /* No mentions: @-tagging a colleague would need the employee
+                           directory, which an outsider does not get to have. */
+                        members={[]}
+                        replyTo={replyTo ? toBubble(replyTo) : null}
+                        onCancelReply={() => setReplyTo(null)}
+                        onSend={send}
+                    />
+                    <p className="portal-composer-note">
+                        <FontAwesomeIcon icon={faCircleCheck} />
+                        Messages and files you send here go to the project team at GTS.
+                    </p>
+                </div>
             </div>
         </div>
     );

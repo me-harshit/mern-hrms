@@ -32,10 +32,16 @@ const messageSchema = new mongoose.Schema({
      * that is either populated or not answers that at a glance, and it makes
      * the External badge (F2.4) impossible to forget to render - there is no
      * value of `sender` that could stand in for an outsider by accident.
+     *
+     * Points at the PERSON (ExternalUser), not at their membership of this
+     * group (ExternalParticipant). Authorship is a fact about who wrote the
+     * words; a membership can be revoked, and re-inviting the same vendor
+     * later creates a new one. Referencing the membership would make their old
+     * messages appear to come from somebody else the second time they joined.
      */
     externalSender: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'ExternalParticipant',
+        ref: 'ExternalUser',
         default: null
     },
 
@@ -107,7 +113,7 @@ const messageSchema = new mongoose.Schema({
      * filter outsiders back out on every render.
      */
     readByExternal: [{
-        participant: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalParticipant' },
+        participant: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalUser' },
         at: { type: Date, default: Date.now },
         _id: false
     }],

@@ -38,12 +38,16 @@ const portalLink = (req, token) => `${baseUrl(req)}/portal/${token}`;
 /**
  * The invite email (F2.1).
  *
+ * Takes the ExternalUser rather than the membership: the name and address are
+ * facts about the person, and reading them off the membership was what let one
+ * human end up with two spellings of their own name in two groups.
+ *
  * Sends its own plain-text part. sendEmail's default strips tags, which on a
  * mail whose entire purpose is one link would produce a text alternative with
  * no url in it at all - and filters score that mismatch against the sender.
  */
 const sendInviteEmail = async ({
-    participant, link, code, inviterName, groupName, projectName, expiresAt, note
+    person, link, code, inviterName, groupName, projectName, expiresAt, note
 }) => {
     const expiry = new Date(expiresAt).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'long', year: 'numeric'
@@ -67,7 +71,7 @@ const sendInviteEmail = async ({
     const message = `
         <div style="font-family:'Segoe UI',sans-serif;max-width:520px;margin:auto;padding:30px;border:1px solid #e2e8f0;border-radius:12px;">
             <h2 style="color:#215D7B;margin-top:0;">You have been invited to a conversation</h2>
-            <p style="color:#334155;font-size:15px;">Hi ${participant.name},</p>
+            <p style="color:#334155;font-size:15px;">Hi ${person.name},</p>
             <p style="color:#334155;font-size:15px;">
                 <strong>${inviterName}</strong> has invited you to join
                 <strong>${where}</strong> to discuss work directly with the team.
@@ -94,7 +98,7 @@ const sendInviteEmail = async ({
     `;
 
     const text = [
-        `Hi ${participant.name},`,
+        `Hi ${person.name},`,
         '',
         `${inviterName} has invited you to join "${where}" to discuss work directly with the team.`,
         note ? `\n${note}\n` : '',
@@ -106,7 +110,7 @@ const sendInviteEmail = async ({
     ].filter(Boolean).join('\n');
 
     return sendEmail({
-        email: participant.email,
+        email: person.email,
         subject: `${inviterName} invited you to ${groupName}`,
         message,
         text

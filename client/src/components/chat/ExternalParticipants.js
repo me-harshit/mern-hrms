@@ -126,7 +126,7 @@ const ExternalParticipants = ({ conversation, canManage }) => {
                     style={{ marginBottom: 10 }}
                     onClick={() => setInviting(true)}
                 >
-                    <FontAwesomeIcon icon={faUserPlus} /> Invite someone from outside
+                    <FontAwesomeIcon icon={faUserPlus} /> Add someone from outside
                 </button>
             )}
 
@@ -157,6 +157,7 @@ const ExternalParticipants = ({ conversation, canManage }) => {
                             {p.company && <span>{p.company}</span>}
                             <span>{p.email}</span>
                             <span>{p.externalId}</span>
+                            {p.type && <span>{p.type.toLowerCase()}</span>}
                         </div>
 
                         <div className="ext-row-meta">
@@ -209,6 +210,9 @@ const ExternalParticipants = ({ conversation, canManage }) => {
             {inviting && (
                 <InviteExternalModal
                     conversation={conversation}
+                    /* So the picker can grey out somebody already in this
+                       group rather than letting the invitation fail on submit. */
+                    existingIds={live.map((p) => p.externalUser).filter(Boolean)}
                     onClose={() => { setInviting(false); load(); }}
                     onInvited={load}
                 />

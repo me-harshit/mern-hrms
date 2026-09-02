@@ -78,9 +78,9 @@ const portalConversation = (conversation, participant) => ({
     members: visibleMembers(conversation, null).map((m) => colleague(m.user)).filter(Boolean),
     me: {
         _id: participant._id,
-        name: participant.name,
-        externalId: participant.externalId,
-        company: participant.company || '',
+        name: participant.externalUser?.name || 'You',
+        externalId: participant.externalUser?.externalId || '',
+        company: participant.externalUser?.company || '',
         expiresAt: participant.expiresAt
     }
 });
