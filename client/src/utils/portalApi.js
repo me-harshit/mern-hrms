@@ -68,7 +68,11 @@ const portalApi = axios.create({
  * session out of the shared store.
  */
 let active = null;
-export const useSession = (sessionToken) => { active = sessionToken; };
+
+// Not a React hook, despite what a `use` prefix would have implied: naming it
+// useSession made eslint's rules-of-hooks reject every call from inside a
+// callback and fail the production build.
+export const setActiveSession = (sessionToken) => { active = sessionToken; };
 
 portalApi.interceptors.request.use((config) => {
     if (active) config.headers['x-portal-token'] = active;
