@@ -18,7 +18,14 @@ const sendEmail = async (options) => {
         });
 
         const mailOptions = {
-            from: `"GTS HRMS" <${process.env.SMTP_USER}>`, // Ensure this matches exactly
+            /*
+             * SMTP_FROM carries display name and address together, e.g.
+             * `GTS Portal <portal@gts.ai>`. It must resolve to the same mailbox as
+             * SMTP_USER: most relays reject a From whose address is not the
+             * authenticated account, and the ones that don't get the mail filed as
+             * spam. The fallback keeps mail flowing if the var is ever unset.
+             */
+            from: process.env.SMTP_FROM || `"GTS Portal" <${process.env.SMTP_USER}>`,
             replyTo: process.env.HR_EMAIL || process.env.SMTP_USER, // Adds a trusted reply-to
             to: options.email,
             cc: options.cc || '',
