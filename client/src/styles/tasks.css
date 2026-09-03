@@ -1318,10 +1318,53 @@
     margin-bottom: 20px;
 }
 
+/*
+ * The date presets, sitting inside the toolbar rather than in their own card
+ * above it. Compact enough that Today/Yesterday/Week/Month/All/Custom, the
+ * two selects and the search box share one line on a normal screen.
+ */
+.filter-bar-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    /* Never the element that gives way: the selects and the search box have
+       their own flexible widths, and squeezing the presets just makes them
+       wrap one at a time. */
+    flex: 0 0 auto;
+}
+
+.filter-bar-inline .filter-buttons {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.filter-bar-inline .filter-btn {
+    padding: 7px 11px;
+    font-size: 12px;
+}
+
+/* Only shown while Custom is selected, and the two date inputs are what
+   legitimately pushes the toolbar onto a second line. */
+.filter-bar-inline .custom-date-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-bar-inline .date-picker-small {
+    margin: 0;
+}
+
 .tk-search {
     position: relative;
-    flex: 1 1 260px;
-    min-width: 200px;
+    /* Takes the slack once the presets and selects have what they need, and
+       is the first thing to drop to its own line on a narrow screen. */
+    flex: 1 1 220px;
+    min-width: 180px;
 }
 
 .tk-search svg {
@@ -1479,6 +1522,35 @@
     text-align: center;
     font-size: 0.76rem;
     color: #9ca3af;
+}
+
+/* Paging control at the foot of the Completed column. Deliberately quiet:
+   it is the bottom of a history list, not an action anyone came here to
+   take. */
+.tk-load-more {
+    width: 100%;
+    margin-top: 8px;
+    padding: 9px 10px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 9px;
+    background: #fff;
+    color: #64748b;
+    font-family: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.tk-load-more:hover:not(:disabled) {
+    border-color: #215D7B;
+    color: #215D7B;
+    background: #f0f9ff;
+}
+
+.tk-load-more:disabled {
+    opacity: 0.65;
+    cursor: default;
 }
 
 /* --- Card --- */

@@ -1,4 +1,5 @@
 const cron = require('node-cron');
+const { scheduleIfEnabled } = require('./enabled');
 const whatsapp = require('../services/whatsapp.service');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
@@ -173,8 +174,13 @@ const tick = async () => {
 if (process.env.WHATSAPP_HEALTH_DISABLED === 'true') {
     console.log('⏸️  WhatsApp health watchdog disabled by env');
 } else {
-    cron.schedule(SCHEDULE, tick);
-    console.log(`✅ WhatsApp health watchdog scheduled (${SCHEDULE})`);
+    // CRON=false also silences this one. Locally OPENWA_BASE_URL points at a
+    // 127.0.0.1 port that only exists on the VPS, so every tick failed the
+    // fetch and spammed the boot log with retries.
+    scheduleIfEnabled('WhatsApp health watchdog', () => {
+        cron.schedule(SCHEDULE, tick);
+        console.log(`✅ WhatsApp health watchdog scheduled (${SCHEDULE})`);
+    });
 }
 
 module.exports = { tick };

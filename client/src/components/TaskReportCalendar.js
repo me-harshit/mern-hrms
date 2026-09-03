@@ -30,7 +30,7 @@ const bucketOf = (task, now) => {
     return slug(task.status);
 };
 
-const TaskReportCalendar = () => {
+const TaskReportCalendar = ({ projectId = 'All' }) => {
     const today = useMemo(() => new Date(), []);
     const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
     const [data, setData] = useState({ tasks: [], todayIdle: { date: '', count: 0, employees: [] } });
@@ -40,7 +40,13 @@ const TaskReportCalendar = () => {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await api.get('/tasks/calendar', { params: { month: monthStr(cursor) } });
+            const res = await api.get('/tasks/calendar', {
+                params: {
+                    month: monthStr(cursor),
+                    // F1.9 — "what is due on Spectra this month".
+                    projectId: projectId !== 'All' ? projectId : undefined
+                }
+            });
             setData(res.data);
         } catch (err) {
             console.error('Failed to load the task calendar', err);
@@ -48,7 +54,7 @@ const TaskReportCalendar = () => {
         } finally {
             setLoading(false);
         }
-    }, [cursor]);
+    }, [cursor, projectId]);
 
     useEffect(() => { load(); }, [load]);
     useEffect(() => { setSelectedDay(null); }, [cursor]);

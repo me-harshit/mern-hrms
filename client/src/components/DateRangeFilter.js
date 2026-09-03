@@ -14,8 +14,15 @@ import { faFilter } from '@fortawesome/free-solid-svg-icons';
  */
 const PRESETS = ['Today', 'Yesterday', 'Week', 'Month', 'All', 'Custom'];
 
-const DateRangeFilter = ({ value, onChange, custom, onCustomChange, presets = PRESETS }) => (
-    <div className="filter-bar-card fade-in">
+/**
+ * `inline` drops the card chrome -- the white background, padding and bottom
+ * margin -- so the control can sit inside another toolbar as a plain group of
+ * buttons. Off by default, because every other screen using this wants the
+ * card and none of them should shift because the task board asked for a
+ * tighter layout.
+ */
+const DateRangeFilter = ({ value, onChange, custom, onCustomChange, presets = PRESETS, inline = false }) => (
+    <div className={inline ? 'filter-bar-inline' : 'filter-bar-card fade-in'}>
         <div className="filter-buttons">
             {presets.map(type => (
                 <button

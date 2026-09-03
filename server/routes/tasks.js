@@ -1,9 +1,11 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const taskUpload = require('../middleware/taskUploadMiddleware');
 const { processTaskFiles, discardStagedFiles, s3Folder, isVideo } = require('../utils/taskMedia');
 const { syncProjectGroupMembers } = require('../utils/conversationAccess');
+const { recordActivity } = require('../utils/projectAccess');
 const { buildTaskDateFilter } = require('../utils/taskDateFilter');
 const { getAbsentToday } = require('../utils/attendanceToday');
 
@@ -48,6 +50,21 @@ const { parseTimeWindow, istWallClockToUTC } = require('../utils/taskOverdue');
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'On Hold', 'Completed'];
 const TASK_TYPES = ['Project Task', 'Regular Office Task'];
+
+/**
+ * The Task Report's project lens — feature draft F1.9.
+ *
+ * Returned as a fragment to spread into a filter rather than pushed onto a
+ * condition list, because the two report endpoints below need it inside an
+ * aggregation $match as well as inside a find, and only find() casts a string
+ * id to an ObjectId on its own — an uncast string in a $match silently matches
+ * nothing, which reads as "this project has no work" rather than as an error.
+ */
+const projectMatch = (query) => (
+    query.projectId && query.projectId !== 'All' && mongoose.isValidObjectId(query.projectId)
+        ? { projectId: new mongoose.Types.ObjectId(query.projectId) }
+        : {}
+);
 
 // Office work has no project, so its media lands in a shared folder.
 const folderForTask = (taskType, projectName) =>
@@ -220,6 +237,22 @@ router.post('/', auth, taskUpload.array('attachments', 10), async (req, res) => 
             `/task/${task._id}`
         )));
 
+        // The project feed (F1.8). Not awaited and never checked: recordActivity
+        // swallows its own errors, and a missing feed row must not fail an
+        // assignment that has already been written and notified.
+        if (!isOfficeTask && projectId) {
+            recordActivity(projectId, {
+                type: 'task_created',
+                actor: req.user.id,
+                actorName: assigner?.name || '',
+                text: `${assigner?.name || 'Someone'} created "${title}"`,
+                refModel: 'Task',
+                refId: task._id,
+                link: `/task/${task._id}`,
+                meta: { priority, dueDate, assigneeCount: assigneeIds.length }
+            });
+        }
+
         const populated = await Task.findById(task._id)
             .populate('projectId', 'name')
             .populate('assignedBy', 'name profilePic')
@@ -247,7 +280,26 @@ router.get('/my', auth, async (req, res) => {
             { assignees: req.user.id }
         ];
 
-        if (req.query.status && req.query.status !== 'All') {
+        /*
+         * `excludeCompleted` lets the board load outstanding work and finished
+         * history as two separate requests. The two grow at completely
+         * different rates -- open work stays small because people finish
+         * things, history only ever grows -- and sharing one page limit meant
+         * the history eventually crowded live work out of the response
+         * altogether, since results are ordered by dueDate and the oldest rows
+         * win.
+         *
+         * It is a separate flag rather than a `status=Open` value on purpose.
+         * An older server handed a status it does not know matches it
+         * literally and returns nothing, so a client deployed even minutes
+         * ahead of the API would show every user an empty board. An unknown
+         * *parameter* is ignored instead: the response comes back with
+         * completed work still in it, which the board simply does not render
+         * in its open columns. Wrong-but-harmless beats blank.
+         */
+        if (req.query.excludeCompleted === 'true' || req.query.status === 'Open') {
+            andConditions.push({ status: { $ne: 'Completed' } });
+        } else if (req.query.status && req.query.status !== 'All') {
             andConditions.push({ status: req.query.status });
         }
         if (req.query.priority && req.query.priority !== 'All') {
@@ -259,9 +311,24 @@ router.get('/my', auth, async (req, res) => {
         if (req.query.taskType && req.query.taskType !== 'All') {
             andConditions.push({ taskType: req.query.taskType });
         }
-        // Today/Yesterday/Week/Month/All/Custom, on the day the task belongs to.
+        /*
+         * Today/Yesterday/Week/Month/All/Custom, on the day the task belongs to
+         * — but applied only to work that is finished.
+         *
+         * Every preset's window ends at today (see windowFor), which on a
+         * personal board meant a task due tomorrow was invisible under every
+         * option except "All". Somebody could create a task, be told it was
+         * created, and never see it again: the board defaults to Today, and
+         * most tasks are due later than the day they are raised.
+         *
+         * A board's job is the work you still owe, so open work is never
+         * filtered out by a date window. The window trims the completed pile,
+         * which is the noise it was added to control in the first place.
+         */
         const dateFilter = buildTaskDateFilter(req.query.filterType, req.query.fromDate, req.query.toDate);
-        if (dateFilter) andConditions.push(dateFilter);
+        if (dateFilter) {
+            andConditions.push({ $or: [{ status: { $ne: 'Completed' } }, dateFilter] });
+        }
         // Matches the title, the people on it, whoever assigned it, the project
         // and the task type — everything the row actually displays.
         const searchFilter = await buildTaskSearchFilter(req.query.search);
@@ -275,7 +342,10 @@ router.get('/my', auth, async (req, res) => {
             .populate('assignedBy', 'name profilePic')
             .populate('assignees', 'name email employeeId profilePic')
             .populate('approvedBy', 'name profilePic')
-            .sort({ dueDate: 1 })
+            // Finished work reads newest-first: the thing you just completed
+            // is the one you are most likely looking for, and page 1 of the
+            // history should not be whatever you did on your first day.
+            .sort(req.query.status === 'Completed' ? { completedAt: -1, dueDate: -1 } : { dueDate: 1 })
             .skip(skip)
             .limit(limit);
 
@@ -863,7 +933,12 @@ router.get('/by-employee', auth, async (req, res) => {
                     // The awaitingApproval counter below keeps the backlog
                     // visible instead of hiding it, which is what excluding
                     // these was really achieving.
-                    approvalStatus: { $ne: 'Rejected' }
+                    approvalStatus: { $ne: 'Rejected' },
+                    // F1.9 — "show me everything on Spectra" rather than only
+                    // "show me my team". Applied to the counts as well as the
+                    // cards below, or the header would describe a workload the
+                    // list no longer shows.
+                    ...projectMatch(req.query)
                 }
             },
             { $unwind: '$assignees' },
@@ -1075,7 +1150,8 @@ router.get('/by-employee', auth, async (req, res) => {
             assignees: { $in: pageIds },
             // Matches the aggregate above, or a card would disagree with the
             // counts on its own header.
-            approvalStatus: { $ne: 'Rejected' }
+            approvalStatus: { $ne: 'Rejected' },
+            ...projectMatch(req.query)
         })
             .select('title status priority startDate dueDate startTime dueTime expectedStartAt overdueAt completedAt createdAt taskType projectId assignedBy assignees attachments approvalStatus isSelfAssigned')
             .populate('projectId', 'name')
@@ -1193,6 +1269,7 @@ router.get('/calendar', auth, async (req, res) => {
             isArchived: false,
             assignees: { $in: empIds },
             ...notRejected,
+            ...projectMatch(req.query),
             dueDate: { $gte: monthStart, $lt: nextMonthStart }
         })
             .select('title status priority dueDate overdueAt taskType isSelfAssigned recurringTaskId assignees')
@@ -1208,6 +1285,7 @@ router.get('/calendar', auth, async (req, res) => {
             isArchived: false,
             assignees: { $in: empIds },
             ...notRejected,
+            ...projectMatch(req.query),
             dueDate: { $gte: todayStart, $lt: tomorrowStart }
         }).select('assignees').lean();
         const busyTodayIds = new Set(dueTodayTasks.flatMap(t => t.assignees.map(String)));
@@ -1845,6 +1923,20 @@ router.put('/:id/status', auth, taskUpload.array('completionProof', 10), async (
                 `${actor?.name || 'Someone'} moved "${task.title}" from ${previousStatus} to ${status}.`,
                 `/task/${task._id}`
             )));
+
+            // Completion gets its own event type — it is the one transition the
+            // feed should be able to show on its own, and F1.10's "% complete"
+            // is the number people will be looking to explain.
+            recordActivity(task.projectId, {
+                type: status === 'Completed' ? 'task_completed' : 'task_status',
+                actor: req.user.id,
+                actorName: actor?.name || '',
+                text: `${actor?.name || 'Someone'} moved "${task.title}" from ${previousStatus} to ${status}`,
+                refModel: 'Task',
+                refId: task._id,
+                link: `/task/${task._id}`,
+                meta: { from: previousStatus, to: status, note: statusNote || '' }
+            });
         }
 
         const populated = await Task.findById(task._id)

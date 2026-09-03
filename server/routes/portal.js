@@ -14,6 +14,7 @@ const { processTaskFiles, discardStagedFiles, s3Folder } = require('../utils/tas
 const { previewFor, touchConversation, postSystemMessage } = require('../utils/conversationAccess');
 const { portalMessage, portalConversation, broadcastMessage } = require('../utils/portalShape');
 const { notifyOwners } = require('./externalParticipants');
+const { recordActivity } = require('../utils/projectAccess');
 
 /**
  * The vendor's view — feature draft Module 2, the outside half.
@@ -221,6 +222,23 @@ router.post('/invite/:token/join', async (req, res) => {
                 title: `${person.name} joined ${conversation.name}`,
                 body: `${person.name} opened the invitation you sent and can now read and reply in this group.`
             });
+
+            // externalActor, not actor — the split on ProjectActivity is what
+            // makes the External badge (F2.4) impossible to omit in the feed.
+            recordActivity(participant.projectId, {
+                type: 'vendor_joined',
+                externalActor: person._id,
+                actorName: person.name,
+                text: `${person.name} (external) joined ${conversation.name}`,
+                refModel: 'ExternalParticipant',
+                refId: participant._id,
+                link: `/chats/${conversation._id}`,
+                meta: {
+                    conversationId: String(conversation._id),
+                    groupName: conversation.name || '',
+                    company: person.company || ''
+                }
+            });
         }
 
         res.json({
@@ -399,6 +417,31 @@ router.post('/messages', externalAuth, chatUpload.array('attachments', 5), async
         await notifyOwners(conversation, req.external, {
             title: `${req.external.externalUser.name} (external) posted in ${conversation.name}`,
             body: previewFor(message).text || 'sent an attachment'
+        });
+
+        /*
+         * A vendor reply is its own feed type, kept apart from `message`.
+         *
+         * The whole reason the draft asks for a vendor tab and a feed is that
+         * an outsider's question going unanswered is the failure mode; if
+         * their replies collapsed into the same rows as internal chat, the
+         * feed would hide exactly the event it exists to surface. Collapsed
+         * over a shorter window than internal chat for the same reason.
+         */
+        recordActivity(req.external.projectId || conversation.projectId, {
+            type: 'vendor_message',
+            externalActor: req.external.externalUser._id,
+            actorName: req.external.externalUser.name,
+            text: `${req.external.externalUser.name} (external) replied in ${conversation.name}`,
+            refModel: 'Conversation',
+            refId: conversation._id,
+            link: `/chats/${conversation._id}`,
+            collapseMs: 5 * 60 * 1000,
+            meta: {
+                conversationId: String(conversation._id),
+                groupName: conversation.name || '',
+                company: req.external.externalUser.company || ''
+            }
         });
 
         res.status(201).json(portalMessage(populated));

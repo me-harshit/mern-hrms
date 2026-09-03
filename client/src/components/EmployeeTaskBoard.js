@@ -64,7 +64,7 @@ const loadClassOf = (row) => {
  * happen client-side against that one payload, so they're instant rather
  * than a round-trip per keystroke.
  */
-const EmployeeTaskBoard = () => {
+const EmployeeTaskBoard = ({ projectId = 'All' }) => {
     const navigate = useNavigate();
 
     const [rows, setRows] = useState([]);
@@ -77,9 +77,17 @@ const EmployeeTaskBoard = () => {
     const [workload, setWorkload] = useState(DEFAULT_WORKLOAD);
     const [overdueOnly, setOverdueOnly] = useState(false);
 
+    /*
+     * The project lens (F1.9) is the one filter that has to go back to the
+     * server. Search, department and workload all narrow the payload that is
+     * already here; a project narrows which *tasks* count towards each
+     * person's numbers, and those numbers are computed server-side.
+     */
     useEffect(() => {
         setLoading(true);
-        api.get('/tasks/by-employee', { params: { limit: 500 } })
+        api.get('/tasks/by-employee', {
+            params: { limit: 500, projectId: projectId !== 'All' ? projectId : undefined }
+        })
             .then(res => {
                 setRows(res.data.data || []);
                 setSummary(res.data.summary || null);
@@ -89,7 +97,7 @@ const EmployeeTaskBoard = () => {
                 Swal.fire('Error', 'Could not load the employee view.', 'error');
             })
             .finally(() => setLoading(false));
-    }, []);
+    }, [projectId]);
 
     const toggleRow = (id) => {
         setExpanded(prev => {

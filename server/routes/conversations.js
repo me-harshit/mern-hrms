@@ -1,5 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 const router = express.Router();
 
@@ -16,7 +18,9 @@ const User = require('../models/User');
 const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 const VideoCompressionQueue = require('../models/VideoCompressionQueue');
+const ExternalParticipant = require('../models/ExternalParticipant');
 
+const { recordActivity } = require('../utils/projectAccess');
 const { processTaskFiles, discardStagedFiles, s3Folder } = require('../utils/taskMedia');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Service');
 const { emitToConversation, emitToConversationExternals, emitToUsers } = require('../utils/realtime');
@@ -568,6 +572,19 @@ router.post('/group', auth, async (req, res) => {
         // Everyone added sees it appear without refreshing.
         emitToUsers(memberIds(populated), 'conversation:new', publicShape(populated));
 
+        // A new group under a project is a project event (F1.8). Standalone
+        // groups have no projectId and record nothing.
+        recordActivity(projectId, {
+            type: 'group_created',
+            actor: req.user.id,
+            actorName: me?.name || '',
+            text: `${me?.name || 'Someone'} created the group "${name}"`,
+            refModel: 'Conversation',
+            refId: conversation._id,
+            link: `/chats/${conversation._id}`,
+            meta: { conversationId: String(conversation._id), memberCount: members.length }
+        });
+
         res.status(201).json(decorate(populated, req.user.id));
     } catch (err) {
         console.error('[CHAT] group create error:', err.message);
@@ -778,6 +795,150 @@ router.put('/:id/mute', auth, async (req, res) => {
     } catch (err) {
         console.error('[CHAT] mute error:', err.message);
         res.status(500).json({ message: 'Could not update notifications' });
+    }
+});
+
+/**
+ * DELETE /api/conversations/:id
+ *
+ * Destroy a group: its messages, its attachments, its external invitations and
+ * the group itself. Members are simply free of it - there is nothing left to be
+ * a member of.
+ *
+ * ADMIN only, and groups only. A direct message belongs to the two people in
+ * it, and the rule that nobody outside a DM may read one would mean very little
+ * if somebody outside it could delete one.
+ *
+ * This is the one irreversible operation in the module, and it is worth being
+ * plain about the trade. Everything else here is built so that work
+ * conversation survives as a company record - "clear chat" hides history from
+ * one person rather than erasing it, "close chat" keeps membership, a revoked
+ * vendor keeps their messages, and admin oversight is only meaningful because
+ * the record is still there. A delete is the deliberate exception, so what it
+ * leaves behind is a ChatAuditLog row naming the group, its size and who
+ * decided. The content goes; the fact of the deletion does not.
+ */
+router.delete('/:id', auth, async (req, res) => {
+    try {
+        if (!IS_OVERSIGHT.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Only an admin can delete a group' });
+        }
+
+        const conversation = await Conversation.findById(req.params.id);
+        if (!conversation) return res.status(404).json({ message: 'Conversation not found' });
+
+        if (conversation.kind !== 'group') {
+            return res.status(400).json({
+                message: 'Direct messages cannot be deleted — they belong to the two people in them.'
+            });
+        }
+
+        const messages = await Message.find({ conversationId: conversation._id })
+            .select('attachments');
+
+        /*
+         * Recorded BEFORE anything is removed.
+         *
+         * Written first rather than last on purpose: if the delete fails
+         * half-way there is still a row saying it was attempted, and an audit
+         * trail that only records successes is not much of one.
+         */
+        await audit(
+            req.user,
+            conversation._id,
+            'delete_group',
+            `deleted "${conversation.name}" (${messages.length} messages, `
+            + `${memberIds(conversation).length} members)`,
+            req.ip
+        );
+
+        const notifyIds = memberIds(conversation);
+
+        /*
+         * The files.
+         *
+         * Attachments live in two places depending on how far through the
+         * pipeline they are: on S3 once processed, and on this box while a
+         * video waits for the night job. Both are cleaned up, because deleting
+         * only the database rows would leave the actual photos and recordings
+         * sitting in the bucket with nothing pointing at them - paid for
+         * forever and impossible to find again.
+         *
+         * Failures here are logged and swallowed: a file that cannot be removed
+         * must not leave the group half-deleted, which is a worse state than an
+         * orphaned object.
+         */
+        let filesRemoved = 0;
+        for (const message of messages) {
+            for (const media of message.attachments || []) {
+                if (!media?.url) continue;
+                try {
+                    if (media.url.startsWith('http')) {
+                        await deleteFromS3(media.url);
+                    } else {
+                        // e.g. /uploads/chat/<file> - still staged on the VPS.
+                        fs.unlink(path.join(__dirname, '..', media.url), () => { });
+                    }
+                    filesRemoved += 1;
+                } catch (err) {
+                    console.error('[CHAT] could not remove attachment:', err.message);
+                }
+            }
+        }
+
+        if (conversation.avatar) {
+            try { await deleteFromS3(conversation.avatar); } catch (e) { /* best effort */ }
+        }
+
+        const messageIds = messages.map((m) => m._id);
+
+        await Promise.all([
+            Message.deleteMany({ conversationId: conversation._id }),
+            // Queued compression jobs for videos that no longer exist would
+            // fail nightly, forever, on a file the cron cannot find.
+            VideoCompressionQueue.deleteMany({ ownerModel: 'Message', taskId: { $in: messageIds } }),
+            // Every outsider invitation into this group, including revoked
+            // ones - the group they described is gone, so their links must
+            // stop resolving rather than 404 halfway through joining.
+            ExternalParticipant.deleteMany({ conversationId: conversation._id }),
+            // Bell entries pointing at a chat that no longer opens.
+            Notification.deleteMany({ link: `/chats/${conversation._id}` })
+        ]);
+
+        await Conversation.deleteOne({ _id: conversation._id });
+
+        /*
+         * Tell everyone who had it, not just whoever had it open.
+         *
+         * Two audiences and two rooms: members get it on their own user room so
+         * their sidebar drops the row even if they were reading something else,
+         * and any external participant watching gets it too so their portal
+         * stops rather than polling a conversation that has gone.
+         */
+        emitToUsers(notifyIds, 'conversation:deleted', {
+            conversationId: String(conversation._id),
+            name: conversation.name
+        });
+        emitToConversation(conversation._id, 'conversation:deleted', {
+            conversationId: String(conversation._id),
+            name: conversation.name
+        });
+        emitToConversationExternals(conversation._id, 'conversation:deleted', {
+            conversationId: String(conversation._id),
+            name: conversation.name
+        });
+
+        res.json({
+            deleted: true,
+            name: conversation.name,
+            messages: messages.length,
+            files: filesRemoved,
+            members: notifyIds.length
+        });
+    } catch (err) {
+        console.error('[CHAT] delete group error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ message: 'Conversation not found' });
+        res.status(500).json({ message: 'Could not delete that group' });
     }
 });
 
@@ -1151,6 +1312,33 @@ router.post('/:id/messages', auth, chatUpload.array('attachments', 10), async (r
 
         if (memberRow(conversation, req.user.id)?.hidden) {
             await audit(req.user, conversation._id, 'post', preview.slice(0, 100), req.ip);
+        }
+
+        /*
+         * Project feed (F1.8).
+         *
+         * Carries no message text on purpose — that the Design group was busy
+         * is what a project feed is for; reproducing what was said would make
+         * the feed a second, unscoped copy of the conversation, readable by
+         * anyone on the project rather than only the group's members.
+         *
+         * Collapsed over ten minutes so an active thread is one row, not fifty
+         * that push every task and vendor event off the page. A hidden
+         * oversight admin records nothing — a feed row naming them would
+         * undo the concealment the rest of the module maintains.
+         */
+        if (conversation.projectId && !memberRow(conversation, req.user.id)?.hidden) {
+            recordActivity(conversation.projectId, {
+                type: 'message',
+                actor: req.user.id,
+                actorName: me?.name || '',
+                text: `${me?.name || 'Someone'} sent a message in ${conversation.name || 'a project chat'}`,
+                refModel: 'Conversation',
+                refId: conversation._id,
+                link: `/chats/${conversation._id}`,
+                collapseMs: 10 * 60 * 1000,
+                meta: { conversationId: String(conversation._id), groupName: conversation.name || '' }
+            });
         }
 
         res.status(201).json(populated);

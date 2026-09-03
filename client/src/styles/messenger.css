@@ -1816,3 +1816,14 @@
 }
 
 .ext-back:hover { text-decoration: underline; }
+
+/* The delete-group section: set apart, and last, so it is never the button
+   somebody reaches for on the way to something else. */
+.msgr-danger-zone {
+    border-top: 1px solid #fecaca;
+    background: #fffbfb;
+}
+
+.msgr-danger-zone h5 {
+    color: #b91c1c;
+}

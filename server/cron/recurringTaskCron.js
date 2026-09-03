@@ -1,4 +1,5 @@
 const cron = require('node-cron');
+const { scheduleIfEnabled } = require('./enabled');
 
 const RecurringTask = require('../models/RecurringTask');
 const Task = require('../models/Task');
@@ -308,7 +309,9 @@ const runDailyGeneration = async (dateStr = todayIST()) => {
 // 06:00 India time. Pinned explicitly rather than trusting server local time —
 // a UTC VPS rolls its date over at 05:30 IST, which is exactly the half hour
 // that would make this job generate the wrong day.
-cron.schedule('0 6 * * *', () => runDailyGeneration(), { timezone: 'Asia/Kolkata' });
+scheduleIfEnabled('Recurring task daily generation', () => {
+    cron.schedule('0 6 * * *', () => runDailyGeneration(), { timezone: 'Asia/Kolkata' });
+});
 
 /**
  * Catch-up sweep on boot.
@@ -323,14 +326,16 @@ cron.schedule('0 6 * * *', () => runDailyGeneration(), { timezone: 'Asia/Kolkata
  */
 const STARTUP_DELAY_MS = 2 * 60 * 1000;
 
-setTimeout(async () => {
-    try {
-        if (istHour() < GENERATION_HOUR_IST) return;
-        console.log('[RECURRING CRON] Startup catch-up: verifying today has been generated...');
-        await runDailyGeneration();
-    } catch (err) {
-        console.error('[RECURRING CRON] Startup catch-up error:', err.message);
-    }
-}, STARTUP_DELAY_MS).unref(); // never hold the process open on its own
+scheduleIfEnabled('Recurring task startup catch-up', () => {
+    setTimeout(async () => {
+        try {
+            if (istHour() < GENERATION_HOUR_IST) return;
+            console.log('[RECURRING CRON] Startup catch-up: verifying today has been generated...');
+            await runDailyGeneration();
+        } catch (err) {
+            console.error('[RECURRING CRON] Startup catch-up error:', err.message);
+        }
+    }, STARTUP_DELAY_MS).unref(); // never hold the process open on its own
+});
 
 module.exports = { generateForSchedule, runDailyGeneration, sweepStaleOccurrences };

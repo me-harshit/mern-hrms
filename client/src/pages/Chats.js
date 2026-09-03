@@ -175,7 +175,32 @@ const Chats = () => {
             }
         });
 
-        return () => { offActivity(); offNew(); offUpdated(); offRemoved(); };
+        /*
+         * An admin deleted a group somebody else is sitting in.
+         *
+         * Distinct from conversation:removed, which means "you are no longer a
+         * member" - the group still exists for everyone else. Here there is
+         * nothing left to go back to, so anyone with it open is told why their
+         * screen just emptied rather than being left looking at a thread whose
+         * every action now fails.
+         */
+        const offDeleted = onSocket('conversation:deleted', ({ conversationId, name }) => {
+            setConversations((prev) => prev.filter((c) => String(c._id) !== String(conversationId)));
+            if (String(activeIdRef.current) === String(conversationId)) {
+                setActiveId(null);
+                setActive(null);
+                setShowInfo(false);
+                Swal.fire({
+                    icon: 'info',
+                    title: 'This group was deleted',
+                    text: `"${name || 'The group'}" has been removed by an administrator.`,
+                    timer: 3200,
+                    showConfirmButton: false
+                });
+            }
+        });
+
+        return () => { offActivity(); offNew(); offUpdated(); offRemoved(); offDeleted(); };
     }, [loadList, loadActive]);
 
     useEffect(() => {
@@ -341,6 +366,15 @@ const Chats = () => {
         setShowInfo(false);
         navigate('/chats', { replace: true });
     };
+
+    /*
+     * The admin who pressed delete.
+     *
+     * Same outcome as leaving as far as this page is concerned - the row goes,
+     * the pane closes - so it shares the handler rather than repeating it. The
+     * difference is only that everyone else finds out over the socket.
+     */
+    const onDeleted = onLeft;
 
     /* ------------------------------ filtering ------------------------------ */
 
@@ -595,6 +629,7 @@ const Chats = () => {
                     onClose={() => setShowInfo(false)}
                     onChanged={onConversationChanged}
                     onLeft={onLeft}
+                    onDeleted={onDeleted}
                 />
             )}
 

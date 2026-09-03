@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChartLine, faCalendarDays, faUsers } from '@fortawesome/free-solid-svg-icons';
+import api from '../../utils/api';
 import TaskReportCalendar from '../../components/TaskReportCalendar';
 import EmployeeTaskBoard from '../../components/EmployeeTaskBoard';
 import '../../styles/App.css';
@@ -13,9 +14,23 @@ import '../../styles/tasks.css';
  * Calendar answers "what's due when", the Workload tab answers "who's
  * carrying what right now". Both use the same scoping as everything else —
  * a Team Lead sees only their own team.
+ *
+ * The project filter (feature draft F1.9) lives here rather than inside either
+ * tab, because it is the same question of both of them — "show me everything on
+ * Spectra" instead of only "show me my team" — and holding it in the shell
+ * keeps the selection when the reader switches tabs, which is exactly when they
+ * are comparing the two views of one project.
  */
 const TaskReport = () => {
     const [tab, setTab] = useState('calendar');
+    const [projectId, setProjectId] = useState('All');
+    const [projects, setProjects] = useState([]);
+
+    useEffect(() => {
+        api.get('/tasks/assignable-projects')
+            .then(res => setProjects(res.data || []))
+            .catch(() => setProjects([]));
+    }, []);
 
     return (
         <div className="attendance-container fade-in">
@@ -26,6 +41,15 @@ const TaskReport = () => {
                 </h1>
 
                 <div className="task-view-group">
+                    <select
+                        className={`task-filter-select ${projectId !== 'All' ? 'is-active' : ''}`}
+                        value={projectId}
+                        onChange={(e) => setProjectId(e.target.value)}
+                    >
+                        <option value="All">All Projects</option>
+                        {projects.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                    </select>
+
                     <div className="type-toggle view-toggle">
                         <button
                             type="button"
@@ -45,7 +69,9 @@ const TaskReport = () => {
                 </div>
             </div>
 
-            {tab === 'calendar' ? <TaskReportCalendar /> : <EmployeeTaskBoard />}
+            {tab === 'calendar'
+                ? <TaskReportCalendar projectId={projectId} />
+                : <EmployeeTaskBoard projectId={projectId} />}
         </div>
     );
 };

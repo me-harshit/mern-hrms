@@ -21,7 +21,13 @@ const chatAuditLogSchema = new mongoose.Schema({
 
     action: {
         type: String,
-        enum: ['read', 'search', 'post', 'join_hidden', 'leave_hidden'],
+        enum: [
+            'read', 'search', 'post', 'join_hidden', 'leave_hidden',
+            // A group being destroyed. The content is gone by design, so this
+            // row is the only remaining evidence that it ever existed - what
+            // it was called, how much was in it, and who decided.
+            'delete_group'
+        ],
         required: true
     },
 

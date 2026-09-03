@@ -22,7 +22,7 @@ import ExternalParticipants from './ExternalParticipants';
  * accident.
  */
 
-const GroupInfoPanel = ({ conversation, myId, myRole, onClose, onChanged, onLeft }) => {
+const GroupInfoPanel = ({ conversation, myId, myRole, onClose, onChanged, onLeft, onDeleted }) => {
     const [addingPeople, setAddingPeople] = useState(false);
     const [editingName, setEditingName] = useState(false);
     const [name, setName] = useState(conversation.name || '');
@@ -143,6 +143,72 @@ const GroupInfoPanel = ({ conversation, myId, myRole, onClose, onChanged, onLeft
             onLeft?.(conversation._id);
         } catch (err) {
             Swal.fire('Error', err.response?.data?.message || 'Could not leave.', 'error');
+        }
+    };
+
+    /**
+     * Delete the group outright (admin only).
+     *
+     * Typing the name is not ceremony. Everything else in this panel is
+     * recoverable - a removed member can be added back, a renamed group
+     * renamed again - and this is the one button that destroys a conversation
+     * and every file in it for everybody, with no undo. A dialog you can
+     * dismiss with the space bar is the wrong shape for that.
+     */
+    const deleteGroup = async () => {
+        const isProject = conversation.groupType === 'project';
+
+        const ok = await Swal.fire({
+            title: `Delete "${conversation.name}"?`,
+            html: `
+                <p style="text-align:left;font-size:14px;line-height:1.6;color:#334155;">
+                    This removes the conversation for
+                    <b>all ${members.length} member${members.length === 1 ? '' : 's'}</b>,
+                    along with every message, photo, file and recording in it.
+                    Any external participants lose access and their links stop working.
+                </p>
+                <p style="text-align:left;font-size:13.5px;color:#b91c1c;">
+                    <b>This cannot be undone.</b> The content is gone; only a record that
+                    you deleted it is kept.
+                </p>
+                ${isProject ? `
+                <p style="text-align:left;font-size:13px;color:#b45309;background:#fffbeb;padding:9px 11px;border-radius:8px;">
+                    This is a project group. A new empty one will be created
+                    automatically the next time somebody is assigned a task on this
+                    project.
+                </p>` : ''}
+                <p style="text-align:left;font-size:13px;color:#64748b;">
+                    Type <b>${conversation.name}</b> to confirm.
+                </p>`,
+            icon: 'warning',
+            input: 'text',
+            inputPlaceholder: conversation.name,
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            confirmButtonText: 'Delete this group',
+            preConfirm: (typed) => {
+                if ((typed || '').trim() !== conversation.name) {
+                    Swal.showValidationMessage('That does not match the group name.');
+                    return false;
+                }
+                return true;
+            }
+        });
+        if (!ok.isConfirmed) return;
+
+        try {
+            const res = await api.delete(`/conversations/${conversation._id}`);
+            Swal.fire({
+                icon: 'success',
+                title: 'Group deleted',
+                text: `"${res.data.name}" and its ${res.data.messages} message`
+                    + `${res.data.messages === 1 ? '' : 's'} have been removed.`,
+                timer: 2200,
+                showConfirmButton: false
+            });
+            onDeleted?.(conversation._id);
+        } catch (err) {
+            Swal.fire('Error', err.response?.data?.message || 'Could not delete the group.', 'error');
         }
     };
 
@@ -382,6 +448,28 @@ const GroupInfoPanel = ({ conversation, myId, myRole, onClose, onChanged, onLeft
                 <div className="msgr-info-section">
                     <button className="msgr-btn danger block" onClick={leave}>
                         <FontAwesomeIcon icon={faRightFromBracket} /> Leave group
+                    </button>
+                </div>
+            )}
+
+            {/*
+              * Admin only, and last on the panel.
+              *
+              * Not offered to a group owner: every other destructive action
+              * here affects one person or one membership, while this one ends
+              * a conversation the whole company may be relying on as a record.
+              * That is a decision for somebody who answers for the whole
+              * system, not for whoever happened to create the group.
+              */}
+            {isGroup && myRole === 'ADMIN' && (
+                <div className="msgr-info-section msgr-danger-zone">
+                    <h5>Danger zone</h5>
+                    <p className="ext-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+                        Deleting removes this conversation and everything in it for every
+                        member. It cannot be undone.
+                    </p>
+                    <button className="msgr-btn danger block" onClick={deleteGroup}>
+                        <FontAwesomeIcon icon={faTrash} /> Delete this group
                     </button>
                 </div>
             )}
