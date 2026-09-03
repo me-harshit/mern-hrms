@@ -179,7 +179,7 @@ function App() {
           * The external participant portal (feature draft Module 2).
           *
           * Outside ProtectedRoute AND outside DashboardLayout, both
-          * deliberately. A vendor has no HRMS login, so the guard would bounce
+          * deliberately. A vendor has no staff login, so the guard would bounce
           * them to /login and the link would never open; and the layout would
           * wrap their one conversation in a sidebar full of Attendance,
           * Payroll and Employees, every item of which is a 401 they cannot

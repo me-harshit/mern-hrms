@@ -288,7 +288,7 @@ router.post('/forgot-password', async (req, res) => {
             <div style="font-family: 'Segoe UI', sans-serif; max-width: 520px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px;">
                 <h2 style="color: #215D7B; margin-top: 0;">Password Reset Code</h2>
                 <p style="color: #334155; font-size: 15px;">Hi ${user.name},</p>
-                <p style="color: #334155; font-size: 15px;">Use this code to reset your GTS HRMS password:</p>
+                <p style="color: #334155; font-size: 15px;">Use this code to reset your GTS Portal password:</p>
                 <div style="font-size: 34px; font-weight: 700; letter-spacing: 10px; color: #0f172a; background: #f1f5f9; padding: 18px; text-align: center; border-radius: 10px; margin: 22px 0;">
                     ${code}
                 </div>
@@ -297,11 +297,18 @@ router.post('/forgot-password', async (req, res) => {
             </div>
         `;
 
-        try {
-            await sendEmail({ email: target, subject: 'Your GTS HRMS password reset code', message });
-        } catch (mailErr) {
+        /*
+         * sendEmail reports failure by returning false, not by throwing -- it
+         * catches its own errors so a mail outage can never break the request
+         * that triggered it. This was previously a try/catch, which meant the
+         * recovery below never ran: a failed send still answered "a code is on
+         * its way" and left the stored code behind.
+         */
+        const sent = await sendEmail({ email: target, subject: 'Your GTS Portal password reset code', message });
+
+        if (!sent) {
             // Don't strand the user with a stored code they never received.
-            console.error('Reset email failed:', mailErr.message);
+            console.error('[AUTH] reset email failed for', target);
             user.resetPasswordCodeHash = undefined;
             user.resetPasswordExpires = undefined;
             await user.save();
