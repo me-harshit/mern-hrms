@@ -1,4 +1,5 @@
 const cron = require('node-cron');
+const { scheduleIfEnabled } = require('./enabled');
 const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
@@ -185,7 +186,9 @@ const runCompressionBatch = async () => {
 };
 
 // Midnight, every night.
-cron.schedule('0 0 * * *', runCompressionBatch);
+scheduleIfEnabled('Video compression nightly batch', () => {
+    cron.schedule('0 0 * * *', runCompressionBatch);
+});
 
 /**
  * Catch-up sweep on boot.
@@ -201,21 +204,23 @@ cron.schedule('0 0 * * *', runCompressionBatch);
 const STARTUP_DELAY_MS = 2 * 60 * 1000;
 const STALE_AFTER_MS = 20 * 60 * 60 * 1000; // ~a missed nightly run
 
-setTimeout(async () => {
-    try {
-        const stale = await VideoCompressionQueue.countDocuments({
-            status: { $in: ['queued', 'failed'] },
-            attempts: { $lt: MAX_ATTEMPTS },
-            createdAt: { $lt: new Date(Date.now() - STALE_AFTER_MS) }
-        });
+scheduleIfEnabled('Video compression startup catch-up', () => {
+    setTimeout(async () => {
+        try {
+            const stale = await VideoCompressionQueue.countDocuments({
+                status: { $in: ['queued', 'failed'] },
+                attempts: { $lt: MAX_ATTEMPTS },
+                createdAt: { $lt: new Date(Date.now() - STALE_AFTER_MS) }
+            });
 
-        if (stale > 0) {
-            console.log(`[VIDEO CRON] Startup catch-up: ${stale} video(s) missed a nightly run. Processing now...`);
-            await runCompressionBatch();
+            if (stale > 0) {
+                console.log(`[VIDEO CRON] Startup catch-up: ${stale} video(s) missed a nightly run. Processing now...`);
+                await runCompressionBatch();
+            }
+        } catch (err) {
+            console.error('[VIDEO CRON] Startup catch-up error:', err.message);
         }
-    } catch (err) {
-        console.error('[VIDEO CRON] Startup catch-up error:', err.message);
-    }
-}, STARTUP_DELAY_MS).unref(); // never hold the process open on its own
+    }, STARTUP_DELAY_MS).unref(); // never hold the process open on its own
+});
 
 module.exports = { runCompressionBatch, compressVideo };
