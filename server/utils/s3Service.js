@@ -38,7 +38,7 @@ const uploadToS3 = async (file, subFolder = 'Default') => {
     let mimeType = file.mimetype;
     let originalExt = path.extname(file.originalname).toLowerCase();
     
-    let s3Key = `HRMS/${subFolder}/${uniqueSuffix}${originalExt}`;
+    let s3Key = `GTSPortal/${subFolder}/${uniqueSuffix}${originalExt}`;
 
     if (mimeType.startsWith('image/')) {
         /*
@@ -59,7 +59,7 @@ const uploadToS3 = async (file, subFolder = 'Default') => {
             .jpeg({ quality })
             .toBuffer();
         
-        s3Key = `HRMS/${subFolder}/${uniqueSuffix}.jpg`;
+        s3Key = `GTSPortal/${subFolder}/${uniqueSuffix}.jpg`;
         mimeType = 'image/jpeg';
     } 
 
@@ -125,11 +125,27 @@ const listForeverBeginsFiles = async () => {
 const deleteFromS3 = async (url) => {
     if (!url || !url.startsWith('http')) return false;
     try {
-        const Key = decodeURIComponent(new URL(url).pathname.replace(/^\//, ''));
-        await getS3Client().send(new DeleteObjectCommand({
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
-            Key
-        }));
+        const parsed = new URL(url);
+        const Key = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+
+        /*
+         * The bucket is read off the url rather than from AWS_S3_BUCKET_NAME.
+         *
+         * The two disagree whenever the env var has moved on but older rows still
+         * carry urls written against the previous bucket -- which is exactly the
+         * state a bucket migration creates. Deleting by env would look up the key
+         * in a bucket that never held it, and S3 treats removing a missing key as
+         * success: the caller is told the delete worked while the real object stays
+         * put, still publicly readable, with nothing left in the database pointing
+         * at it to find it by.
+         *
+         * Falls back to the env var for a path-style url, which this module never
+         * produces but a hand-written row might.
+         */
+        const [urlBucket, hostRest] = parsed.hostname.split('.s3.');
+        const Bucket = hostRest ? urlBucket : process.env.AWS_S3_BUCKET_NAME;
+
+        await getS3Client().send(new DeleteObjectCommand({ Bucket, Key }));
         return true;
     } catch (err) {
         console.error('[S3] Could not delete object for', url, '-', err.message);
