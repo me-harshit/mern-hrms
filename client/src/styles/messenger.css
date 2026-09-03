@@ -6,7 +6,7 @@
  * and right-aligned. People already know how to use this, and every difference
  * from the app they came from is something they have to learn for no benefit.
  *
- * Scoped under .msgr so nothing here leaks into the rest of the HRMS.
+ * Scoped under .msgr so nothing here leaks into the rest of the app.
  */
 
 /*

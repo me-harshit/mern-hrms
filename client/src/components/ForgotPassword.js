@@ -137,7 +137,7 @@ const ForgotPassword = ({ initialEmail = '', onBack, onDone }) => {
                         <input
                             className="auth-input" type="email" value={email} autoFocus
                             onChange={(e) => setEmail(e.target.value)}
-                            placeholder="e.g. employee@gts.com" disabled={busy}
+                            placeholder="e.g. employee@gts.ai" disabled={busy}
                         />
                     </div>
                     <button type="submit" className="auth-btn" disabled={busy}>

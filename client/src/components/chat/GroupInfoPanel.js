@@ -432,7 +432,7 @@ const GroupInfoPanel = ({ conversation, myId, myRole, onClose, onChanged, onLeft
                             </button>
                             <p style={{ fontSize: 11.5, color: '#667781', marginTop: 8, marginBottom: 0 }}>
                                 Expires in 7 days. For colleagues only — anyone logged into
-                                the HRMS with this link can join. To bring in someone from
+                                GTS Portal with this link can join. To bring in someone from
                                 outside the company, use Invite someone from outside above.
                             </p>
                         </>
